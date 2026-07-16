@@ -2,7 +2,7 @@
 
 This app ships as a normal Flask app with SQLite storage. It's genuinely
 deployable as-is for small-to-medium SACCO/chama usage, but the Flask dev
-server it runs under locally (`python run.py`) is **not** suitable for
+server it runs under locally (`python app.py`) is **not** suitable for
 production -- this guide covers what changes and why.
 
 ## What's already handled for you
@@ -14,10 +14,17 @@ production -- this guide covers what changes and why.
   Render/Railway/Fly.io).
 - `render.yaml`, `railway.json`, `fly.toml` -- ready-to-use configs for
   each of those three platforms specifically (see step 7 below).
-- `app/__init__.py` refuses to boot with `APP_ENV=production` set while
+- `core/__init__.py` refuses to boot with `APP_ENV=production` set while
   `SECRET_KEY`/`JWT_SECRET_KEY` are still the insecure dev defaults.
 - The auth cookie automatically becomes `Secure` (HTTPS-only) once
   `APP_ENV=production`.
+- The seeded default admin account (and any user created with a temporary
+  password) is forced to set a new password on first login -- it's not
+  just a note in this doc that's easy to forget.
+- `ProxyFix` middleware, so the app sees each visitor's real IP/scheme
+  behind Render/Railway/Fly's reverse proxy instead of the proxy's own IP
+  (this matters for per-client login rate limiting and for HTTPS URLs
+  generated for M-Pesa callbacks).
 - `GET /health` -- a real DB-backed health check for load balancers /
   container orchestrators.
 
@@ -232,7 +239,7 @@ Type=notify
 User=jodala
 WorkingDirectory=/opt/jodala
 EnvironmentFile=/opt/jodala/.env.production
-ExecStart=/opt/jodala/venv/bin/gunicorn -c gunicorn.conf.py run:app
+ExecStart=/opt/jodala/venv/bin/gunicorn -c gunicorn.conf.py app:app
 Restart=always
 RestartSec=5
 
@@ -248,11 +255,29 @@ use a managed instance.
 
 ## 8. After it's live
 
-- Log in as the default admin (`admin` / whatever was seeded — **change
-  this password immediately**, and turn on 2FA for it under
-  Settings > Profile).
+- Log in as the default admin (`admin` / whatever was seeded) -- you'll be
+  **required** to set a new password before you can do anything else, and
+  should turn on 2FA for the account afterwards under Settings > Profile.
 - Set up the daily backup cron from step 5.
 - Set `send_overdue_reminders.py` to actually run on a schedule (cron, or a
   platform's scheduled-job feature) -- it exists but doesn't run itself.
 - Watch `GET /health` from an uptime monitor (UptimeRobot, Better Uptime,
   your platform's built-in one, etc.).
+
+## 9. Installable as an app (PWA)
+
+The app ships with a web app manifest and a service worker, so once it's
+served over HTTPS (required for both) it's installable straight from the
+browser -- no app-store build or review needed:
+
+- **Android/desktop Chrome/Edge**: an install icon appears in the address
+  bar, and the app's own top navbar shows a download button once the
+  browser signals it's installable.
+- **iOS Safari**: Share -> "Add to Home Screen" (Safari doesn't support
+  the automatic install prompt, so there's no in-app button there).
+
+What's cached for offline use is deliberately narrow -- only static
+assets (CSS/JS/icons), never pages or `/api/` data, since this is a live
+financial ledger and must never show stale account/loan/savings figures.
+Losing connectivity mid-navigation shows a plain "you're offline, retry"
+screen (`static/offline.html`) instead of a broken page.

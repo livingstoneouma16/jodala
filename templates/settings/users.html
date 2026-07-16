@@ -64,7 +64,7 @@ async function loadUsers() {
       <td style="font-size:12px">${escapeHtml(u.email)}</td>
       <td><span style="font-size:11px;font-weight:600;color:${roleColor[u.role]||'var(--text-muted)'};text-transform:capitalize">${escapeHtml(u.role.replace('_',' '))}</span></td>
       <td style="font-size:12px;color:var(--text-muted)">${u.last_login ? timeAgo(u.last_login) : 'Never'}</td>
-      <td>${statusPill(u.is_active?'active':'suspended')}</td>
+      <td>${statusPill(u.is_active?'active':'suspended')}${u.must_change_password ? ' <span class="badge" style="background:#FEF3C7;color:#92400E;font-weight:600;font-size:9.5px" title="Must change password on next login">pending change</span>' : ''}</td>
       <td><div class="d-flex gap-1">
         <button onclick='openUserModal(${JSON.stringify(u)});new bootstrap.Modal(document.getElementById("userModal")).show()' class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--surface-2);border:1px solid var(--border)" title="Edit"><i class="bi bi-pencil"></i></button>
         <button onclick="toggleUser(${u.id},${u.is_active})" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:${u.is_active?'#FFE4E6':'#D1FAE5'};border:1px solid ${u.is_active?'#FCA5A5':'#6EE7B7'}" title="${u.is_active?'Deactivate':'Activate'}"><i class="bi bi-${u.is_active?'x':'check'}"></i></button>

@@ -56,4 +56,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health', timeout=4).status==200 else sys.exit(1)"
 
 ENTRYPOINT ["./entrypoint.sh"]
-CMD ["gunicorn", "-c", "gunicorn.conf.py", "run:app"]
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]

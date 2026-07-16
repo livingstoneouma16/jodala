@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}Jodala Microfinance{% endblock %}</title>
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
+  <meta name="theme-color" content="#12395E" />
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" />
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Jodala" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -123,6 +130,11 @@
         <input type="text" placeholder="Quick search…" id="globalSearch" />
       </div>
 
+      <!-- Install App (shown only once the browser signals it's installable) -->
+      <button class="icon-btn d-none" id="pwaInstallBtn" data-pwa-install title="Install app">
+        <i class="bi bi-download"></i>
+      </button>
+
       <!-- Theme Toggle -->
       <button class="icon-btn" id="themeToggle" title="Toggle theme">
         <i class="bi bi-moon-fill" id="themeIcon"></i>
@@ -179,6 +191,7 @@
 <script>window.CURRENCY_SYM = 'Ksh ';</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

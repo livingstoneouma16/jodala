@@ -9,8 +9,8 @@ from the web app process, e.g.:
 Requires the same .env (or configured Gmail settings in the DB) as the web
 app, since it uses the same app factory / DB / mailer.
 """
-from app import create_app
-from app.routes.loans import send_overdue_reminders
+from core import create_app
+from core.routes.loans import send_overdue_reminders
 
 if __name__ == '__main__':
     app = create_app()

@@ -8,11 +8,11 @@ each block only inserts rows that don't already exist.
 No fake/demo members, clients, loans, or savings accounts are created —
 those should come from real registrations. The very first admin user +
 default settings + default chart of accounts are created automatically
-on app startup by app/database.py's migrations.
+on app startup by core/database.py's migrations.
 """
-from app import create_app
-from app.database import get_db, execute, utcnow
-from app.auth import hash_password
+from core import create_app
+from core.database import get_db, execute, utcnow
+from core.auth import hash_password
 
 
 def seed_database():

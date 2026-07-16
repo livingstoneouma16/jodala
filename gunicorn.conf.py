@@ -1,7 +1,7 @@
 """
 Gunicorn config for production. Usage:
 
-    gunicorn -c gunicorn.conf.py run:app
+    gunicorn -c gunicorn.conf.py app:app
 
 All values can be overridden via environment variables so the same config
 file works unchanged across dev/staging/prod containers.
