@@ -88,6 +88,22 @@ body {
   flex-shrink: 0;
 }
 
+.sidebar-close {
+  display: none;
+  margin-left: auto;
+  background: rgba(255,255,255,.08);
+  border: none;
+  color: rgba(255,255,255,.7);
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  font-size: 12px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+.sidebar-close:hover { background: rgba(255,255,255,.16); color: #fff; }
+
 .brand-text { overflow: hidden; }
 .brand-name {
   display: block;
@@ -704,17 +720,93 @@ body {
 .timeline-time { font-size: 10.5px; color: var(--text-muted); }
 .timeline-text { font-size: 12px; color: var(--text); margin-top: 1px; }
 
+/* ── MOBILE SIDEBAR OVERLAY ───────────────────────────── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10,20,15,0);
+  z-index: 999;
+  transition: background .25s ease;
+}
+.sidebar-overlay.visible {
+  display: block;
+  background: rgba(10,20,15,.45);
+}
+body.sidebar-locked { overflow: hidden; }
+
+/* ── MOBILE BOTTOM TAB BAR ─────────────────────────────── */
+.mobile-tabbar {
+  display: none;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 950;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px rgba(18,57,94,.08);
+  padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
+}
+.tab-item {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+  padding: 5px 2px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 9.5px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+.tab-item i { font-size: 16px; }
+.tab-item.active { color: var(--brand-mid); }
+[data-bs-theme="dark"] .tab-item.active { color: var(--brand-light); }
+.tab-item:active { background: var(--surface-2); }
+
+/* ── LARGE-SCREEN CONTENT GUARD ───────────────────────── */
+@media (min-width: 1600px) {
+  .page-content { max-width: 1680px; margin: 0 auto; }
+}
+
 /* ── RESPONSIVE ───────────────────────────────────────── */
 html { overflow-x: hidden; font-size: 14px; }
 
 @media (max-width: 768px) {
-  .sidebar { transform: translateX(-100%); }
+  .sidebar {
+    width: 250px;
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-lg);
+  }
   .sidebar.mobile-open { transform: translateX(0); }
+  .sidebar-close { display: flex; }
+  .sidebar-brand { padding: 13px 10px 12px; }
+  .brand-name { font-size: 13.5px; }
+  .brand-sub { font-size: 10px; }
+  .nav-section-label { font-size: 9.5px; padding: 10px 8px 4px; }
+  .nav-link-item { padding: 10px 10px; font-size: 13px; min-height: 40px; }
+  .nav-link-item i { font-size: 15px; width: 18px; }
+  .user-mini { padding: 8px; }
+  .user-avatar-sm { width: 28px; height: 28px; font-size: 12px; }
+  .user-mini-name { font-size: 11.5px; }
+  .logout-btn { font-size: 15px; padding: 4px; }
+
   .main-wrapper { margin-left: 0; }
   .main-wrapper.expanded { margin-left: 0; }
-  .page-content { padding: 10px; }
+  .page-content { padding: 10px; padding-bottom: calc(58px + env(safe-area-inset-bottom)); }
   .stat-value { font-size: 15px; }
   .detail-grid { grid-template-columns: 1fr; }
+
+  .mobile-tabbar { display: flex; }
+  #toastContainer { bottom: calc(58px + env(safe-area-inset-bottom)) !important; }
+  .sidebar-toggle { width: 32px; height: 32px; font-size: 18px; }
+  .icon-btn { width: 32px; height: 32px; font-size: 14px; }
+  .user-avatar-btn { width: 30px; height: 30px; }
+  .btn, .btn-brand, .btn-brand-outline { min-height: 36px; }
 
   .d-flex.align-items-center.justify-content-between.mb-4,
   .d-flex.justify-content-between.align-items-center.mb-4,
@@ -736,7 +828,6 @@ html { overflow-x: hidden; font-size: 14px; }
 
   .top-navbar { padding: 0 10px; gap: 6px; }
   .navbar-actions { gap: 3px; }
-  .icon-btn { width: 25px; height: 25px; font-size: 12px; }
   .breadcrumb-page { font-size: 12px; max-width: 46vw; }
 
   .jd-card-body { padding: 10px; }
@@ -758,7 +849,7 @@ html { overflow-x: hidden; font-size: 14px; }
 }
 
 @media (max-width: 480px) {
-  .page-content { padding: 8px; }
+  .page-content { padding: 8px; padding-bottom: calc(58px + env(safe-area-inset-bottom)); }
   .jd-card-body { padding: 8px; }
   .jd-card-header { padding: 7px 8px; }
   .stat-card { padding: 9px 10px; }

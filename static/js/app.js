@@ -86,18 +86,33 @@ const Toast = {
 
 // ── Sidebar Toggle ────────────────────────────────────────
 function initSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  const wrapper = document.getElementById('mainWrapper');
-  const toggle  = document.getElementById('sidebarToggle');
+  const sidebar  = document.getElementById('sidebar');
+  const wrapper  = document.getElementById('mainWrapper');
+  const toggle   = document.getElementById('sidebarToggle');
+  const overlay  = document.getElementById('sidebarOverlay');
+  const closeBtn = document.getElementById('sidebarClose');
   if (!sidebar || !toggle) return;
 
+  const isMobile = () => window.innerWidth < 769;
+
   const collapsed = localStorage.getItem('jd_sidebar') === 'collapsed';
-  if (collapsed) { sidebar.classList.add('collapsed'); wrapper?.classList.add('expanded'); }
+  if (collapsed && !isMobile()) { sidebar.classList.add('collapsed'); wrapper?.classList.add('expanded'); }
+
+  function openMobile() {
+    sidebar.classList.add('mobile-open');
+    overlay?.classList.add('visible');
+    document.body.classList.add('sidebar-locked');
+  }
+
+  function closeMobile() {
+    sidebar.classList.remove('mobile-open');
+    overlay?.classList.remove('visible');
+    document.body.classList.remove('sidebar-locked');
+  }
 
   toggle.addEventListener('click', () => {
-    const isMobile = window.innerWidth < 769;
-    if (isMobile) {
-      sidebar.classList.toggle('mobile-open');
+    if (isMobile()) {
+      sidebar.classList.contains('mobile-open') ? closeMobile() : openMobile();
     } else {
       sidebar.classList.toggle('collapsed');
       wrapper?.classList.toggle('expanded');
@@ -105,11 +120,37 @@ function initSidebar() {
     }
   });
 
-  // Close on outside click (mobile)
+  closeBtn?.addEventListener('click', closeMobile);
+  overlay?.addEventListener('click', closeMobile);
+  document.getElementById('tabbarMore')?.addEventListener('click', openMobile);
+
+  // Close on outside click (mobile) — kept as a fallback alongside the overlay
   document.addEventListener('click', e => {
-    if (window.innerWidth < 769 && sidebar.classList.contains('mobile-open')
+    if (isMobile() && sidebar.classList.contains('mobile-open')
         && !sidebar.contains(e.target) && e.target !== toggle) {
-      sidebar.classList.remove('mobile-open');
+      closeMobile();
+    }
+  });
+
+  // Close the drawer automatically when a nav link is tapped
+  sidebar.querySelectorAll('.nav-link-item').forEach(link => {
+    link.addEventListener('click', () => { if (isMobile()) closeMobile(); });
+  });
+
+  // Close on Escape, and reset drawer state when resizing past the mobile breakpoint
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && sidebar.classList.contains('mobile-open')) closeMobile();
+  });
+  window.addEventListener('resize', () => {
+    if (isMobile()) {
+      sidebar.classList.remove('collapsed');
+      wrapper?.classList.remove('expanded');
+    } else {
+      if (sidebar.classList.contains('mobile-open')) closeMobile();
+      if (localStorage.getItem('jd_sidebar') === 'collapsed') {
+        sidebar.classList.add('collapsed');
+        wrapper?.classList.add('expanded');
+      }
     }
   });
 }

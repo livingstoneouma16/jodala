@@ -34,6 +34,9 @@
       <span class="brand-name">{{ company_name.split(' ')[0] if company_name else 'Jodala' }}</span>
       <span class="brand-sub">{{ ' '.join(company_name.split(' ')[1:]) if company_name and ' ' in company_name else 'Microfinance' }}</span>
     </div>
+    <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+      <i class="bi bi-x-lg"></i>
+    </button>
   </div>
 
   <nav class="sidebar-nav" id="sidebarNav">
@@ -101,6 +104,9 @@
     </div>
   </div>
 </div>
+
+<!-- Mobile sidebar backdrop -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
 
 <!-- Main Content -->
 <div class="main-wrapper" id="mainWrapper">
@@ -184,6 +190,25 @@
     {% block content %}{% endblock %}
   </main>
 </div>
+
+<!-- Mobile bottom tab bar -->
+<nav class="mobile-tabbar" id="mobileTabbar">
+  <a href="{{ url_for('dashboard.index') }}" class="tab-item {% if request.endpoint and 'dashboard' in request.endpoint %}active{% endif %}">
+    <i class="bi bi-grid-1x2-fill"></i><span>Home</span>
+  </a>
+  <a href="{{ url_for('loans.index') }}" class="tab-item {% if request.endpoint and 'loans' in request.endpoint %}active{% endif %}">
+    <i class="bi bi-cash-coin"></i><span>Loans</span>
+  </a>
+  <a href="{{ url_for('members.index') }}" class="tab-item {% if request.endpoint and 'members' in request.endpoint %}active{% endif %}">
+    <i class="bi bi-people-fill"></i><span>Members</span>
+  </a>
+  <a href="{{ url_for('savings.index') }}" class="tab-item {% if request.endpoint and 'savings' in request.endpoint %}active{% endif %}">
+    <i class="bi bi-piggy-bank-fill"></i><span>Savings</span>
+  </a>
+  <button type="button" class="tab-item" id="tabbarMore">
+    <i class="bi bi-grid-3x3-gap-fill"></i><span>More</span>
+  </button>
+</nav>
 
 <!-- Toast Container -->
 <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
