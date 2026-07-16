@@ -1,0 +1,74 @@
+# Render Blueprint -- deploys this app + a Redis (Key Value) instance for
+# correct multi-worker rate limiting, with a persistent disk for the SQLite
+# database.
+#
+# Deploy: push this repo to GitHub/GitLab, then in the Render dashboard:
+#   New -> Blueprint -> select this repo. Render reads this file and
+#   provisions everything below automatically.
+#
+# Recommended: sign up for Render using jodalamicrofinance@gmail.com so the
+# deployment, billing, and Gmail-based email notifications all live under
+# one account.
+#
+# After the first deploy, go to the web service's Settings > Environment
+# and fill in the `sync: false` variables (Gmail/M-Pesa credentials) --
+# Render prompts for these during Blueprint creation, or you can add them
+# manually afterwards. They can also be set later from inside the app under
+# Settings > Notifications / Settings > M-Pesa instead, which takes
+# precedence over env vars either way.
+#
+# NOTE: a service with an attached persistent disk can't be horizontally
+# scaled to multiple instances on Render -- which is fine here, since
+# SQLite only supports one writer anyway (see DEPLOYMENT.md).
+
+services:
+  - type: web
+    name: jodala-microfinance
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DB_PATH
+        value: /data/sacco.db
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: RATELIMIT_STORAGE_URI
+        fromService:
+          type: keyvalue
+          name: jodala-redis
+          property: connectionString
+      - key: CORS_ALLOWED_ORIGINS
+        value: ""
+      # M-Pesa / Gmail credentials -- set once in the Render dashboard
+      # (prompted on first Blueprint deploy), or skip these entirely and
+      # configure them from inside the app under Settings instead.
+      - key: GMAIL_ADDRESS
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: MPESA_CONSUMER_KEY
+        sync: false
+      - key: MPESA_CONSUMER_SECRET
+        sync: false
+    disk:
+      name: jodala-data
+      mountPath: /data
+      sizeGB: 1
+
+  - type: keyvalue
+    name: jodala-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: noeviction
+    # Render requires this field on every Key Value service. Empty list =
+    # no external/public access -- only other services in this Blueprint
+    # (i.e. the web service above) can reach it, which is all we need.
+    ipAllowList: []

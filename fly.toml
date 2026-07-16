@@ -1,0 +1,53 @@
+# Fly.io config for Jodala Microfinance.
+#
+# First-time setup (run once):
+#   fly launch --no-deploy                       # picks up this file; say no to overwriting it
+#   fly volumes create jodala_data --size 1 --region iad   # match region below
+#   fly redis create                              # managed Upstash Redis; note the redis:// URL it prints
+#   fly secrets set SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+#   fly secrets set JWT_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+#   fly secrets set RATELIMIT_STORAGE_URI="redis://default:<password>@<host>.upstash.io"
+#   fly deploy
+#
+# IMPORTANT: a Fly volume is tied to one specific Machine and can't be
+# shared across Machines -- don't scale this app past 1 Machine (see
+# DEPLOYMENT.md on why SQLite doesn't want that anyway). min_machines_running
+# is set to 1 below for the same reason: this app should not scale to zero,
+# since a `disbursed`/`repaid` M-Pesa callback arriving while the one
+# Machine is stopped would just fail rather than queue.
+
+app = "jodala-microfinance"          # must be globally unique on Fly -- change this
+primary_region = "iad"                # pick the region closest to your users
+
+[build]
+
+[env]
+  APP_ENV = "production"
+  DB_PATH = "/data/sacco.db"
+  COOKIE_SECURE = "true"
+  PORT = "8000"
+  # CORS_ALLOWED_ORIGINS, GMAIL_*, MPESA_* -- set with `fly secrets set` or
+  # configure from inside the app under Settings instead.
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false     # keep running -- see note above on M-Pesa callbacks
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[mounts]
+  source = "jodala_data"
+  destination = "/data"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

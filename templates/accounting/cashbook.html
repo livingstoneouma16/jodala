@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Cashbook — Jodala Microfinance{% endblock %}
+{% block page_title %}Cashbook{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div><h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">Cashbook</h4>
+  <p class="text-muted mb-0" style="font-size:13px">Daily cash receipts and payments</p></div>
+</div>
+<div class="jd-card mb-3"><div class="jd-card-body">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3"><label class="form-label">From Date</label><input type="date" class="form-control" id="cbFrom" /></div>
+    <div class="col-md-3"><label class="form-label">To Date</label><input type="date" class="form-control" id="cbTo" /></div>
+    <div class="col-md-3"><button class="btn btn-brand w-100 mt-3" onclick="loadCashbook()"><i class="bi bi-search me-1"></i>Load</button></div>
+  </div>
+</div></div>
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="stat-card"><div class="stat-icon green"><i class="bi bi-arrow-down-circle"></i></div>
+    <div class="stat-body"><div class="stat-label">Total Receipts</div><div class="stat-value" id="cbReceipts">—</div></div></div></div>
+  <div class="col-md-4"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-arrow-up-circle"></i></div>
+    <div class="stat-body"><div class="stat-label">Total Payments</div><div class="stat-value" id="cbPayments">—</div></div></div></div>
+  <div class="col-md-4"><div class="stat-card gold"><div class="stat-icon gold"><i class="bi bi-wallet2"></i></div>
+    <div class="stat-body"><div class="stat-label">Net Balance</div><div class="stat-value" id="cbBalance">—</div></div></div></div>
+</div>
+<div class="data-table-wrapper">
+  <div class="data-table-header"><div class="data-table-title">Cash Transactions</div></div>
+  <div class="table-responsive"><table class="table mb-0">
+    <thead><tr><th>Date</th><th>Description</th><th>Reference</th><th>Receipts</th><th>Payments</th></tr></thead>
+    <tbody id="cbTable"><tr><td colspan="5" class="text-center p-4 text-muted">Select date range and click Load</td></tr></tbody>
+    <tfoot id="cbFoot"></tfoot>
+  </table></div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+const today = new Date().toISOString().split('T')[0];
+const firstDay = new Date(new Date().setDate(1)).toISOString().split('T')[0];
+document.getElementById('cbFrom').value = firstDay;
+document.getElementById('cbTo').value = today;
+
+async function loadCashbook() {
+  const from = document.getElementById('cbFrom').value;
+  const to = document.getElementById('cbTo').value;
+  const tbody = document.getElementById('cbTable');
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data = await API.get(`/accounting/api/cashbook-data?date_from=${from}&date_to=${to}`);
+    document.getElementById('cbReceipts').textContent = fmtCurrency(data.total_receipts);
+    document.getElementById('cbPayments').textContent = fmtCurrency(data.total_payments);
+    document.getElementById('cbBalance').textContent = fmtCurrency(data.net_balance);
+    if (!data.entries.length) { tbody.innerHTML='<tr><td colspan="5"><div class="empty-state"><i class="bi bi-cash-stack"></i><p>No transactions in this period</p></div></td></tr>'; return; }
+    tbody.innerHTML = data.entries.map(e=>`<tr>
+      <td style="font-size:12px;color:var(--text-muted)">${fmtDate(e.date)}</td>
+      <td style="font-size:13px">${escapeHtml(e.description)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(e.reference)}</td>
+      <td style="font-weight:700;color:var(--brand-light)">${e.type==='receipt'?fmtCurrency(e.amount):'—'}</td>
+      <td style="font-weight:700;color:var(--danger)">${e.type==='payment'?fmtCurrency(e.amount):'—'}</td>
+    </tr>`).join('');
+    document.getElementById('cbFoot').innerHTML = `<tr style="background:var(--surface-2);font-weight:700">
+      <td colspan="3">TOTALS</td>
+      <td style="color:var(--brand-light)">${fmtCurrency(data.total_receipts)}</td>
+      <td style="color:var(--danger)">${fmtCurrency(data.total_payments)}</td>
+    </tr>`;
+  } catch(e) { Toast.error(e.message); }
+}
+loadCashbook();
+</script>{% endblock %}

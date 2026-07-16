@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Users — Jodala Microfinance{% endblock %}
+{% block page_title %}User Management{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div><h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">User Management</h4>
+  <p class="text-muted mb-0" style="font-size:13px">Manage system users and audit logs</p></div>
+  <button class="btn btn-brand" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openUserModal()"><i class="bi bi-person-plus me-1"></i>Add User</button>
+</div>
+<div class="data-table-wrapper mb-4">
+  <div class="data-table-header"><div class="data-table-title">System Users</div></div>
+  <div class="table-responsive"><table class="table mb-0">
+    <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Last Login</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody id="usersTable"><tr><td colspan="7" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+  </table></div>
+</div>
+<div class="jd-card">
+  <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-shield-check" style="color:var(--brand-light)"></i>Audit Log</div></div>
+  <div class="table-responsive"><table class="table mb-0">
+    <thead><tr><th>Action</th><th>User</th><th>Resource</th><th>IP</th><th>Time</th></tr></thead>
+    <tbody id="auditTable"><tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+  </table></div>
+</div>
+<div class="modal fade" id="userModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title" id="userModalTitle">Add New User</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><div class="row g-3">
+        <div class="col-md-6"><label class="form-label">Full Name *</label><input type="text" class="form-control" id="uName" /></div>
+        <div class="col-md-6"><label class="form-label">Username *</label><input type="text" class="form-control" id="uUser" /></div>
+        <div class="col-md-6"><label class="form-label">Email *</label><input type="email" class="form-control" id="uEmail" /></div>
+        <div class="col-md-6"><label class="form-label">Phone</label><input type="text" class="form-control" id="uPhone" /></div>
+        <div class="col-md-6"><label class="form-label">Role *</label>
+          <select class="form-select" id="uRole"><option value="loan_officer">Loan Officer</option><option value="cashier">Cashier</option><option value="accountant">Accountant</option><option value="admin">Admin</option></select></div>
+        <div class="col-md-6"><label class="form-label">Password</label><input type="password" class="form-control" id="uPass" placeholder="Leave blank to keep current" /></div>
+        <input type="hidden" id="editUserId" value="" />
+      </div></div>
+      <div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-brand" id="saveUserBtn" onclick="saveUser()">Save User</button></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+function openUserModal(user=null) {
+  document.getElementById('userModalTitle').textContent = user ? 'Edit User' : 'Add New User';
+  document.getElementById('editUserId').value = user?.id || '';
+  document.getElementById('uName').value = user?.full_name || '';
+  document.getElementById('uUser').value = user?.username || '';
+  document.getElementById('uEmail').value = user?.email || '';
+  document.getElementById('uPhone').value = user?.phone || '';
+  document.getElementById('uRole').value = user?.role || 'loan_officer';
+  document.getElementById('uPass').value = '';
+}
+
+async function loadUsers() {
+  const tbody = document.getElementById('usersTable');
+  try {
+    const users = await API.get('/users/api');
+    const roleColor = {admin:'var(--danger)',loan_officer:'var(--brand-mid)',accountant:'#F4A261',cashier:'#4895EF'};
+    tbody.innerHTML = users.map(u=>`<tr>
+      <td style="font-weight:600;font-size:13px">${escapeHtml(u.full_name)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">@${escapeHtml(u.username)}</td>
+      <td style="font-size:12px">${escapeHtml(u.email)}</td>
+      <td><span style="font-size:11px;font-weight:600;color:${roleColor[u.role]||'var(--text-muted)'};text-transform:capitalize">${escapeHtml(u.role.replace('_',' '))}</span></td>
+      <td style="font-size:12px;color:var(--text-muted)">${u.last_login ? timeAgo(u.last_login) : 'Never'}</td>
+      <td>${statusPill(u.is_active?'active':'suspended')}</td>
+      <td><div class="d-flex gap-1">
+        <button onclick='openUserModal(${JSON.stringify(u)});new bootstrap.Modal(document.getElementById("userModal")).show()' class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--surface-2);border:1px solid var(--border)" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button onclick="toggleUser(${u.id},${u.is_active})" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:${u.is_active?'#FFE4E6':'#D1FAE5'};border:1px solid ${u.is_active?'#FCA5A5':'#6EE7B7'}" title="${u.is_active?'Deactivate':'Activate'}"><i class="bi bi-${u.is_active?'x':'check'}"></i></button>
+        <button onclick="deleteUser(${u.id}, '${jsAttr(u.full_name)}')" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:#FFE4E6;border:1px solid #FCA5A5;color:#991B1B" title="Delete"><i class="bi bi-trash"></i></button>
+      </div></td>
+    </tr>`).join('');
+  } catch(e) { Toast.error('Access denied or error loading users'); }
+}
+
+async function loadAudit() {
+  try {
+    const data = await API.get('/users/api/audit-logs');
+    const tbody = document.getElementById('auditTable');
+    tbody.innerHTML = data.logs.map(l=>`<tr>
+      <td><span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px">${escapeHtml(l.action.replace(/_/g,' '))}</span></td>
+      <td style="font-size:12px">${escapeHtml(l.user_name)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(l.resource_type||'—')} ${l.resource_id?'#'+escapeHtml(String(l.resource_id)):''}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(l.ip_address||'—')}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${timeAgo(l.created_at)}</td>
+    </tr>`).join('');
+  } catch(e) {}
+}
+
+async function saveUser() {
+  const btn = document.getElementById('saveUserBtn');
+  setLoading(btn, true);
+  const id = document.getElementById('editUserId').value;
+  const body = { full_name:document.getElementById('uName').value, username:document.getElementById('uUser').value,
+    email:document.getElementById('uEmail').value, phone:document.getElementById('uPhone').value,
+    role:document.getElementById('uRole').value, password:document.getElementById('uPass').value };
+  try {
+    if (id) await API.put(`/users/api/${id}`, body);
+    else await API.post('/users/api', body);
+    Toast.success('User saved!');
+    bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
+    loadUsers();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function toggleUser(id, active) {
+  confirm(`${active?'Deactivate':'Activate'} this user?`, async ()=>{
+    try { await API.put(`/users/api/${id}`, {is_active: !active}); Toast.success('User updated'); loadUsers(); } catch(e) { Toast.error(e.message); }
+  });
+}
+
+async function deleteUser(id, name) {
+  confirm(`Delete user "${name}"? This cannot be undone.`, async () => {
+    try {
+      await API.delete(`/users/api/${id}`);
+      Toast.success('User deleted');
+      loadUsers();
+    } catch(e) { Toast.error(e.message); }
+  });
+}
+
+loadUsers();
+loadAudit();
+</script>{% endblock %}

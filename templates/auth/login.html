@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Jodala Microfinance</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+  <style>
+    body { display: grid; place-items: center; min-height: 100vh;
+           background: linear-gradient(135deg,#12395E 0%,#1D5A96 60%,#4C9FE8 100%); }
+
+    .login-wrap { width: 100%; max-width: 340px; padding: 16px; }
+
+    .login-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 22px 24px 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.25);
+    }
+
+    /* Brand row */
+    .login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .login-brand-icon {
+      width: 36px; height: 36px; flex-shrink: 0;
+      border-radius: 8px; overflow: hidden;
+      background: var(--brand-dark);
+      display: grid; place-items: center;
+      font-size: 18px; color: var(--brand-light);
+    }
+    .login-brand-icon img { width: 100%; height: 100%; object-fit: contain; }
+    .login-brand-name  { font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:var(--text); line-height:1.2; }
+    .login-brand-sub   { font-size:10.5px; color:var(--text-muted); }
+
+    /* Divider */
+    .login-divider { border-top: 1px solid var(--border); margin: 0 0 14px; }
+
+    /* Headings */
+    .login-title { font-family:'Space Grotesk',sans-serif; font-size:13.5px; font-weight:600; color:var(--text); margin:0 0 2px; }
+    .login-sub   { font-size:11px; color:var(--text-muted); margin:0 0 14px; }
+
+    /* Inputs */
+    .form-label  { font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); margin-bottom:3px; }
+    .input-group-text { background:var(--surface-2); border-color:var(--border); color:var(--text-muted); padding:0 9px; font-size:13px; }
+    .form-control { font-size:12px; padding:5px 9px; border-color:var(--border); }
+    .form-control:focus { border-color:var(--brand-light); box-shadow:0 0 0 3px rgba(76,159,232,.15); }
+    .btn-show-pwd { cursor:pointer; }
+
+    /* Submit */
+    .btn-login {
+      width:100%; padding:7px; font-size:12.5px; font-weight:600;
+      background:var(--brand-dark); color:#fff; border:none;
+      border-radius:var(--radius-sm); transition:background .2s;
+      margin-top:14px;
+    }
+    .btn-login:hover { background:var(--brand-mid); }
+
+    .login-footer { text-align:center; margin-top:14px; font-size:10.5px; color:rgba(255,255,255,.4); }
+  </style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+
+    <!-- Brand -->
+    <div class="login-brand">
+      <div class="login-brand-icon">
+        {% if company_logo %}
+          <img src="{{ company_logo }}" alt="Logo" />
+        {% else %}
+          <i class="bi bi-bank2"></i>
+        {% endif %}
+      </div>
+      <div>
+        <div class="login-brand-name">{{ company_name if company_name else 'Jodala Microfinance' }}</div>
+        <div class="login-brand-sub">Management System</div>
+      </div>
+    </div>
+
+    <div class="login-divider"></div>
+
+    <p class="login-title">Welcome back</p>
+    <p class="login-sub">Sign in to your account to continue</p>
+
+    {% if error %}
+    <div class="alert alert-danger alert-dismissible py-1 mb-3" style="font-size:11.5px">
+      <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
+      <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <form id="loginForm" method="POST" action="{{ url_for('auth.login') }}">
+      <div class="mb-2">
+        <label class="form-label">Username or Email</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-person"></i></span>
+          <input type="text" class="form-control" name="username" id="username"
+                 placeholder="Enter username or email" required autofocus autocomplete="username" />
+        </div>
+      </div>
+
+      <div class="mb-1">
+        <label class="form-label">Password</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-lock"></i></span>
+          <input type="password" class="form-control" name="password" id="password"
+                 placeholder="Enter password" required autocomplete="current-password" />
+          <span class="input-group-text btn-show-pwd" id="togglePwd" title="Show password">
+            <i class="bi bi-eye" id="eyeIcon"></i>
+          </span>
+        </div>
+      </div>
+
+      <!-- 2FA field -->
+      <div class="mb-2 mt-2 {% if not require_2fa %}d-none{% endif %}" id="totpField">
+        <label class="form-label">Two-Factor Code</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-shield-check"></i></span>
+          <input type="text" class="form-control" name="totp_code" id="totpCode"
+                 placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}" />
+        </div>
+        <div class="form-text" style="font-size:10px">Enter the code from your authenticator app</div>
+      </div>
+
+      {% if require_2fa %}
+      <input type="hidden" name="user_id" value="{{ user_id }}" />
+      {% endif %}
+
+      <button type="submit" class="btn-login" id="loginBtn">
+        <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
+      </button>
+    </form>
+  </div>
+
+  <div class="login-footer">&copy; 2025 Jodala Microfinance Ltd. All rights reserved.</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+<script>
+  const t = localStorage.getItem('jd_theme') || 'light';
+  document.documentElement.setAttribute('data-bs-theme', t);
+
+  // Clear auth token and wipe password field on every load of the login page
+  localStorage.removeItem('jd_token');
+  document.getElementById('password').value = '';
+
+  document.getElementById('togglePwd').addEventListener('click', () => {
+    const pwd = document.getElementById('password');
+    const icon = document.getElementById('eyeIcon');
+    if (pwd.type === 'password') { pwd.type = 'text'; icon.className = 'bi bi-eye-slash'; }
+    else { pwd.type = 'password'; icon.className = 'bi bi-eye'; }
+  });
+
+  document.getElementById('loginForm').addEventListener('submit', function() {
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Signing in…';
+  });
+</script>
+</body>
+</html>
