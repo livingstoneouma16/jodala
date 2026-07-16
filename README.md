@@ -10,25 +10,14 @@ A complete, production-ready microfinance loan management system built with Flas
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Seed the database (creates all tables + demo data)
+# 2. Seed the database (creates all tables + initial data)
 python seed.py
 
 # 3. Run the application
-python run.py
+python app.py
 ```
 
 Visit: **http://localhost:5000**
-
----
-
-## 🔐 Demo Login Credentials
-
-| Role         | Username      | Password      |
-|--------------|---------------|---------------|
-| Admin        | `admin`       | `Admin@2024`  |
-| Loan Officer | `officer1`    | `Officer@2024`|
-| Accountant   | `accountant1` | `Account@2024`|
-| Cashier      | `cashier1`    | `Cashier@2024`|
 
 ---
 
@@ -36,12 +25,12 @@ Visit: **http://localhost:5000**
 
 ```
 jodala/
-├── run.py                    # Application entry point
-├── seed.py                   # Database seeder with demo data
+├── app.py                    # Application entry point
+├── seed.py                   # Database seeder script
 ├── requirements.txt          # Python dependencies
 ├── .env                      # Environment configuration
 │
-├── app/
+├── core/
 │   ├── __init__.py           # Flask app factory, extension setup
 │   ├── models/
 │   │   └── __init__.py       # All SQLAlchemy database models
@@ -70,7 +59,7 @@ jodala/
 └── templates/
     ├── base.html             # Sidebar layout, navbar, notifications
     ├── auth/
-    │   ├── login.html        # Login with demo credential buttons
+    │   ├── login.html        # Login page
     │   └── profile.html      # Profile edit + 2FA setup
     ├── dashboard/
     │   └── index.html        # Stats, charts, due-today, overdue, activity
@@ -292,6 +281,3 @@ For Nginx + SSL, point your reverse proxy to `http://localhost:5000`.
 ---
 
 *Built with ❤️ — Jodala Microfinance Management System v1.0*
-#   j o d a l a  
- #   j o d a l a  
- 
