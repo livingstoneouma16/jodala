@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Jodala Microfinance{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div id="dashboardApp">
+
+  <!-- Welcome Bar -->
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h5 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">
+        Good <span id="greetPart"></span>, {{ user.full_name.split()[0] if user else 'User' }} 👋
+      </h5>
+      <p class="text-muted mb-0" style="font-size:11.5px" id="todayDate"></p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('loans.apply_page') }}" class="btn btn-brand btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>New Loan
+      </a>
+      <a href="{{ url_for('repayments.record_page') }}" class="btn btn-brand-outline btn-sm">
+        <i class="bi bi-arrow-repeat me-1"></i>Record Payment
+      </a>
+    </div>
+  </div>
+
+  <!-- Main Account Balance -->
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <div class="stat-card gold">
+        <div class="stat-icon gold"><i class="bi bi-bank2"></i></div>
+        <div class="stat-body d-flex align-items-baseline gap-3 flex-wrap">
+          <div>
+            <div class="stat-label">Main Account</div>
+            <div class="stat-value" id="statMainAccount">—</div>
+          </div>
+          <div class="stat-change">Cash &amp; bank balance across the institution</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stat Cards Row 1 -->
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-sm-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon green"><i class="bi bi-people-fill"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Active Members</div>
+          <div class="stat-value" id="statMembers">—</div>
+          <div class="stat-change"><i class="bi bi-building me-1"></i><span id="statClients">—</span> clients</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon blue"><i class="bi bi-cash-coin"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Active Loans</div>
+          <div class="stat-value" id="statActiveLoans">—</div>
+          <div class="stat-change"><span id="statPending">—</span> pending approval</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-md-3">
+      <div class="stat-card gold">
+        <div class="stat-icon gold"><i class="bi bi-graph-up-arrow"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Loan Portfolio</div>
+          <div class="stat-value" id="statPortfolio">—</div>
+          <div class="stat-change"><span id="statDisbursed">—</span> disbursed total</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-md-3">
+      <div class="stat-card danger">
+        <div class="stat-icon red"><i class="bi bi-exclamation-circle-fill"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Portfolio at Risk</div>
+          <div class="stat-value" id="statPAR">—</div>
+          <div class="stat-change"><span id="statOverdue">—</span> overdue loans</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stat Cards Row 2 -->
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon teal"><i class="bi bi-arrow-down-circle-fill"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Monthly Collections</div>
+          <div class="stat-value" id="statCollections">—</div>
+          <div class="stat-change"><span id="statDueToday">—</span> due today</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon green"><i class="bi bi-piggy-bank-fill"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Total Savings</div>
+          <div class="stat-value" id="statSavings">—</div>
+          <div class="stat-change">All active accounts</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon purple"><i class="bi bi-receipt"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Monthly Income</div>
+          <div class="stat-value" id="statIncome">—</div>
+          <div class="stat-change">This month</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-md-3">
+      <div class="stat-card">
+        <div class="stat-icon gold"><i class="bi bi-calculator-fill"></i></div>
+        <div class="stat-body">
+          <div class="stat-label">Net Profit</div>
+          <div class="stat-value" id="statProfit">—</div>
+          <div class="stat-change"><span id="statExpenses">—</span> expenses</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts + Due Today -->
+  <div class="row g-3 mb-3">
+    <!-- Loan Trend Chart -->
+    <div class="col-12 col-lg-8">
+      <div class="jd-card h-100">
+        <div class="jd-card-header">
+          <div class="jd-card-title"><i class="bi bi-bar-chart-fill" style="color:var(--brand-light)"></i>Loan Activity (12 Months)</div>
+          <div class="d-flex gap-2">
+            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px"><span style="background:var(--brand-mid);width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Disbursed</span>
+            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:10px"><span style="background:#E9C46A;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Collected</span>
+          </div>
+        </div>
+        <div class="jd-card-body">
+          <div class="chart-wrapper"><canvas id="loanTrendChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loan Status Doughnut -->
+    <div class="col-12 col-lg-4">
+      <div class="jd-card h-100">
+        <div class="jd-card-header">
+          <div class="jd-card-title"><i class="bi bi-pie-chart-fill" style="color:var(--gold)"></i>Loan Status</div>
+        </div>
+        <div class="jd-card-body">
+          <div class="chart-wrapper" style="height:180px"><canvas id="statusChart"></canvas></div>
+          <div id="statusLegend" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- More Charts -->
+  <div class="row g-3 mb-3">
+    <!-- Income vs Expenses -->
+    <div class="col-12 col-lg-6">
+      <div class="jd-card h-100">
+        <div class="jd-card-header">
+          <div class="jd-card-title"><i class="bi bi-graph-up" style="color:var(--brand-light)"></i>Income vs Expenses (6 Months)</div>
+          <div class="d-flex gap-2">
+            <span class="badge" style="background:#D1FAE5;color:#065F46;font-size:10px"><span style="background:#52B788;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Income</span>
+            <span class="badge" style="background:#FFE4E6;color:#991B1B;font-size:10px"><span style="background:#E63946;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Expenses</span>
+          </div>
+        </div>
+        <div class="jd-card-body">
+          <div class="chart-wrapper"><canvas id="incomeExpenseChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Member Growth -->
+    <div class="col-12 col-lg-6">
+      <div class="jd-card h-100">
+        <div class="jd-card-header">
+          <div class="jd-card-title"><i class="bi bi-person-lines-fill" style="color:var(--gold)"></i>Member Growth (6 Months)</div>
+          <div class="d-flex gap-2">
+            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px"><span style="background:var(--brand-mid);width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Members</span>
+            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:10px"><span style="background:#E9C46A;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Clients</span>
+          </div>
+        </div>
+        <div class="jd-card-body">
+          <div class="chart-wrapper"><canvas id="memberGrowthChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tables Row -->
+  <div class="row g-3">
+    <!-- Due Today -->
+    <div class="col-12 col-lg-6">
+      <div class="jd-card h-100">
+        <div class="jd-card-header">
+          <div class="jd-card-title"><i class="bi bi-calendar-check-fill" style="color:var(--brand-light)"></i>Due Today</div>
+          <a href="{{ url_for('repayments.record_page') }}" class="btn btn-brand btn-sm"><i class="bi bi-plus me-1"></i>Record</a>
+        </div>
+        <div id="dueTodayList">
+          <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overdue Loans -->
+    <div class="col-12 col-lg-6">
+      <div class="jd-card h-100">
+        <div class="jd-card-header">
+          <div class="jd-card-title"><i class="bi bi-exclamation-triangle-fill" style="color:var(--danger)"></i>Overdue Loans</div>
+          <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-brand-outline">View Report</a>
+        </div>
+        <div id="overdueList">
+          <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// Greet
+const h = new Date().getHours();
+document.getElementById('greetPart').textContent = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+document.getElementById('todayDate').textContent = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+// Theme-aware chart defaults
+const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+Chart.defaults.color = isDark ? '#7A9B85' : '#6B8070';
+Chart.defaults.borderColor = isDark ? '#2D4035' : '#E2E8E4';
+Chart.defaults.font.family = 'Inter';
+
+let trendChart, statusChart;
+
+async function loadStats() {
+  try {
+    const s = await API.get('/dashboard/stats');
+    document.getElementById('statMainAccount').textContent  = fmtCurrency(s.main_account_balance);
+    document.getElementById('statMembers').textContent    = fmt(s.total_members, 0);
+    document.getElementById('statClients').textContent    = fmt(s.total_clients, 0);
+    document.getElementById('statActiveLoans').textContent = fmt(s.active_loans, 0);
+    document.getElementById('statPending').textContent    = fmt(s.pending_loans, 0);
+    document.getElementById('statPortfolio').textContent  = fmtCurrency(s.total_outstanding);
+    document.getElementById('statDisbursed').textContent  = fmtCurrency(s.total_disbursed);
+    document.getElementById('statPAR').textContent        = s.par.toFixed(1) + '%';
+    document.getElementById('statOverdue').textContent    = fmt(s.overdue_loans, 0);
+    document.getElementById('statCollections').textContent = fmtCurrency(s.monthly_collections);
+    document.getElementById('statDueToday').textContent   = fmt(s.due_today, 0);
+    document.getElementById('statSavings').textContent    = fmtCurrency(s.total_savings);
+    document.getElementById('statIncome').textContent     = fmtCurrency(s.monthly_income);
+    document.getElementById('statProfit').textContent     = fmtCurrency(s.monthly_profit);
+    document.getElementById('statExpenses').textContent   = fmtCurrency(s.monthly_expenses);
+  } catch (e) { Toast.error('Could not load stats'); }
+}
+
+async function loadTrendChart() {
+  try {
+    const data = await API.get('/dashboard/loan-trend');
+    const labels = data.map(d => d.month);
+    const disbursed = data.map(d => d.disbursed);
+    const collected = data.map(d => d.collected);
+
+    const ctx = document.getElementById('loanTrendChart').getContext('2d');
+    trendChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Disbursed', data: disbursed, backgroundColor: 'rgba(45,106,79,.7)', borderRadius: 4, borderSkipped: false },
+          { label: 'Collected', data: collected, backgroundColor: 'rgba(233,196,106,.7)', borderRadius: 4, borderSkipped: false }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { ticks: { callback: v => 'Ksh ' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) } }
+        }
+      }
+    });
+  } catch(e) {}
+}
+
+async function loadStatusChart() {
+  try {
+    const data = await API.get('/dashboard/loan-status-distribution');
+    const colors = { active:'#52B788', pending:'#E9C46A', approved:'#4895EF', completed:'#0F766E',
+                     rejected:'#E63946', disbursed:'#7C3AED', written_off:'#9CA3AF' };
+    const labels = data.map(d => d.status);
+    const values = data.map(d => d.count);
+    const bgs = labels.map(l => colors[l] || '#9CA3AF');
+
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    statusChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data: values, backgroundColor: bgs, borderWidth: 2, hoverOffset: 6 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '70%',
+                 plugins: { legend: { display: false } } }
+    });
+
+    document.getElementById('statusLegend').innerHTML = data.slice(0,5).map(d =>
+      `<div class="d-flex justify-content-between align-items-center mb-1" style="font-size:11px">
+        <div class="d-flex align-items-center gap-1">
+          <span style="width:8px;height:8px;border-radius:50%;background:${colors[d.status] || '#9CA3AF'};display:inline-block"></span>
+          <span style="text-transform:capitalize">${escapeHtml(d.status.replace('_',' '))}</span>
+        </div>
+        <span style="font-weight:600">${d.count}</span>
+      </div>`
+    ).join('');
+  } catch(e) {}
+}
+
+async function loadIncomeExpenseChart() {
+  try {
+    const data = await API.get('/dashboard/income-expense-trend');
+    const labels = data.map(d => d.month);
+    const income = data.map(d => d.income);
+    const expenses = data.map(d => d.expenses);
+
+    const ctx = document.getElementById('incomeExpenseChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Income', data: income, borderColor: '#52B788', backgroundColor: 'rgba(82,183,136,.15)', fill: true, tension: 0.3 },
+          { label: 'Expenses', data: expenses, borderColor: '#E63946', backgroundColor: 'rgba(230,57,70,.1)', fill: true, tension: 0.3 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { ticks: { callback: v => 'Ksh ' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) } }
+        }
+      }
+    });
+  } catch(e) {}
+}
+
+async function loadMemberGrowthChart() {
+  try {
+    const data = await API.get('/dashboard/member-growth');
+    const labels = data.map(d => d.month);
+    const members = data.map(d => d.members);
+    const clients = data.map(d => d.clients);
+
+    const ctx = document.getElementById('memberGrowthChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Members', data: members, backgroundColor: 'rgba(29,90,150,.7)', borderRadius: 4, borderSkipped: false },
+          { label: 'Clients', data: clients, backgroundColor: 'rgba(233,196,106,.7)', borderRadius: 4, borderSkipped: false }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, stacked: true },
+          y: { stacked: true, ticks: { precision: 0 } }
+        }
+      }
+    });
+  } catch(e) {}
+}
+
+async function loadDueToday() {
+  try {
+    const data = await API.get('/dashboard/due-today');
+    const el = document.getElementById('dueTodayList');
+    if (!data.length) {
+      el.innerHTML = '<div class="empty-state"><i class="bi bi-calendar-check"></i><p>No payments due today</p></div>';
+      return;
+    }
+    el.innerHTML = '<div class="table-responsive"><table class="table table-borderless mb-0"><thead><tr><th>Loan</th><th>Borrower</th><th>Installment</th><th>Amount Due</th></tr></thead><tbody>' +
+      data.map(d => `<tr>
+        <td><span style="font-weight:600;font-size:12px">${escapeHtml(d.loan_number)}</span></td>
+        <td style="font-size:13px">${escapeHtml(d.borrower)}</td>
+        <td><span class="badge bg-secondary">#${d.installment}</span></td>
+        <td style="font-weight:600;color:var(--brand-mid)">${fmtCurrency(d.amount_due)}</td>
+      </tr>`).join('') + '</tbody></table></div>';
+  } catch(e) {}
+}
+
+async function loadOverdue() {
+  try {
+    const data = await API.get('/dashboard/overdue-loans');
+    const el = document.getElementById('overdueList');
+    if (!data.length) {
+      el.innerHTML = '<div class="empty-state"><i class="bi bi-check-circle text-success"></i><p>No overdue loans — great work!</p></div>';
+      return;
+    }
+    el.innerHTML = '<div class="table-responsive"><table class="table table-borderless mb-0"><thead><tr><th>Loan</th><th>Borrower</th><th>Outstanding</th><th>Days Overdue</th></tr></thead><tbody>' +
+      data.map(d => `<tr>
+        <td><span style="font-weight:600;font-size:12px">${escapeHtml(d.loan_number)}</span></td>
+        <td style="font-size:13px">${escapeHtml(d.borrower)}</td>
+        <td style="font-weight:600">${fmtCurrency(d.outstanding)}</td>
+        <td><span class="status-pill status-overdue">${d.overdue_days}d</span></td>
+      </tr>`).join('') + '</tbody></table></div>';
+  } catch(e) {}
+}
+// Load everything
+loadStats();
+loadTrendChart();
+loadStatusChart();
+loadIncomeExpenseChart();
+loadMemberGrowthChart();
+loadDueToday();
+loadOverdue();
+</script>
+{% endblock %}

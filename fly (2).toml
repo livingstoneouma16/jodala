@@ -1,0 +1,50 @@
+# Fly.io config for Jodala Microfinance.
+#
+# First-time setup (run once):
+#   fly launch --no-deploy                       # picks up this file; say no to overwriting it
+#   fly postgres create --name jodala-db --region iad   # match region below
+#   fly postgres attach jodala-db                # wires DATABASE_URL into this app's secrets
+#   fly redis create                              # managed Upstash Redis; note the redis:// URL it prints
+#   fly secrets set SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+#   fly secrets set JWT_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+#   fly secrets set RATELIMIT_STORAGE_URI="redis://default:<password>@<host>.upstash.io"
+#   fly deploy
+#
+# The database is PostgreSQL, managed as its own Fly app (`fly postgres
+# attach` sets DATABASE_URL as a secret automatically) -- this web app has
+# no local volume and can be scaled past 1 Machine if needed.
+# min_machines_running stays at 1 below regardless, so this app never scales
+# to zero: a `disbursed`/`repaid` M-Pesa callback arriving while every
+# Machine is stopped would just fail rather than queue.
+
+app = "jodala-microfinance"          # must be globally unique on Fly -- change this
+primary_region = "iad"                # pick the region closest to your users
+
+[build]
+
+[env]
+  APP_ENV = "production"
+  COOKIE_SECURE = "true"
+  PORT = "8000"
+  # DATABASE_URL is set automatically by `fly postgres attach`.
+  # CORS_ALLOWED_ORIGINS, GMAIL_*, MPESA_* -- set with `fly secrets set` or
+  # configure from inside the app under Settings instead.
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false     # keep running -- see note above on M-Pesa callbacks
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

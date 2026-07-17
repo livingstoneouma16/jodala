@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Register Member — Jodala Microfinance{% endblock %}
+{% block page_title %}Register Member{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">Register New Member</h4>
+    <p class="text-muted mb-0" style="font-size:13px">Fill in the details below to register a new member</p>
+  </div>
+  <a href="{{ url_for('members.index') }}" class="btn btn-brand-outline btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Members
+  </a>
+</div>
+
+<form id="registerForm">
+<div class="row g-3 justify-content-center">
+  <div class="col-12 col-lg-7">
+    <div class="jd-card mb-3">
+      <div class="jd-card-header">
+        <div class="jd-card-title"><i class="bi bi-person-fill" style="color:var(--brand-light)"></i>Member Details</div>
+      </div>
+      <div class="jd-card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">First Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="first_name" required placeholder="John" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Last Name</label>
+            <input type="text" class="form-control" name="last_name" placeholder="Smith" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Gender</label>
+            <select class="form-select" name="gender">
+              <option value="">Select</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Phone Number</label>
+            <input type="tel" class="form-control" name="phone" placeholder="+254-700-000000" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" name="email" placeholder="name@example.com" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Region</label>
+            <select class="form-select" name="region" id="regionSelect">
+              <option value="">Select region</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Status</label>
+            <select class="form-select" name="status">
+              <option value="active" selected>Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="blacklisted">Blacklisted</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="jd-card">
+      <div class="jd-card-body">
+        <button type="submit" class="btn btn-brand w-100" id="submitBtn">
+          <i class="bi bi-person-check-fill me-1"></i>Register Member
+        </button>
+        <a href="{{ url_for('members.index') }}" class="btn btn-brand-outline w-100 mt-2">Cancel</a>
+      </div>
+    </div>
+  </div>
+</div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadRegionOptions() {
+  const sel = document.getElementById('regionSelect');
+  try {
+    const regions = await API.get('/settings/api/regions');
+    regions.filter(r => r.is_active).forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.name;
+      opt.textContent = r.name;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+loadRegionOptions();
+
+document.getElementById('registerForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  setLoading(btn, true);
+
+  const fd = new FormData(this);
+  const body = Object.fromEntries(fd.entries());
+
+  try {
+    const data = await API.post('/members/api', body);
+    Toast.success(`Member ${data.member.member_number} registered successfully!`);
+    setTimeout(() => window.location.href = `/members/${data.member.id}`, 1200);
+  } catch(e) {
+    Toast.error(e.message);
+    setLoading(btn, false);
+  }
+});
+</script>
+{% endblock %}

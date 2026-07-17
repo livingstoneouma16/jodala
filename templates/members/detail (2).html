@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}{{ member.first_name }} {{ member.last_name }} — Jodala Microfinance{% endblock %}
+{% block page_title %}Member Profile{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div class="d-flex align-items-center gap-3">
+    <div style="width:52px;height:52px;border-radius:50%;background:var(--brand-mid);display:grid;place-items:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0">
+      {{ member.first_name[0] if member.first_name else '' }}{{ member.last_name[0] if member.last_name else '' }}
+    </div>
+    <div>
+      <h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">{{ member.first_name }} {{ member.last_name }}</h4>
+      <div class="d-flex align-items-center gap-2">
+        <span style="font-size:12px;color:var(--text-muted)">{{ member.member_number }}</span>
+        <span class="status-pill status-{{ member.status }}">{{ member.status }}</span>
+      </div>
+    </div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('members.edit_page', member_id=member.id) }}" class="btn btn-brand-outline btn-sm">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    <a href="{{ url_for('loans.apply_page') }}" class="btn btn-brand btn-sm">
+      <i class="bi bi-plus me-1"></i>New Loan
+    </a>
+    <a href="{{ url_for('members.index') }}" class="btn btn-sm" style="background:var(--surface-2);border:1px solid var(--border)">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Details Card -->
+  <div class="col-12 col-lg-4">
+    <div class="jd-card mb-3">
+      <div class="jd-card-header">
+        <div class="jd-card-title"><i class="bi bi-person-fill" style="color:var(--brand-light)"></i>Personal Information</div>
+      </div>
+      <div class="jd-card-body">
+        <div class="detail-grid">
+          <div class="detail-item">
+            <div class="detail-label">First Name</div>
+            <div class="detail-value">{{ member.first_name }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Last Name</div>
+            <div class="detail-value">{{ member.last_name }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Gender</div>
+            <div class="detail-value">{{ member.gender or '—' }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Phone</div>
+            <div class="detail-value">{{ member.phone }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Email</div>
+            <div class="detail-value">{{ member.email or '—' }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Region</div>
+            <div class="detail-value">{{ member.region or '—' }}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Address</div>
+            <div class="detail-value">{{ member.address or '—' }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loans and Savings -->
+  <div class="col-12 col-lg-8">
+    <!-- Loans -->
+    <div class="jd-card mb-3">
+      <div class="jd-card-header">
+        <div class="jd-card-title"><i class="bi bi-cash-coin" style="color:var(--brand-light)"></i>Loan History</div>
+        <a href="{{ url_for('loans.apply_page') }}" class="btn btn-brand btn-sm"><i class="bi bi-plus"></i></a>
+      </div>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead><tr>
+            <th>Loan No</th><th>Product</th><th>Principal</th><th>Outstanding</th><th>Status</th><th>Date</th><th></th>
+          </tr></thead>
+          <tbody id="loansTable">
+            <tr><td colspan="7" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Savings -->
+    <div class="jd-card">
+      <div class="jd-card-header">
+        <div class="jd-card-title"><i class="bi bi-piggy-bank-fill" style="color:var(--brand-light)"></i>Savings Accounts</div>
+        <a href="{{ url_for('savings.index') }}?member_id={{ member.id }}" class="btn btn-brand btn-sm" title="Open a savings account for this member"><i class="bi bi-plus"></i></a>
+      </div>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead><tr>
+            <th>Account No</th><th>Product</th><th>Balance</th><th>Status</th><th>Opened</th>
+          </tr></thead>
+          <tbody id="savingsTable">
+            <tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadMemberData() {
+  try {
+    const data = await API.get('/members/api/{{ member.id }}');
+
+    // Loans
+    const loansTbody = document.getElementById('loansTable');
+    if (!data.loans.length) {
+      loansTbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="bi bi-cash-coin"></i><p>No loans yet</p></div></td></tr>';
+    } else {
+      loansTbody.innerHTML = data.loans.map(l => `
+        <tr>
+          <td><span style="font-weight:600;font-size:12px;color:var(--brand-mid)">${escapeHtml(l.loan_number)}</span></td>
+          <td style="font-size:12px">${escapeHtml(l.product_name)}</td>
+          <td style="font-weight:600">${fmtCurrency(l.principal_amount)}</td>
+          <td style="font-weight:600;color:${l.outstanding_balance > 0 ? 'var(--danger)' : 'var(--brand-light)'}">${fmtCurrency(l.outstanding_balance)}</td>
+          <td>${statusPill(l.status)}</td>
+          <td style="font-size:12px;color:var(--text-muted)">${fmtDate(l.application_date)}</td>
+          <td><a href="/loans/${l.id}" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--surface-2);border:1px solid var(--border)">
+            <i class="bi bi-eye"></i></a></td>
+        </tr>`).join('');
+    }
+
+    // Savings
+    const savTbody = document.getElementById('savingsTable');
+    if (!data.savings_accounts.length) {
+      savTbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="bi bi-piggy-bank"></i><p>No savings accounts</p></div></td></tr>';
+    } else {
+      savTbody.innerHTML = data.savings_accounts.map(s => `
+        <tr>
+          <td style="font-weight:600;font-size:12px">${escapeHtml(s.account_number)}</td>
+          <td style="font-size:13px">${escapeHtml(s.product_name)}</td>
+          <td style="font-weight:600;color:var(--brand-mid)">${fmtCurrency(s.balance)}</td>
+          <td>${statusPill(s.status)}</td>
+          <td style="font-size:12px;color:var(--text-muted)">${fmtDate(s.opened_at)}</td>
+        </tr>`).join('');
+    }
+  } catch(e) { Toast.error('Failed to load member data'); }
+}
+
+loadMemberData();
+</script>
+{% endblock %}
