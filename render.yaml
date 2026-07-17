@@ -1,6 +1,5 @@
-# Render Blueprint -- deploys this app + a Redis (Key Value) instance for
-# correct multi-worker rate limiting, with a persistent disk for the SQLite
-# database.
+# Render Blueprint -- deploys this app + a managed PostgreSQL database + a
+# Redis (Key Value) instance for correct multi-worker rate limiting.
 #
 # Deploy: push this repo to GitHub/GitLab, then in the Render dashboard:
 #   New -> Blueprint -> select this repo. Render reads this file and
@@ -17,9 +16,8 @@
 # Settings > Notifications / Settings > M-Pesa instead, which takes
 # precedence over env vars either way.
 #
-# NOTE: a service with an attached persistent disk can't be horizontally
-# scaled to multiple instances on Render -- which is fine here, since
-# SQLite only supports one writer anyway (see DEPLOYMENT.md).
+# Because the database is now PostgreSQL (not a local SQLite file), this
+# web service has no disk and can be scaled to multiple instances if needed.
 
 services:
   - type: web
@@ -32,8 +30,10 @@ services:
     envVars:
       - key: APP_ENV
         value: production
-      - key: DB_PATH
-        value: /data/sacco.db
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jodala-db
+          property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: JWT_SECRET_KEY
@@ -58,10 +58,6 @@ services:
         sync: false
       - key: MPESA_CONSUMER_SECRET
         sync: false
-    disk:
-      name: jodala-data
-      mountPath: /data
-      sizeGB: 1
 
   - type: keyvalue
     name: jodala-redis
@@ -72,3 +68,10 @@ services:
     # no external/public access -- only other services in this Blueprint
     # (i.e. the web service above) can reach it, which is all we need.
     ipAllowList: []
+
+databases:
+  - name: jodala-db
+    plan: starter
+    region: oregon
+    databaseName: jodala
+    user: jodala

@@ -1,6 +1,6 @@
 # 🏦 Jodala Microfinance Management System
 
-A complete, production-ready microfinance loan management system built with Flask (Python), Bootstrap 5, SQLite, and JWT authentication.
+A complete, production-ready microfinance loan management system built with Flask (Python), Bootstrap 5, PostgreSQL, and JWT authentication.
 
 ---
 
@@ -10,10 +10,14 @@ A complete, production-ready microfinance loan management system built with Flas
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Seed the database (creates all tables + initial data)
+# 2. Create the database (once)
+createdb jodala
+# ...or set DATABASE_URL to point at an existing PostgreSQL database.
+
+# 3. Seed the database (creates all tables + initial data)
 python seed.py
 
-# 3. Run the application
+# 4. Run the application
 python app.py
 ```
 
@@ -216,15 +220,14 @@ jodala/
 ```ini
 SECRET_KEY=change-in-production
 JWT_SECRET_KEY=change-in-production
-DATABASE_URL=sqlite:///jodala.db
+DATABASE_URL=postgresql://user:password@localhost:5432/jodala
 FLASK_ENV=production
 COMPANY_NAME=Jodala Microfinance
 ```
 
-To use PostgreSQL:
-```ini
-DATABASE_URL=postgresql://user:password@localhost/jodala_db
-```
+No `DATABASE_URL`? The app falls back to `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE`
+env vars (standard libpq vars), and finally to `postgresql://postgres@localhost:5432/jodala`
+for local dev -- create that database once with `createdb jodala`.
 
 ---
 

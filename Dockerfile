@@ -2,11 +2,12 @@
 #
 # Build:  docker build -t jodala-microfinance .
 # Run:    docker run -p 8000:8000 --env-file .env.production \
-#           -v jodala-data:/data jodala-microfinance
+#           jodala-microfinance
 #
-# The SQLite database lives at /data/sacco.db (see DB_PATH below) on a named
-# volume so it survives container restarts/redeploys -- without that volume
-# every deploy wipes all data.
+# Data lives in PostgreSQL, reached over the network via DATABASE_URL --
+# point that at a managed Postgres instance (Render/Railway/Fly.io addon)
+# or the `postgres` service in docker-compose.yml. There's no local volume
+# to manage; every deploy is stateless as far as this container is concerned.
 
 FROM python:3.12-slim AS base
 
@@ -21,8 +22,9 @@ WORKDIR /app
 
 # System deps needed to build `cryptography` and `pillow` wheels on slim,
 # plus gosu (a minimal, purpose-built su/sudo replacement) used by
-# entrypoint.sh to drop from root to the app user after fixing volume
-# ownership -- see that file for why this is necessary.
+# entrypoint.sh to drop from root to the app user before exec'ing the real
+# process. libpq-dev isn't required: psycopg2-binary ships libpq statically
+# bundled in its wheel.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
@@ -39,15 +41,12 @@ RUN chmod +x entrypoint.sh
 
 # Create the unprivileged user the app actually runs as. Deliberately NOT
 # switching to it here with USER -- the container must start as root so
-# entrypoint.sh can fix ownership of a freshly-mounted volume (which
-# arrives root-owned on Render/Railway/Fly.io) before it execs into
-# appuser for the real gunicorn process. The app itself never runs as root.
+# entrypoint.sh can drop privileges cleanly via gosu before exec'ing into
+# the real gunicorn process. The app itself never runs as root.
 RUN useradd --create-home --shell /bin/bash appuser \
-    && mkdir -p /data \
-    && chown -R appuser:appuser /app /data
+    && chown -R appuser:appuser /app
 
 ENV APP_ENV=production \
-    DB_PATH=/data/sacco.db \
     PORT=8000
 
 EXPOSE 8000

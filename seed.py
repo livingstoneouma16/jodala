@@ -26,28 +26,28 @@ def seed_database():
         print("Creating loan products...")
         loan_products = [
             ('Personal Emergency Loan', 'PEL', 'Quick personal loans for emergencies',
-             100, 5000, 5.0, 'flat', 'monthly', 1, 12, 0.5, 2.0, 1.0, 0, 0),
+             100, 5000, 5.0, 'flat', 'monthly', 1, 12, 0.5, 1.0, 0, 0),
             ('Business Development Loan', 'BDL', 'Loans for business expansion and development',
-             1000, 50000, 4.0, 'reducing', 'monthly', 3, 36, 0.3, 1.5, 0.5, 1, 0),
+             1000, 50000, 4.0, 'reducing', 'monthly', 3, 36, 0.3, 0.5, 1, 0),
             ('Agriculture Loan', 'AGL', 'Seasonal agricultural financing',
-             500, 20000, 3.5, 'flat', 'monthly', 3, 18, 0.2, 1.0, 0.5, 0, 0),
+             500, 20000, 3.5, 'flat', 'monthly', 3, 18, 0.2, 0.5, 0, 0),
             ('Salary Advance', 'SAL', 'Short-term salary-backed loans',
-             100, 3000, 2.5, 'flat', 'monthly', 1, 6, 1.0, 0, 0, 0, 0),
+             100, 3000, 2.5, 'flat', 'monthly', 1, 6, 1.0, 0, 0, 0),
             ('Group Loan', 'GRP', 'Loans for registered groups',
-             500, 30000, 3.0, 'flat', 'monthly', 3, 24, 0.3, 1.0, 0.5, 0, 0),
+             500, 30000, 3.0, 'flat', 'monthly', 3, 24, 0.3, 0.5, 0, 0),
         ]
         for (name, code, desc, min_amt, max_amt, rate, itype, freq, min_t, max_t,
-             penalty, proc_fee, ins_fee, req_guarantor, req_collateral) in loan_products:
-            existing = db.execute("SELECT id FROM loan_products WHERE code = ?", (code,)).fetchone()
+             penalty, ins_fee, req_guarantor, req_collateral) in loan_products:
+            existing = db.execute("SELECT id FROM loan_products WHERE code = %s", (code,)).fetchone()
             if not existing:
                 execute(
                     """INSERT INTO loan_products (name, code, description, min_amount, max_amount,
                            interest_rate, interest_type, repayment_frequency, min_term, max_term,
-                           penalty_rate, processing_fee, insurance_fee, require_guarantor,
+                           penalty_rate, insurance_fee, require_guarantor,
                            require_collateral, is_active, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)""",
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)""",
                     (name, code, desc, min_amt, max_amt, rate, itype, freq, min_t, max_t,
-                     penalty, proc_fee, ins_fee, req_guarantor, req_collateral, now)
+                     penalty, ins_fee, req_guarantor, req_collateral, now)
                 )
 
         print("Creating savings products...")
@@ -57,11 +57,11 @@ def seed_database():
             ('Junior Savings', 'JS001', 'Savings account for children', 4.0, 10),
         ]
         for name, code, desc, rate, min_bal in savings_products:
-            existing = db.execute("SELECT id FROM savings_products WHERE code = ?", (code,)).fetchone()
+            existing = db.execute("SELECT id FROM savings_products WHERE code = %s", (code,)).fetchone()
             if not existing:
                 execute(
                     """INSERT INTO savings_products (name, code, description, interest_rate, min_balance, is_active, created_at)
-                       VALUES (?, ?, ?, ?, ?, 1, ?)""",
+                       VALUES (%s, %s, %s, %s, %s, 1, %s)""",
                     (name, code, desc, rate, min_bal, now)
                 )
 
@@ -77,18 +77,18 @@ def seed_database():
             ('5600', 'Loan Loss Provision', 'expense'), ('5700', 'Other Expenses', 'expense'),
         ]
         for code, name, acc_type in extra_accounts:
-            existing = db.execute("SELECT id FROM accounts WHERE code = ?", (code,)).fetchone()
+            existing = db.execute("SELECT id FROM accounts WHERE code = %s", (code,)).fetchone()
             if not existing:
-                execute("INSERT INTO accounts (code, name, account_type, balance, is_active) VALUES (?, ?, ?, 0, 1)",
+                execute("INSERT INTO accounts (code, name, account_type, balance, is_active) VALUES (%s, %s, %s, 0, 1)",
                         (code, name, acc_type))
 
         print("Creating seed user...")
-        existing_user = db.execute("SELECT id FROM users WHERE username = ?", ('Livow',)).fetchone()
+        existing_user = db.execute("SELECT id FROM users WHERE username = %s", ('Livow',)).fetchone()
         if not existing_user:
             execute(
                 """INSERT INTO users (username, email, password_hash, full_name, role,
                        is_active, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+                   VALUES (%s, %s, %s, %s, %s, 1, %s, %s)""",
                 ('Livow', 'livow@jodala.local', hash_password('Lee 1234'),
                  'Livow', 'admin', now, now)
             )
