@@ -147,10 +147,15 @@ auto-generated).
 2. In the Render dashboard: **New > Blueprint**, select the repo. Render
    reads `render.yaml` and provisions both services.
 3. When prompted (or afterwards, under the web service's
-   **Environment** tab), fill in `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`,
+   **Environment** tab), fill in `RESEND_API_KEY`, `RESEND_FROM_EMAIL`,
    `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET` -- or skip these and
    configure them from inside the app under Settings instead, either
-   works.
+   works. Email must go through Resend's HTTP API rather than Gmail SMTP:
+   Render blocks outbound SMTP ports (25/465/587) at the network level, so
+   direct Gmail SMTP will always fail with "Network is unreachable"
+   regardless of credentials. Get a free API key at
+   https://resend.com/api-keys -- the free tier covers 100 emails/day,
+   which is plenty for SACCO notifications.
 4. Once deployed, note the `https://your-app.onrender.com` URL Render
    gives you and set it as the M-Pesa Callback/Result/Timeout URLs under
    Settings > M-Pesa in-app.
