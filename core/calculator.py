@@ -34,7 +34,7 @@ def next_due_date(start_date, installment_number, repayment_frequency):
 
 
 def loan_summary(principal, interest_rate, term, interest_type='flat',
-                  processing_fee_pct=0, insurance_fee_pct=0):
+                  insurance_fee_pct=0):
     """
     Headline numbers for a proposed loan, before a day-by-day schedule
     is generated. interest_rate is a percentage per repayment period.
@@ -42,7 +42,6 @@ def loan_summary(principal, interest_rate, term, interest_type='flat',
     principal = float(principal)
     interest_rate = float(interest_rate)
     term = int(term)
-    processing_fee_pct = float(processing_fee_pct or 0)
     insurance_fee_pct = float(insurance_fee_pct or 0)
 
     if interest_type == 'flat':
@@ -58,7 +57,6 @@ def loan_summary(principal, interest_rate, term, interest_type='flat',
             )
         total_interest = round((installment_amount * term) - principal, 2)
 
-    processing_fee = round(principal * processing_fee_pct / 100, 2)
     insurance_fee = round(principal * insurance_fee_pct / 100, 2)
     total_repayable = round(principal + total_interest, 2)
 
@@ -70,9 +68,8 @@ def loan_summary(principal, interest_rate, term, interest_type='flat',
         'total_interest': round(total_interest, 2),
         'total_repayable': total_repayable,
         'installment_amount': installment_amount,
-        'processing_fee': processing_fee,
         'insurance_fee': insurance_fee,
-        'net_disbursement': round(principal - processing_fee - insurance_fee, 2),
+        'net_disbursement': round(principal - insurance_fee, 2),
     }
 
 

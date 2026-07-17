@@ -53,7 +53,7 @@ class MpesaError(Exception):
 def _setting(key, default=None):
     try:
         row = get_db().execute(
-            "SELECT value FROM company_settings WHERE key = ?", (key,)
+            "SELECT value FROM company_settings WHERE key = %s", (key,)
         ).fetchone()
         if row and row['value']:
             return row['value']
@@ -296,6 +296,6 @@ def initiate_b2c_payment(phone, amount, remarks, occasion, result_url, timeout_u
 
 def get_recent_mpesa_log(limit=25):
     rows = get_db().execute(
-        "SELECT * FROM mpesa_transactions ORDER BY created_at DESC LIMIT ?", (limit,)
+        "SELECT * FROM mpesa_transactions ORDER BY created_at DESC LIMIT %s", (limit,)
     ).fetchall()
     return [dict(r) for r in rows]

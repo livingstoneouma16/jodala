@@ -62,11 +62,11 @@ def adjust_account_balance(code, delta):
     stay at zero forever no matter how much real activity happens.
     Silently does nothing if the account code doesn't exist, so seeding
     differences across environments can't crash a request."""
-    account = get_db().execute("SELECT id, balance FROM accounts WHERE code = ?", (code,)).fetchone()
+    account = get_db().execute("SELECT id, balance FROM accounts WHERE code = %s", (code,)).fetchone()
     if not account:
         return None
     new_balance = round((account['balance'] or 0) + delta, 2)
-    execute("UPDATE accounts SET balance = ? WHERE id = ?", (new_balance, account['id']))
+    execute("UPDATE accounts SET balance = %s WHERE id = %s", (new_balance, account['id']))
     return new_balance
 
 
@@ -89,12 +89,12 @@ def adjust_main_account_balance(delta):
     new_balance = round(current + delta, 2)
     if row:
         execute(
-            "UPDATE company_settings SET value = ?, updated_at = ? WHERE key = 'main_account_opening_balance'",
+            "UPDATE company_settings SET value = %s, updated_at = %s WHERE key = 'main_account_opening_balance'",
             (str(new_balance), now)
         )
     else:
         execute(
-            "INSERT INTO company_settings (key, value, updated_at) VALUES ('main_account_opening_balance', ?, ?)",
+            "INSERT INTO company_settings (key, value, updated_at) VALUES ('main_account_opening_balance', %s, %s)",
             (str(new_balance), now)
         )
     adjust_account_balance('1000', delta)
@@ -114,7 +114,7 @@ def log_audit(action, resource_type=None, resource_id=None, old_values=None, new
     execute(
         """INSERT INTO audit_logs (user_id, action, resource_type, resource_id,
                                     old_values, new_values, ip_address, user_agent, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (user_id, action, resource_type, resource_id,
          json.dumps(old_values) if old_values else None,
          json.dumps(new_values) if new_values else None,
@@ -126,7 +126,7 @@ def get_overdue_loan_ids():
     today = date.today().isoformat()
     rows = get_db().execute(
         """SELECT DISTINCT loan_id FROM loan_schedules
-           WHERE due_date < ? AND status IN ('pending', 'partial')""",
+           WHERE due_date < %s AND status IN ('pending', 'partial')""",
         (today,)
     ).fetchall()
     return [r['loan_id'] for r in rows]
@@ -166,13 +166,13 @@ def notify(user_id, title, message, notification_type='info', related_type=None,
         execute(
             """INSERT INTO notifications (user_id, title, message, notification_type,
                    related_type, related_id, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
             (user_id, title, message, notification_type, related_type, related_id, utcnow())
         )
 
         if notify_user_email:
             user_row = get_db().execute(
-                "SELECT email, full_name FROM users WHERE id = ?", (user_id,)
+                "SELECT email, full_name FROM users WHERE id = %s", (user_id,)
             ).fetchone()
             if user_row and user_row['email']:
                 staff_email = user_row['email']
@@ -214,5 +214,5 @@ def paginate(base_sql, count_sql, params, page, per_page):
     total = total_row[0] if total_row else 0
     pages = max(1, (total + per_page - 1) // per_page)
     offset = (page - 1) * per_page
-    rows = get_db().execute(base_sql + " LIMIT ? OFFSET ?", params + (per_page, offset)).fetchall()
+    rows = get_db().execute(base_sql + " LIMIT %s OFFSET %s", params + (per_page, offset)).fetchall()
     return rows, total, pages

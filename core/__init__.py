@@ -8,7 +8,7 @@ from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
-from core.database import init_db, resolve_db_path
+from core.database import init_db, resolve_db_url
 
 load_dotenv()
 
@@ -61,7 +61,7 @@ def create_app():
     # Configuration
     app.config['ENV_NAME'] = os.getenv('APP_ENV', 'development').strip().lower()
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
-    app.config['DB_PATH'] = os.getenv('DB_PATH', resolve_db_path())
+    app.config['DATABASE_URL'] = resolve_db_url()
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key')
 
     # Refuse to boot with the insecure default secrets once this is a real

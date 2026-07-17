@@ -23,7 +23,7 @@ def register_page():
 @clients_bp.route('/<int:client_id>/edit')
 @login_required
 def edit_page(client_id):
-    client = get_db().execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
+    client = get_db().execute("SELECT * FROM clients WHERE id = %s", (client_id,)).fetchone()
     return render_template('clients/edit.html', user=get_current_user(), client=client)
 
 
@@ -38,10 +38,10 @@ def list_clients():
     where, params = [], []
     if search:
         like = f'%{search}%'
-        where.append("(first_name LIKE ? OR last_name LIKE ? OR client_number LIKE ? OR phone LIKE ? OR national_id LIKE ?)")
+        where.append("(first_name LIKE %s OR last_name LIKE %s OR client_number LIKE %s OR phone LIKE %s OR national_id LIKE %s)")
         params += [like, like, like, like, like]
     if status:
-        where.append("status = ?")
+        where.append("status = %s")
         params.append(status)
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
@@ -80,7 +80,7 @@ def create_client():
     existing_phone = None
     if phone:
         existing_phone = get_db().execute(
-            "SELECT id FROM clients WHERE phone = ?", (phone,)
+            "SELECT id FROM clients WHERE phone = %s", (phone,)
         ).fetchone()
     if existing_phone:
         return jsonify({'error': 'Phone number already registered'}), 400
@@ -88,7 +88,7 @@ def create_client():
     cur = execute(
         """INSERT INTO clients (client_number, first_name, last_name, gender, date_of_birth,
                phone, email, region, status, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (generate_client_number(),
          first_name,
          last_name,
@@ -100,7 +100,7 @@ def create_client():
          status,
          user['id'], now, now)
     )
-    client = get_db().execute("SELECT * FROM clients WHERE id = ?", (cur.lastrowid,)).fetchone()
+    client = get_db().execute("SELECT * FROM clients WHERE id = %s", (cur.lastrowid,)).fetchone()
     log_audit('CREATE_CLIENT', 'client', client['id'], new_values=client_public(client))
 
     notify(
@@ -125,12 +125,12 @@ def create_client():
 @login_required
 @role_required('admin')
 def delete_client(client_id):
-    client = get_db().execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
+    client = get_db().execute("SELECT * FROM clients WHERE id = %s", (client_id,)).fetchone()
     if not client:
         return jsonify({'error': 'Client not found'}), 404
 
     active_loan = get_db().execute(
-        "SELECT id FROM loans WHERE client_id = ? AND status IN ('active', 'completed')",
+        "SELECT id FROM loans WHERE client_id = %s AND status IN ('active', 'completed')",
         (client_id,)
     ).fetchone()
     if active_loan:
@@ -139,15 +139,15 @@ def delete_client(client_id):
     old_data = client_public(client)
 
     loan_ids = [r['id'] for r in get_db().execute(
-        "SELECT id FROM loans WHERE client_id = ?", (client_id,)
+        "SELECT id FROM loans WHERE client_id = %s", (client_id,)
     ).fetchall()]
     for loan_id in loan_ids:
-        execute("DELETE FROM loan_schedules WHERE loan_id = ?", (loan_id,))
-        execute("DELETE FROM repayments WHERE loan_id = ?", (loan_id,))
+        execute("DELETE FROM loan_schedules WHERE loan_id = %s", (loan_id,))
+        execute("DELETE FROM repayments WHERE loan_id = %s", (loan_id,))
     if loan_ids:
-        execute("DELETE FROM loans WHERE client_id = ?", (client_id,))
+        execute("DELETE FROM loans WHERE client_id = %s", (client_id,))
 
-    execute("DELETE FROM clients WHERE id = ?", (client_id,))
+    execute("DELETE FROM clients WHERE id = %s", (client_id,))
     log_audit('DELETE_CLIENT', 'client', client_id, old_values=old_data)
 
     return jsonify({'message': 'Client deleted successfully'})
@@ -156,7 +156,7 @@ def delete_client(client_id):
 @clients_bp.route('/api/<int:client_id>', methods=['GET'])
 @login_required
 def get_client(client_id):
-    client = get_db().execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
+    client = get_db().execute("SELECT * FROM clients WHERE id = %s", (client_id,)).fetchone()
     if not client:
         return jsonify({'error': 'Client not found'}), 404
 
@@ -166,7 +166,7 @@ def get_client(client_id):
            FROM loans
            LEFT JOIN clients ON clients.id = loans.client_id
            LEFT JOIN loan_products ON loan_products.id = loans.product_id
-           WHERE loans.client_id = ?""", (client_id,)
+           WHERE loans.client_id = %s""", (client_id,)
     ).fetchall()
     data['loans'] = [
         loan_public({**dict(l), 'borrower_name': client_full_name(l)}) for l in loans
@@ -177,7 +177,7 @@ def get_client(client_id):
 @clients_bp.route('/api/<int:client_id>', methods=['PUT'])
 @login_required
 def update_client(client_id):
-    client = get_db().execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
+    client = get_db().execute("SELECT * FROM clients WHERE id = %s", (client_id,)).fetchone()
     if not client:
         return jsonify({'error': 'Client not found'}), 404
     old_data = client_public(client)
@@ -190,12 +190,12 @@ def update_client(client_id):
     values['monthly_income'] = float(data.get('monthly_income', client['monthly_income']))
 
     execute(
-        f"""UPDATE clients SET {', '.join(f'{f} = ?' for f in fields)}, monthly_income = ?, updated_at = ?
-            WHERE id = ?""",
+        f"""UPDATE clients SET {', '.join(f'{f} = %s' for f in fields)}, monthly_income = %s, updated_at = %s
+            WHERE id = %s""",
         tuple(values[f] for f in fields) + (values['monthly_income'], utcnow(), client_id)
     )
 
-    updated = get_db().execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
+    updated = get_db().execute("SELECT * FROM clients WHERE id = %s", (client_id,)).fetchone()
     log_audit('UPDATE_CLIENT', 'client', client_id, old_values=old_data, new_values=client_public(updated))
 
     return jsonify({'message': 'Client updated', 'client': client_public(updated)})
@@ -204,7 +204,7 @@ def update_client(client_id):
 @clients_bp.route('/api/<int:client_id>/status', methods=['PUT'])
 @login_required
 def update_status(client_id):
-    client = get_db().execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
+    client = get_db().execute("SELECT * FROM clients WHERE id = %s", (client_id,)).fetchone()
     if not client:
         return jsonify({'error': 'Client not found'}), 404
     data = request.get_json()
@@ -214,7 +214,7 @@ def update_status(client_id):
         return jsonify({'error': 'Invalid status'}), 400
 
     old_status = client['status']
-    execute("UPDATE clients SET status = ?, updated_at = ? WHERE id = ?", (status, utcnow(), client_id))
+    execute("UPDATE clients SET status = %s, updated_at = %s WHERE id = %s", (status, utcnow(), client_id))
     log_audit('CHANGE_CLIENT_STATUS', 'client', client_id,
               old_values={'status': old_status}, new_values={'status': status})
 
@@ -224,5 +224,5 @@ def update_status(client_id):
 @clients_bp.route('/<int:client_id>')
 @login_required
 def detail(client_id):
-    client = get_db().execute("SELECT * FROM clients WHERE id = ?", (client_id,)).fetchone()
+    client = get_db().execute("SELECT * FROM clients WHERE id = %s", (client_id,)).fetchone()
     return render_template('clients/detail.html', user=get_current_user(), client=client)

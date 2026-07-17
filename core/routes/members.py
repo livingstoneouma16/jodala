@@ -33,13 +33,13 @@ def list_members():
     params = []
     if search:
         like = f'%{search}%'
-        where.append("(first_name LIKE ? OR last_name LIKE ? OR member_number LIKE ? OR phone LIKE ? OR national_id LIKE ?)")
+        where.append("(first_name LIKE %s OR last_name LIKE %s OR member_number LIKE %s OR phone LIKE %s OR national_id LIKE %s)")
         params += [like, like, like, like, like]
     if status:
-        where.append("status = ?")
+        where.append("status = %s")
         params.append(status)
     if region:
-        where.append("region = ?")
+        where.append("region = %s")
         params.append(region)
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
@@ -76,7 +76,7 @@ def create_member():
     existing_phone = None
     if phone:
         existing_phone = get_db().execute(
-            "SELECT id FROM members WHERE phone = ?", (phone,)
+            "SELECT id FROM members WHERE phone = %s", (phone,)
         ).fetchone()
     if existing_phone:
         return jsonify({'error': 'Phone number already registered'}), 400
@@ -85,7 +85,7 @@ def create_member():
     cur = execute(
         """INSERT INTO members (member_number, first_name, last_name, gender, date_of_birth, phone, email,
                region, status, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (generate_member_number(),
          first_name,
          last_name,
@@ -97,7 +97,7 @@ def create_member():
          status,
          user['id'], now, now)
     )
-    member = get_db().execute("SELECT * FROM members WHERE id = ?", (cur.lastrowid,)).fetchone()
+    member = get_db().execute("SELECT * FROM members WHERE id = %s", (cur.lastrowid,)).fetchone()
     log_audit('CREATE_MEMBER', 'member', member['id'], new_values=member_public(member))
 
     notify(
@@ -122,12 +122,12 @@ def create_member():
 @login_required
 @role_required('admin')
 def delete_member(member_id):
-    member = get_db().execute("SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
+    member = get_db().execute("SELECT * FROM members WHERE id = %s", (member_id,)).fetchone()
     if not member:
         return jsonify({'error': 'Member not found'}), 404
 
     active_loan = get_db().execute(
-        "SELECT id FROM loans WHERE member_id = ? AND status = 'active'",
+        "SELECT id FROM loans WHERE member_id = %s AND status = 'active'",
         (member_id,)
     ).fetchone()
     if active_loan:
@@ -136,23 +136,23 @@ def delete_member(member_id):
     old_data = member_public(member)
 
     loan_ids = [r['id'] for r in get_db().execute(
-        "SELECT id FROM loans WHERE member_id = ?", (member_id,)
+        "SELECT id FROM loans WHERE member_id = %s", (member_id,)
     ).fetchall()]
     for loan_id in loan_ids:
-        execute("DELETE FROM loan_schedules WHERE loan_id = ?", (loan_id,))
-        execute("DELETE FROM repayments WHERE loan_id = ?", (loan_id,))
+        execute("DELETE FROM loan_schedules WHERE loan_id = %s", (loan_id,))
+        execute("DELETE FROM repayments WHERE loan_id = %s", (loan_id,))
     if loan_ids:
-        execute("DELETE FROM loans WHERE member_id = ?", (member_id,))
+        execute("DELETE FROM loans WHERE member_id = %s", (member_id,))
 
     account_ids = [r['id'] for r in get_db().execute(
-        "SELECT id FROM savings_accounts WHERE member_id = ?", (member_id,)
+        "SELECT id FROM savings_accounts WHERE member_id = %s", (member_id,)
     ).fetchall()]
     for account_id in account_ids:
-        execute("DELETE FROM savings_transactions WHERE account_id = ?", (account_id,))
+        execute("DELETE FROM savings_transactions WHERE account_id = %s", (account_id,))
     if account_ids:
-        execute("DELETE FROM savings_accounts WHERE member_id = ?", (member_id,))
+        execute("DELETE FROM savings_accounts WHERE member_id = %s", (member_id,))
 
-    execute("DELETE FROM members WHERE id = ?", (member_id,))
+    execute("DELETE FROM members WHERE id = %s", (member_id,))
     log_audit('DELETE_MEMBER', 'member', member_id, old_values=old_data)
 
     return jsonify({'message': 'Member deleted successfully'})
@@ -161,7 +161,7 @@ def delete_member(member_id):
 @members_bp.route('/api/<int:member_id>', methods=['GET'])
 @login_required
 def get_member(member_id):
-    member = get_db().execute("SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
+    member = get_db().execute("SELECT * FROM members WHERE id = %s", (member_id,)).fetchone()
     if not member:
         return jsonify({'error': 'Member not found'}), 404
 
@@ -173,7 +173,7 @@ def get_member(member_id):
            FROM loans
            LEFT JOIN members ON members.id = loans.member_id
            LEFT JOIN loan_products ON loan_products.id = loans.product_id
-           WHERE loans.member_id = ?""", (member_id,)
+           WHERE loans.member_id = %s""", (member_id,)
     ).fetchall()
     from core.serializers import loan_public, member_full_name
     data['loans'] = [
@@ -184,7 +184,7 @@ def get_member(member_id):
         """SELECT savings_accounts.*, savings_products.name AS product_name
            FROM savings_accounts
            LEFT JOIN savings_products ON savings_products.id = savings_accounts.product_id
-           WHERE savings_accounts.member_id = ?""", (member_id,)
+           WHERE savings_accounts.member_id = %s""", (member_id,)
     ).fetchall()
     from core.serializers import savings_account_public
     data['savings_accounts'] = [
@@ -197,7 +197,7 @@ def get_member(member_id):
 @members_bp.route('/api/<int:member_id>', methods=['PUT'])
 @login_required
 def update_member(member_id):
-    member = get_db().execute("SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
+    member = get_db().execute("SELECT * FROM members WHERE id = %s", (member_id,)).fetchone()
     if not member:
         return jsonify({'error': 'Member not found'}), 404
     old_data = member_public(member)
@@ -210,12 +210,12 @@ def update_member(member_id):
     values['monthly_income'] = float(data.get('monthly_income', member['monthly_income']))
 
     execute(
-        f"""UPDATE members SET {', '.join(f'{f} = ?' for f in fields)}, monthly_income = ?, updated_at = ?
-            WHERE id = ?""",
+        f"""UPDATE members SET {', '.join(f'{f} = %s' for f in fields)}, monthly_income = %s, updated_at = %s
+            WHERE id = %s""",
         tuple(values[f] for f in fields) + (values['monthly_income'], utcnow(), member_id)
     )
 
-    updated = get_db().execute("SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
+    updated = get_db().execute("SELECT * FROM members WHERE id = %s", (member_id,)).fetchone()
     log_audit('UPDATE_MEMBER', 'member', member_id, old_values=old_data, new_values=member_public(updated))
 
     return jsonify({'message': 'Member updated', 'member': member_public(updated)})
@@ -224,7 +224,7 @@ def update_member(member_id):
 @members_bp.route('/api/<int:member_id>/status', methods=['PUT'])
 @login_required
 def update_status(member_id):
-    member = get_db().execute("SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
+    member = get_db().execute("SELECT * FROM members WHERE id = %s", (member_id,)).fetchone()
     if not member:
         return jsonify({'error': 'Member not found'}), 404
     data = request.get_json()
@@ -234,7 +234,7 @@ def update_status(member_id):
         return jsonify({'error': 'Invalid status'}), 400
 
     old_status = member['status']
-    execute("UPDATE members SET status = ?, updated_at = ? WHERE id = ?", (status, utcnow(), member_id))
+    execute("UPDATE members SET status = %s, updated_at = %s WHERE id = %s", (status, utcnow(), member_id))
     log_audit('CHANGE_MEMBER_STATUS', 'member', member_id,
               old_values={'status': old_status}, new_values={'status': status})
 
@@ -244,12 +244,12 @@ def update_status(member_id):
 @members_bp.route('/<int:member_id>')
 @login_required
 def detail(member_id):
-    member = get_db().execute("SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
+    member = get_db().execute("SELECT * FROM members WHERE id = %s", (member_id,)).fetchone()
     return render_template('members/detail.html', user=get_current_user(), member=member)
 
 
 @members_bp.route('/<int:member_id>/edit')
 @login_required
 def edit_page(member_id):
-    member = get_db().execute("SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
+    member = get_db().execute("SELECT * FROM members WHERE id = %s", (member_id,)).fetchone()
     return render_template('members/edit.html', user=get_current_user(), member=member)

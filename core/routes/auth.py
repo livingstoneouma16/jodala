@@ -14,7 +14,7 @@ auth_bp = Blueprint('auth', __name__)
 
 def _find_user_by_username_or_email(identifier):
     return get_db().execute(
-        "SELECT * FROM users WHERE username = ? OR email = ?", (identifier, identifier)
+        "SELECT * FROM users WHERE username = %s OR email = %s", (identifier, identifier)
     ).fetchone()
 
 
@@ -70,7 +70,7 @@ def login():
             return render_template('auth/login.html', error='Invalid 2FA code',
                                     require_2fa=True, user_id=user['id'], next=next_path)
 
-    execute("UPDATE users SET last_login = ? WHERE id = ?", (utcnow(), user['id']))
+    execute("UPDATE users SET last_login = %s WHERE id = %s", (utcnow(), user['id']))
 
     access_token = create_access_token(user['id'], user['role'])
     log_audit('LOGIN', 'user', user['id'])
@@ -137,7 +137,7 @@ def force_password_change():
         return fail('New password must be different from your current password')
 
     execute(
-        "UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ?",
+        "UPDATE users SET password_hash = %s, must_change_password = 0, updated_at = %s WHERE id = %s",
         (hash_password(new_password), utcnow(), user['id'])
     )
     log_audit('FORCED_PASSWORD_CHANGE', 'user', user['id'])
@@ -155,24 +155,24 @@ def profile():
         return render_template('auth/profile.html', user=user)
 
     data = request.get_json() if request.is_json else request.form
-    full_name = data.get('full_name', user['full_name'])
-    phone = data.get('phone', user['phone'])
-    email = data.get('email', user['email'])
+    full_name = data.get('full_name') or user['full_name']
+    phone = data.get('phone') or user['phone']
+    email = data.get('email') or user['email']
 
     if data.get('new_password'):
         password_hash = hash_password(data['new_password'])
         execute(
-            "UPDATE users SET full_name = ?, phone = ?, email = ?, password_hash = ?, "
-            "must_change_password = 0, updated_at = ? WHERE id = ?",
+            "UPDATE users SET full_name = %s, phone = %s, email = %s, password_hash = %s, "
+            "must_change_password = 0, updated_at = %s WHERE id = %s",
             (full_name, phone, email, password_hash, utcnow(), user['id'])
         )
     else:
         execute(
-            "UPDATE users SET full_name = ?, phone = ?, email = ?, updated_at = ? WHERE id = ?",
+            "UPDATE users SET full_name = %s, phone = %s, email = %s, updated_at = %s WHERE id = %s",
             (full_name, phone, email, utcnow(), user['id'])
         )
 
-    updated = get_db().execute("SELECT * FROM users WHERE id = ?", (user['id'],)).fetchone()
+    updated = get_db().execute("SELECT * FROM users WHERE id = %s", (user['id'],)).fetchone()
     return jsonify({'message': 'Profile updated', 'user': user_public(updated)})
 
 
@@ -187,13 +187,15 @@ def setup_2fa():
         provisioning_uri = totp.provisioning_uri(user['email'], issuer_name='Jodala Microfinance')
         return jsonify({'secret': secret, 'provisioning_uri': provisioning_uri})
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     secret = data.get('secret')
     code = data.get('code')
+    if not secret or not code:
+        return jsonify({'error': 'secret and code are required'}), 400
 
     totp = pyotp.TOTP(secret)
     if totp.verify(code):
-        execute("UPDATE users SET totp_secret = ?, totp_enabled = 1, updated_at = ? WHERE id = ?",
+        execute("UPDATE users SET totp_secret = %s, totp_enabled = 1, updated_at = %s WHERE id = %s",
                 (secret, utcnow(), user['id']))
         return jsonify({'message': '2FA enabled successfully'})
 
@@ -205,13 +207,13 @@ def setup_2fa():
 @limiter.limit('10 per minute')
 def disable_2fa():
     user = get_current_user()
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     password = data.get('password', '')
 
     if not verify_password(password, user['password_hash']):
         return jsonify({'error': 'Invalid password'}), 401
 
-    execute("UPDATE users SET totp_enabled = 0, totp_secret = NULL, updated_at = ? WHERE id = ?",
+    execute("UPDATE users SET totp_enabled = 0, totp_secret = NULL, updated_at = %s WHERE id = %s",
             (utcnow(), user['id']))
     return jsonify({'message': '2FA disabled'})
 

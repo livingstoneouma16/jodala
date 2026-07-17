@@ -44,13 +44,13 @@ def list_repayments():
 
     where, params = [], []
     if loan_id:
-        where.append("repayments.loan_id = ?")
+        where.append("repayments.loan_id = %s")
         params.append(int(loan_id))
     if date_from:
-        where.append("repayments.payment_date >= ?")
+        where.append("repayments.payment_date >= %s")
         params.append(date_from)
     if date_to:
-        where.append("repayments.payment_date <= ?")
+        where.append("repayments.payment_date <= %s")
         params.append(date_to)
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
@@ -108,7 +108,7 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
     payment collected via M-Pesa is applied to the loan schedule exactly the
     same way as one entered by staff. Raises _RepaymentError on validation
     failure; returns (repayment_row, new_outstanding_balance) on success."""
-    loan = get_db().execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         raise _RepaymentError('Loan not found', 404)
     if loan['status'] not in ('active', 'disbursed'):
@@ -121,7 +121,7 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
     today = date.today()
 
     schedules = get_db().execute(
-        """SELECT * FROM loan_schedules WHERE loan_id = ? AND status IN ('pending', 'partial')
+        """SELECT * FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')
            ORDER BY due_date""", (loan['id'],)
     ).fetchall()
     schedule_dicts = [dict(s) for s in schedules]
@@ -130,14 +130,14 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
     for u in updates:
         if u['fully_paid']:
             execute(
-                """UPDATE loan_schedules SET principal_paid = principal_paid + ?, interest_paid = interest_paid + ?,
-                       total_paid = total_due, status = 'paid', paid_date = ? WHERE id = ?""",
+                """UPDATE loan_schedules SET principal_paid = principal_paid + %s, interest_paid = interest_paid + %s,
+                       total_paid = total_due, status = 'paid', paid_date = %s WHERE id = %s""",
                 (u['principal_paid_delta'], u['interest_paid_delta'], today.isoformat(), u['schedule_id'])
             )
         else:
             execute(
-                """UPDATE loan_schedules SET principal_paid = principal_paid + ?, interest_paid = interest_paid + ?,
-                       total_paid = total_paid + ?, status = 'partial' WHERE id = ?""",
+                """UPDATE loan_schedules SET principal_paid = principal_paid + %s, interest_paid = interest_paid + %s,
+                       total_paid = total_paid + %s, status = 'partial' WHERE id = %s""",
                 (u['principal_paid_delta'], u['interest_paid_delta'], u['total_paid_delta'], u['schedule_id'])
             )
 
@@ -157,8 +157,8 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
         actual_end_date = today.isoformat()
 
     execute(
-        """UPDATE loans SET total_paid = ?, outstanding_balance = ?, status = ?, actual_end_date = ?, updated_at = ?
-           WHERE id = ?""",
+        """UPDATE loans SET total_paid = %s, outstanding_balance = %s, status = %s, actual_end_date = %s, updated_at = %s
+           WHERE id = %s""",
         (new_total_paid, new_outstanding, new_status, actual_end_date, utcnow(), loan['id'])
     )
 
@@ -166,7 +166,7 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
     cur = execute(
         """INSERT INTO repayments (receipt_number, loan_id, amount, principal_portion, interest_portion,
                penalty_portion, payment_method, reference_number, payment_date, notes, collected_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (generate_receipt_number(), loan['id'], amount, principal_portion, interest_portion, penalty_portion,
          payment_method, reference_number, payment_date or today.isoformat(), notes, user_id, now)
     )
@@ -177,17 +177,17 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
 
     repayment = get_db().execute(
         """SELECT repayments.*, loans.loan_number FROM repayments
-           LEFT JOIN loans ON loans.id = repayments.loan_id WHERE repayments.id = ?""",
+           LEFT JOIN loans ON loans.id = repayments.loan_id WHERE repayments.id = %s""",
         (cur.lastrowid,)
     ).fetchone()
 
     db = get_db()
     borrower_name, borrower_email = None, None
     if loan['member_id']:
-        p = db.execute("SELECT first_name, last_name, email FROM members WHERE id = ?",
+        p = db.execute("SELECT first_name, last_name, email FROM members WHERE id = %s",
                         (loan['member_id'],)).fetchone()
     elif loan['client_id']:
-        p = db.execute("SELECT first_name, last_name, email FROM clients WHERE id = ?",
+        p = db.execute("SELECT first_name, last_name, email FROM clients WHERE id = %s",
                         (loan['client_id'],)).fetchone()
     else:
         p = None
@@ -221,17 +221,17 @@ def get_repayment(repayment_id):
     repayment = get_db().execute(
         """SELECT repayments.*, loans.loan_number, loans.member_id, loans.client_id
            FROM repayments LEFT JOIN loans ON loans.id = repayments.loan_id
-           WHERE repayments.id = ?""", (repayment_id,)
+           WHERE repayments.id = %s""", (repayment_id,)
     ).fetchone()
     if not repayment:
         return jsonify({'error': 'Repayment not found'}), 404
 
     data = repayment_public(repayment)
     if repayment['member_id']:
-        member = get_db().execute("SELECT * FROM members WHERE id = ?", (repayment['member_id'],)).fetchone()
+        member = get_db().execute("SELECT * FROM members WHERE id = %s", (repayment['member_id'],)).fetchone()
         data['borrower_name'] = member_full_name(member) if member else 'N/A'
     elif repayment['client_id']:
-        client = get_db().execute("SELECT * FROM clients WHERE id = ?", (repayment['client_id'],)).fetchone()
+        client = get_db().execute("SELECT * FROM clients WHERE id = %s", (repayment['client_id'],)).fetchone()
         data['borrower_name'] = client_full_name(client) if client else 'N/A'
     else:
         data['borrower_name'] = 'N/A'
@@ -253,7 +253,7 @@ def receipt_page(repayment_id):
            LEFT JOIN loans ON loans.id = repayments.loan_id
            LEFT JOIN members ON members.id = loans.member_id
            LEFT JOIN clients ON clients.id = loans.client_id
-           WHERE repayments.id = ?""",
+           WHERE repayments.id = %s""",
         (repayment_id,)
     ).fetchone()
     if not row:

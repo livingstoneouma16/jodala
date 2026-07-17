@@ -80,7 +80,7 @@ def stk_push():
 
     db = get_db()
     if purpose == 'loan_repayment':
-        target = db.execute("SELECT * FROM loans WHERE id = ?", (target_id,)).fetchone()
+        target = db.execute("SELECT * FROM loans WHERE id = %s", (target_id,)).fetchone()
         if not target:
             return jsonify({'error': 'Loan not found'}), 404
         if target['status'] not in ('active', 'disbursed'):
@@ -88,7 +88,7 @@ def stk_push():
         account_reference = target['loan_number']
         transaction_desc = 'Loan Repay'
     else:
-        target = db.execute("SELECT * FROM savings_accounts WHERE id = ?", (target_id,)).fetchone()
+        target = db.execute("SELECT * FROM savings_accounts WHERE id = %s", (target_id,)).fetchone()
         if not target:
             return jsonify({'error': 'Savings account not found'}), 404
         if target['status'] != 'active':
@@ -114,7 +114,7 @@ def stk_push():
     execute(
         """INSERT INTO mpesa_transactions (checkout_request_id, merchant_request_id, purpose, target_id,
                phone, amount, status, initiated_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s, %s, %s)""",
         (checkout_request_id, merchant_request_id, purpose, int(target_id), phone_normalized,
          float(amount), user['id'], now, now)
     )
@@ -130,7 +130,7 @@ def stk_push():
 @login_required
 def stk_status(checkout_request_id):
     txn = get_db().execute(
-        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = ?", (checkout_request_id,)
+        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = %s", (checkout_request_id,)
     ).fetchone()
     if not txn:
         return jsonify({'error': 'Unknown checkout request'}), 404
@@ -160,7 +160,7 @@ def callback():
         return jsonify({'ResultCode': 0, 'ResultDesc': 'Accepted'}), 200
 
     txn = get_db().execute(
-        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = ?", (checkout_request_id,)
+        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = %s", (checkout_request_id,)
     ).fetchone()
     if not txn:
         current_app.logger.warning('M-Pesa callback for unknown CheckoutRequestID: %s', checkout_request_id)
@@ -173,8 +173,8 @@ def callback():
     now = utcnow()
     if result_code != 0:
         execute(
-            "UPDATE mpesa_transactions SET status = 'failed', result_code = ?, result_desc = ?, updated_at = ? "
-            "WHERE id = ?",
+            "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
+            "WHERE id = %s",
             (result_code, result_desc, now, txn['id'])
         )
         return jsonify({'ResultCode': 0, 'ResultDesc': 'Accepted'}), 200
@@ -199,16 +199,16 @@ def callback():
                     user_id=txn['initiated_by'],
                 )
                 execute(
-                    "UPDATE mpesa_transactions SET status = 'success', result_code = ?, result_desc = ?, "
-                    "mpesa_receipt_number = ?, repayment_id = ?, updated_at = ? WHERE id = ?",
+                    "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+                    "mpesa_receipt_number = %s, repayment_id = %s, updated_at = %s WHERE id = %s",
                     (result_code, result_desc, mpesa_receipt, repayment['id'], now, txn['id'])
                 )
             except _RepaymentError as e:
                 current_app.logger.error('M-Pesa payment succeeded but could not be applied to loan %s: %s',
                                           txn['target_id'], e)
                 execute(
-                    "UPDATE mpesa_transactions SET status = 'success', result_code = ?, result_desc = ?, "
-                    "mpesa_receipt_number = ?, updated_at = ? WHERE id = ?",
+                    "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+                    "mpesa_receipt_number = %s, updated_at = %s WHERE id = %s",
                     (result_code, f'Paid but not applied: {e}', mpesa_receipt, now, txn['id'])
                 )
         else:
@@ -219,16 +219,16 @@ def callback():
                 notes='Paid via M-Pesa STK Push',
             )
             execute(
-                "UPDATE mpesa_transactions SET status = 'success', result_code = ?, result_desc = ?, "
-                "mpesa_receipt_number = ?, savings_transaction_id = ?, updated_at = ? WHERE id = ?",
+                "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+                "mpesa_receipt_number = %s, savings_transaction_id = %s, updated_at = %s WHERE id = %s",
                 (result_code, result_desc, mpesa_receipt, savings_txn['id'], now, txn['id'])
             )
     except Exception:
         current_app.logger.exception('M-Pesa callback: failed to apply payment for checkout_request_id=%s',
                                       checkout_request_id)
         execute(
-            "UPDATE mpesa_transactions SET status = 'success', result_code = ?, result_desc = ?, "
-            "mpesa_receipt_number = ?, updated_at = ? WHERE id = ?",
+            "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+            "mpesa_receipt_number = %s, updated_at = %s WHERE id = %s",
             (result_code, 'Paid but failed to apply -- needs manual reconciliation', mpesa_receipt, now, txn['id'])
         )
 
@@ -253,14 +253,14 @@ def b2c_disburse():
     if not loan_id or not phone:
         return jsonify({'error': 'loan_id and phone are required'}), 400
 
-    loan = get_db().execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
     if loan['status'] != 'approved':
         return jsonify({'error': 'Loan must be approved (and not yet disbursed) to disburse via M-Pesa'}), 400
 
     amount = (loan['principal_amount'] - loan['rollover_amount']
-              - loan['processing_fee'] - loan['insurance_fee'])
+              - loan['insurance_fee'])
 
     try:
         phone_normalized = normalize_phone(phone)
@@ -277,7 +277,7 @@ def b2c_disburse():
     execute(
         """INSERT INTO mpesa_transactions (originator_conversation_id, conversation_id, purpose, target_id,
                phone, amount, status, initiated_by, created_at, updated_at)
-           VALUES (?, ?, 'loan_disbursement', ?, ?, ?, 'pending', ?, ?, ?)""",
+           VALUES (%s, %s, 'loan_disbursement', %s, %s, %s, 'pending', %s, %s, %s)""",
         (originator_conversation_id, conversation_id, int(loan_id), phone_normalized,
          float(amount), user['id'], now, now)
     )
@@ -293,7 +293,7 @@ def b2c_disburse():
 @login_required
 def b2c_status(originator_conversation_id):
     txn = get_db().execute(
-        "SELECT * FROM mpesa_transactions WHERE originator_conversation_id = ?", (originator_conversation_id,)
+        "SELECT * FROM mpesa_transactions WHERE originator_conversation_id = %s", (originator_conversation_id,)
     ).fetchone()
     if not txn:
         return jsonify({'error': 'Unknown disbursement request'}), 404
@@ -324,7 +324,7 @@ def _handle_b2c_result(body):
         return
 
     txn = get_db().execute(
-        "SELECT * FROM mpesa_transactions WHERE originator_conversation_id = ?",
+        "SELECT * FROM mpesa_transactions WHERE originator_conversation_id = %s",
         (originator_conversation_id,)
     ).fetchone()
     if not txn:
@@ -337,8 +337,8 @@ def _handle_b2c_result(body):
     now = utcnow()
     if result_code != 0:
         execute(
-            "UPDATE mpesa_transactions SET status = 'failed', result_code = ?, result_desc = ?, updated_at = ? "
-            "WHERE id = ?",
+            "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
+            "WHERE id = %s",
             (result_code, result_desc, now, txn['id'])
         )
         return
@@ -354,24 +354,24 @@ def _handle_b2c_result(body):
                 mpesa_receipt=transaction_id,
             )
             execute(
-                "UPDATE mpesa_transactions SET status = 'success', result_code = ?, result_desc = ?, "
-                "mpesa_receipt_number = ?, transaction_id = ?, updated_at = ? WHERE id = ?",
+                "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+                "mpesa_receipt_number = %s, transaction_id = %s, updated_at = %s WHERE id = %s",
                 (result_code, result_desc, transaction_id, transaction_id, now, txn['id'])
             )
         except _DisbursementError as e:
             current_app.logger.error('M-Pesa B2C payment succeeded but loan %s could not be disbursed: %s',
                                       txn['target_id'], e)
             execute(
-                "UPDATE mpesa_transactions SET status = 'success', result_code = ?, result_desc = ?, "
-                "mpesa_receipt_number = ?, transaction_id = ?, updated_at = ? WHERE id = ?",
+                "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+                "mpesa_receipt_number = %s, transaction_id = %s, updated_at = %s WHERE id = %s",
                 (result_code, f'Paid out but not applied: {e}', transaction_id, transaction_id, now, txn['id'])
             )
     except Exception:
         current_app.logger.exception('M-Pesa B2C callback: failed to apply disbursement for '
                                       'originator_conversation_id=%s', originator_conversation_id)
         execute(
-            "UPDATE mpesa_transactions SET status = 'success', result_code = ?, result_desc = ?, "
-            "mpesa_receipt_number = ?, transaction_id = ?, updated_at = ? WHERE id = ?",
+            "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+            "mpesa_receipt_number = %s, transaction_id = %s, updated_at = %s WHERE id = %s",
             (result_code, 'Paid out but failed to apply -- needs manual reconciliation',
              transaction_id, transaction_id, now, txn['id'])
         )

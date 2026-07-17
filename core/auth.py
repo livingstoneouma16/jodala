@@ -104,7 +104,7 @@ def login_required(fn):
             return _unauthenticated_response('Invalid token')
 
         user_row = get_db().execute(
-            "SELECT * FROM users WHERE id = ?", (payload['sub'],)
+            "SELECT * FROM users WHERE id = %s", (payload['sub'],)
         ).fetchone()
         user = row_to_dict(user_row)
         if not user:

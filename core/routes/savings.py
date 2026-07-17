@@ -39,7 +39,7 @@ def list_accounts():
     where, params = '', ()
     if search:
         like = f'%{search}%'
-        where = " WHERE (savings_accounts.account_number LIKE ? OR members.first_name LIKE ? OR members.last_name LIKE ?)"
+        where = " WHERE (savings_accounts.account_number LIKE %s OR members.first_name LIKE %s OR members.last_name LIKE %s)"
         params = (like, like, like)
 
     base = _account_join_sql() + where + " ORDER BY savings_accounts.opened_at DESC"
@@ -62,23 +62,23 @@ def open_account():
     data = request.get_json()
     user = get_current_user()
 
-    member = get_db().execute("SELECT * FROM members WHERE id = ?", (data.get('member_id'),)).fetchone()
+    member = get_db().execute("SELECT * FROM members WHERE id = %s", (data.get('member_id'),)).fetchone()
     if not member:
         return jsonify({'error': 'Member not found'}), 404
 
-    product = get_db().execute("SELECT * FROM savings_products WHERE id = ?", (data.get('product_id'),)).fetchone()
+    product = get_db().execute("SELECT * FROM savings_products WHERE id = %s", (data.get('product_id'),)).fetchone()
     if not product:
         return jsonify({'error': 'Invalid savings product'}), 400
 
     existing = get_db().execute(
-        "SELECT id FROM savings_accounts WHERE account_number = ?", (member['member_number'],)
+        "SELECT id FROM savings_accounts WHERE account_number = %s", (member['member_number'],)
     ).fetchone()
     if existing:
         return jsonify({'error': 'This member already has a savings account'}), 400
 
     cur = execute(
         """INSERT INTO savings_accounts (account_number, member_id, product_id, balance, status, opened_at, created_by)
-           VALUES (?, ?, ?, 0, 'active', ?, ?)""",
+           VALUES (%s, %s, %s, 0, 'active', %s, %s)""",
         (member['member_number'], member['id'], product['id'], utcnow(), user['id'])
     )
     account_id = cur.lastrowid
@@ -88,14 +88,14 @@ def open_account():
         _create_transaction(account_id, 'deposit', initial_deposit, data.get('payment_method', 'cash'), user['id'])
 
     log_audit('OPEN_SAVINGS_ACCOUNT', 'savings_account', account_id)
-    account = get_db().execute(_account_join_sql() + " WHERE savings_accounts.id = ?", (account_id,)).fetchone()
+    account = get_db().execute(_account_join_sql() + " WHERE savings_accounts.id = %s", (account_id,)).fetchone()
     return jsonify({'message': 'Savings account opened', 'account': savings_account_public(account)}), 201
 
 
 @savings_bp.route('/api/accounts/<int:account_id>', methods=['GET'])
 @login_required
 def get_account(account_id):
-    account = get_db().execute(_account_join_sql() + " WHERE savings_accounts.id = ?", (account_id,)).fetchone()
+    account = get_db().execute(_account_join_sql() + " WHERE savings_accounts.id = %s", (account_id,)).fetchone()
     if not account:
         return jsonify({'error': 'Account not found'}), 404
 
@@ -103,7 +103,7 @@ def get_account(account_id):
     txns = get_db().execute(
         """SELECT savings_transactions.*, savings_accounts.account_number FROM savings_transactions
            LEFT JOIN savings_accounts ON savings_accounts.id = savings_transactions.account_id
-           WHERE savings_transactions.account_id = ? ORDER BY savings_transactions.created_at DESC LIMIT 50""",
+           WHERE savings_transactions.account_id = %s ORDER BY savings_transactions.created_at DESC LIMIT 50""",
         (account_id,)
     ).fetchall()
     data['transactions'] = [savings_transaction_public(t) for t in txns]
@@ -116,7 +116,7 @@ def deposit():
     data = request.get_json()
     user = get_current_user()
 
-    account = get_db().execute("SELECT * FROM savings_accounts WHERE id = ?", (data.get('account_id'),)).fetchone()
+    account = get_db().execute("SELECT * FROM savings_accounts WHERE id = %s", (data.get('account_id'),)).fetchone()
     if not account:
         return jsonify({'error': 'Account not found'}), 404
     if account['status'] != 'active':
@@ -139,7 +139,7 @@ def withdraw():
     data = request.get_json()
     user = get_current_user()
 
-    account = get_db().execute("SELECT * FROM savings_accounts WHERE id = ?", (data.get('account_id'),)).fetchone()
+    account = get_db().execute("SELECT * FROM savings_accounts WHERE id = %s", (data.get('account_id'),)).fetchone()
     if not account:
         return jsonify({'error': 'Account not found'}), 404
 
@@ -147,7 +147,7 @@ def withdraw():
     if account['balance'] < amount:
         return jsonify({'error': 'Insufficient balance'}), 400
 
-    product = get_db().execute("SELECT * FROM savings_products WHERE id = ?", (account['product_id'],)).fetchone()
+    product = get_db().execute("SELECT * FROM savings_products WHERE id = %s", (account['product_id'],)).fetchone()
     if product and product['min_balance'] and (account['balance'] - amount) < product['min_balance']:
         return jsonify({'error': f"Minimum balance of {product['min_balance']} must be maintained"}), 400
 
@@ -159,11 +159,11 @@ def withdraw():
 
 
 def _create_transaction(account_id, txn_type, amount, method, user_id, reference=None, notes=None):
-    account = get_db().execute("SELECT * FROM savings_accounts WHERE id = ?", (account_id,)).fetchone()
+    account = get_db().execute("SELECT * FROM savings_accounts WHERE id = %s", (account_id,)).fetchone()
     balance_before = account['balance']
     balance_after = balance_before + amount if txn_type in ('deposit', 'interest') else balance_before - amount
 
-    execute("UPDATE savings_accounts SET balance = ? WHERE id = ?", (balance_after, account_id))
+    execute("UPDATE savings_accounts SET balance = %s WHERE id = %s", (balance_after, account_id))
 
     if txn_type == 'deposit':
         adjust_main_account_balance(amount)
@@ -178,14 +178,14 @@ def _create_transaction(account_id, txn_type, amount, method, user_id, reference
     cur = execute(
         """INSERT INTO savings_transactions (transaction_number, account_id, transaction_type, amount,
                balance_before, balance_after, payment_method, reference, notes, transaction_date, processed_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (generate_savings_transaction_number(), account_id, txn_type, amount, balance_before, balance_after,
          method, reference, notes, date.today().isoformat(), user_id, now)
     )
     txn = get_db().execute(
         """SELECT savings_transactions.*, savings_accounts.account_number FROM savings_transactions
            LEFT JOIN savings_accounts ON savings_accounts.id = savings_transactions.account_id
-           WHERE savings_transactions.id = ?""", (cur.lastrowid,)
+           WHERE savings_transactions.id = %s""", (cur.lastrowid,)
     ).fetchone()
     return txn, balance_after
 
@@ -199,7 +199,7 @@ def list_transactions():
 
     where, params = '', ()
     if account_id:
-        where = " WHERE savings_transactions.account_id = ?"
+        where = " WHERE savings_transactions.account_id = %s"
         params = (int(account_id),)
 
     base = f"""SELECT savings_transactions.*, savings_accounts.account_number FROM savings_transactions

@@ -37,11 +37,11 @@ def loan_report():
 
     where, params = [], []
     if status:
-        where.append("loans.status = ?"); params.append(status)
+        where.append("loans.status = %s"); params.append(status)
     if date_from:
-        where.append("loans.application_date >= ?"); params.append(date_from)
+        where.append("loans.application_date >= %s"); params.append(date_from)
     if date_to:
-        where.append("loans.application_date <= ?"); params.append(date_to)
+        where.append("loans.application_date <= %s"); params.append(date_to)
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
     loans = get_db().execute(_loan_join_sql(where_sql), tuple(params)).fetchall()
@@ -75,7 +75,7 @@ def arrears_report():
                   loans.member_id, loans.client_id
            FROM loan_schedules
            LEFT JOIN loans ON loans.id = loan_schedules.loan_id
-           WHERE loan_schedules.due_date < ? AND loan_schedules.status IN ('pending', 'partial')""",
+           WHERE loan_schedules.due_date < %s AND loan_schedules.status IN ('pending', 'partial')""",
         (today.isoformat(),)
     ).fetchall()
 
@@ -86,11 +86,11 @@ def arrears_report():
         days_overdue = (today - date.fromisoformat(s['due_date'])).days
         borrower = 'N/A'
         if s['member_id']:
-            m = get_db().execute("SELECT * FROM members WHERE id = ?", (s['member_id'],)).fetchone()
+            m = get_db().execute("SELECT * FROM members WHERE id = %s", (s['member_id'],)).fetchone()
             if m:
                 borrower = member_full_name(m)
         elif s['client_id']:
-            c = get_db().execute("SELECT * FROM clients WHERE id = ?", (s['client_id'],)).fetchone()
+            c = get_db().execute("SELECT * FROM clients WHERE id = %s", (s['client_id'],)).fetchone()
             if c:
                 borrower = client_full_name(c)
 
@@ -118,7 +118,7 @@ def collection_report():
     repayments = get_db().execute(
         """SELECT repayments.*, loans.loan_number FROM repayments
            LEFT JOIN loans ON loans.id = repayments.loan_id
-           WHERE repayments.payment_date >= ? AND repayments.payment_date <= ?
+           WHERE repayments.payment_date >= %s AND repayments.payment_date <= %s
            ORDER BY repayments.payment_date DESC""",
         (date_from, date_to)
     ).fetchall()

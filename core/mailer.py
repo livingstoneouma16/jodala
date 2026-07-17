@@ -31,7 +31,7 @@ logger = logging.getLogger('jodala.mailer')
 def _setting(key, default=None):
     try:
         row = get_db().execute(
-            "SELECT value FROM company_settings WHERE key = ?", (key,)
+            "SELECT value FROM company_settings WHERE key = %s", (key,)
         ).fetchone()
         if row and row['value']:
             return row['value']
@@ -64,7 +64,7 @@ def _log_attempt(to_email, subject, status, error=None):
     and keep the table from growing unbounded."""
     try:
         execute(
-            "INSERT INTO email_log (recipient, subject, status, error, created_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO email_log (recipient, subject, status, error, created_at) VALUES (%s, %s, %s, %s, %s)",
             (to_email, subject, status, error, utcnow())
         )
         execute(
@@ -165,7 +165,7 @@ def send_email_async(to_email, subject, body_text, body_html=None):
 
 def get_recent_email_log(limit=25):
     rows = get_db().execute(
-        "SELECT recipient, subject, status, error, created_at FROM email_log ORDER BY id DESC LIMIT ?",
+        "SELECT recipient, subject, status, error, created_at FROM email_log ORDER BY id DESC LIMIT %s",
         (limit,)
     ).fetchall()
     return [dict(r) for r in rows]

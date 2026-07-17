@@ -98,7 +98,6 @@ def loan_product_public(row):
         'min_term': row['min_term'],
         'max_term': row['max_term'],
         'penalty_rate': row['penalty_rate'],
-        'processing_fee': row['processing_fee'],
         'insurance_fee': row['insurance_fee'],
         'is_active': bool(row['is_active']),
     }

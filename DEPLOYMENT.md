@@ -1,6 +1,6 @@
 # Deploying Jodala Microfinance to production
 
-This app ships as a normal Flask app with SQLite storage. It's genuinely
+This app ships as a normal Flask app with PostgreSQL storage. It's genuinely
 deployable as-is for small-to-medium SACCO/chama usage, but the Flask dev
 server it runs under locally (`python app.py`) is **not** suitable for
 production -- this guide covers what changes and why.
@@ -9,9 +9,7 @@ production -- this guide covers what changes and why.
 
 - `gunicorn.conf.py` -- production WSGI server config.
 - `Dockerfile` + `entrypoint.sh` + `docker-compose.yml` -- containerized
-  deploy with Redis for rate limiting, and a non-root container that still
-  works correctly with freshly-mounted, root-owned volumes (the norm on
-  Render/Railway/Fly.io).
+  deploy with PostgreSQL and Redis, running as a non-root container.
 - `render.yaml`, `railway.json`, `fly.toml` -- ready-to-use configs for
   each of those three platforms specifically (see step 7 below).
 - `core/__init__.py` refuses to boot with `APP_ENV=production` set while
@@ -55,28 +53,26 @@ certbot (Let's Encrypt), Caddy (automatic HTTPS with zero config), or your
 hosting platform's built-in TLS (Render, Railway, Fly.io, DigitalOcean App
 Platform all handle this for you automatically).
 
-## 3. Database: SQLite is fine until it isn't
+## 3. Database: PostgreSQL
 
-This app uses SQLite, which is genuinely a reasonable choice for a single
-SACCO/chama with a handful of staff using it concurrently. Two things to
-know:
+This app uses PostgreSQL, connected via a standard `DATABASE_URL` connection
+string (`postgresql://user:password@host:5432/dbname`). Managed Postgres from
+your host (Render's PostgreSQL, Railway's Postgres plugin, Fly Postgres,
+Supabase, RDS, etc.) is the easiest way to run it in production -- you get
+backups, connection pooling, and failover handled for you rather than
+operating a database server yourself.
 
-- **Concurrent writes are the limit, not reads.** SQLite handles many
-  simultaneous readers fine but serializes writers. `gunicorn.conf.py`
-  deliberately defaults to 2 workers rather than the usual
-  `(2 × CPU cores) + 1` formula for exactly this reason -- more workers
-  doesn't buy you more write throughput here, only more lock contention.
-- **The database is one file that must be persisted.** In Docker, that's
-  the `jodala-data` volume in `docker-compose.yml` mounted at `/data`. If
-  you deploy to a platform with an ephemeral filesystem (e.g. most
-  container platforms' default disk), you **must** attach a persistent
-  volume there or every redeploy wipes all data.
+`docker-compose.yml` runs Postgres 16 in its own container with a named
+volume (`jodala-postgres`) so data survives restarts. `render.yaml` and
+`fly.toml` provision a managed Postgres instance and wire `DATABASE_URL` in
+automatically -- see step 7 below. For local development without Docker,
+create a `jodala` database (`createdb jodala`) and either set `DATABASE_URL`
+or rely on the `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` defaults in
+`core/database.py`.
 
-If you outgrow SQLite (multiple branches, heavier concurrent write load,
-need for read replicas), migrate to PostgreSQL rather than trying to scale
-SQLite further -- that's a real migration project, not a config change, so
-plan for it separately when you actually hit the ceiling rather than
-pre-optimizing now.
+Unlike the SQLite version this replaced, PostgreSQL handles concurrent
+writers natively, so `gunicorn.conf.py`'s worker count isn't constrained by
+the database and this app can run more than one instance/replica if needed.
 
 ## 4. Rate limiting needs Redis once you run >1 worker
 
@@ -93,12 +89,15 @@ plenty) and set `RATELIMIT_STORAGE_URI=redis://<host>:6379/0`.
 
 ## 5. Backups
 
-The entire application state is one SQLite file (`DB_PATH`). There is
-**no automated backup built into the app** -- set one up yourself:
+The entire application state lives in the PostgreSQL database
+(`DATABASE_URL`). There is **no automated backup built into the app** --
+managed Postgres from Render/Railway/Fly/RDS/etc. typically includes
+automated daily backups/point-in-time-recovery out of the box (check your
+provider's plan), but if you're running Postgres yourself, set one up:
 
 ```bash
-# Simple daily cron example (adjust path/destination):
-0 2 * * * sqlite3 /data/sacco.db ".backup /backups/sacco-$(date +\%F).db"
+# Simple daily cron example (adjust connection details/destination):
+0 2 * * * pg_dump "$DATABASE_URL" | gzip > /backups/jodala-$(date +\%F).sql.gz
 ```
 
 Then ship `/backups` somewhere off the host (S3-compatible object storage,
@@ -138,10 +137,11 @@ for TLS termination.
 
 ### Option B: Render
 
-`render.yaml` in this repo is a Blueprint that provisions the web service
-*and* a Redis instance together, wired up correctly (persistent disk for
-SQLite at `/data`, `RATELIMIT_STORAGE_URI` pointed at Redis automatically,
-`SECRET_KEY`/`JWT_SECRET_KEY` auto-generated).
+`render.yaml` in this repo is a Blueprint that provisions the web service,
+a managed PostgreSQL database, *and* a Redis instance together, wired up
+correctly (`DATABASE_URL` pointed at Postgres and `RATELIMIT_STORAGE_URI`
+pointed at Redis automatically, `SECRET_KEY`/`JWT_SECRET_KEY`
+auto-generated).
 
 1. Push this repo to GitHub/GitLab.
 2. In the Render dashboard: **New > Blueprint**, select the repo. Render
@@ -155,27 +155,28 @@ SQLite at `/data`, `RATELIMIT_STORAGE_URI` pointed at Redis automatically,
    gives you and set it as the M-Pesa Callback/Result/Timeout URLs under
    Settings > M-Pesa in-app.
 
-A service with an attached disk can't be horizontally scaled on Render --
-that's fine here, since SQLite only wants one writer anyway.
+This web service has no attached disk, so it can be scaled to multiple
+instances on Render if needed -- PostgreSQL handles concurrent writers
+natively, unlike the SQLite setup this replaced.
 
 ### Option C: Railway
 
 Railway's config-as-code (`railway.json`, included) covers build/health
-check/restart settings, but **volumes and the Redis add-on are dashboard/CLI
-steps, not something you can declare in the config file** -- do these once
-after the first deploy:
+check/restart settings, but **the Postgres and Redis add-ons are
+dashboard/CLI steps, not something you can declare in the config file** --
+do these once after the first deploy:
 
 1. `railway init` (or link this repo via the dashboard: **New Project >
    Deploy from GitHub repo**). Railway detects the `Dockerfile`
    automatically.
-2. Add a volume: service **Settings > Volumes > New Volume**, mount path
-   `/data`.
+2. Add Postgres: **+ New > Database > PostgreSQL** in the project canvas.
+   This creates a `Postgres` service with its own `DATABASE_URL` variable.
 3. Add Redis: **+ New > Database > Redis** in the project canvas. This
    creates a `Redis` service with its own `REDIS_URL` variable.
 4. On the web service's **Variables** tab, set:
    ```
    APP_ENV=production
-   DB_PATH=/data/sacco.db
+   DATABASE_URL=${{Postgres.DATABASE_URL}}
    COOKIE_SECURE=true
    SECRET_KEY=<paste output of: python -c "import secrets; print(secrets.token_hex(32))">
    JWT_SECRET_KEY=<same command again, different value>
@@ -186,14 +187,6 @@ after the first deploy:
 5. Under **Settings > Networking**, generate a public domain -- you'll
    need its `https://` URL for the M-Pesa callback settings, and Railway
    also exposes it to your app automatically as `RAILWAY_PUBLIC_DOMAIN`.
-6. **Known gotcha, already handled:** Railway volumes mount fresh and
-   root-owned, which would break a container that switches to a non-root
-   user at build time (as this one used to). The `Dockerfile`/
-   `entrypoint.sh` in this repo fix that automatically -- the container
-   starts as root just long enough to `chown` the mounted `/data`
-   directory, then drops to the unprivileged `appuser` before starting
-   gunicorn. No action needed on your end, just don't remove
-   `entrypoint.sh` if you're customizing the Dockerfile.
 
 ### Option D: Fly.io
 
@@ -202,7 +195,8 @@ needs to be a globally-unique name.
 
 ```bash
 fly launch --no-deploy          # detects fly.toml, don't let it overwrite yours
-fly volumes create jodala_data --size 1 --region iad   # match fly.toml's primary_region
+fly postgres create --name jodala-db --region iad   # match fly.toml's primary_region
+fly postgres attach jodala-db    # wires DATABASE_URL into this app's secrets
 fly redis create                 # managed Upstash Redis -- note the redis:// URL printed
 fly secrets set \
   SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))") \
@@ -213,10 +207,10 @@ fly deploy
 
 `fly.toml` pins `min_machines_running = 1` and `auto_stop_machines = false`
 deliberately -- Fly's usual scale-to-zero behavior would mean an M-Pesa
-callback arriving while the Machine is stopped just fails, and a Fly
-volume can't be shared across multiple Machines anyway (another reason,
-same as Render/Railway, not to scale this past one instance). Once
-deployed, set the `https://your-app.fly.dev` URL as your M-Pesa
+callback arriving while the Machine is stopped just fails. The database
+itself runs as its own separate Fly Postgres app, so this web app has no
+local volume and can scale past one Machine if you outgrow the default.
+Once deployed, set the `https://your-app.fly.dev` URL as your M-Pesa
 Callback/Result/Timeout URLs under Settings > M-Pesa in-app.
 
 ### Option E: A plain VPS with systemd + nginx (no Docker)
@@ -250,8 +244,9 @@ WantedBy=multi-user.target
 `chmod 600 /opt/jodala/.env.production` (it holds secrets -- don't let
 other users on the box read it), then `systemctl enable --now jodala`, and
 put nginx in front of it as a reverse proxy to `127.0.0.1:8000` with
-certbot for TLS. Run Redis on the same box (`apt install redis-server`) or
-use a managed instance.
+certbot for TLS. Run PostgreSQL and Redis on the same box (`apt install
+postgresql redis-server`) or use managed instances and point
+`DATABASE_URL`/`RATELIMIT_STORAGE_URI` at those instead.
 
 ## 8. After it's live
 

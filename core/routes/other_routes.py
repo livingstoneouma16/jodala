@@ -32,7 +32,7 @@ def get_company():
     db = get_db()
     settings = {}
     for k in keys:
-        row = db.execute("SELECT value FROM company_settings WHERE key = ?", (k,)).fetchone()
+        row = db.execute("SELECT value FROM company_settings WHERE key = %s", (k,)).fetchone()
         settings[k] = row['value'] if row else ''
     return jsonify(settings)
 
@@ -67,11 +67,11 @@ def update_company():
             adjust_account_balance('3000', delta)
 
     for key, value in data.items():
-        existing = get_db().execute("SELECT id FROM company_settings WHERE key = ?", (key,)).fetchone()
+        existing = get_db().execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
         if existing:
-            execute("UPDATE company_settings SET value = ?, updated_at = ? WHERE key = ?", (str(value), now, key))
+            execute("UPDATE company_settings SET value = %s, updated_at = %s WHERE key = %s", (str(value), now, key))
         else:
-            execute("INSERT INTO company_settings (key, value, updated_at) VALUES (?, ?, ?)", (key, str(value), now))
+            execute("INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)", (key, str(value), now))
     return jsonify({'message': 'Company settings updated'})
 
 
@@ -100,11 +100,11 @@ def update_notification_settings():
     now = utcnow()
 
     def _set(key, value):
-        existing = get_db().execute("SELECT id FROM company_settings WHERE key = ?", (key,)).fetchone()
+        existing = get_db().execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
         if existing:
-            execute("UPDATE company_settings SET value = ?, updated_at = ? WHERE key = ?", (str(value), now, key))
+            execute("UPDATE company_settings SET value = %s, updated_at = %s WHERE key = %s", (str(value), now, key))
         else:
-            execute("INSERT INTO company_settings (key, value, updated_at) VALUES (?, ?, ?)", (key, str(value), now))
+            execute("INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)", (key, str(value), now))
 
     if 'gmail_address' in data:
         _set('gmail_address', (data.get('gmail_address') or '').strip())
@@ -187,11 +187,11 @@ def update_mpesa_settings():
     now = utcnow()
 
     def _set(key, value):
-        existing = get_db().execute("SELECT id FROM company_settings WHERE key = ?", (key,)).fetchone()
+        existing = get_db().execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
         if existing:
-            execute("UPDATE company_settings SET value = ?, updated_at = ? WHERE key = ?", (str(value), now, key))
+            execute("UPDATE company_settings SET value = %s, updated_at = %s WHERE key = %s", (str(value), now, key))
         else:
-            execute("INSERT INTO company_settings (key, value, updated_at) VALUES (?, ?, ?)", (key, str(value), now))
+            execute("INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)", (key, str(value), now))
 
     if 'mpesa_environment' in data:
         _set('mpesa_environment', 'production' if data.get('mpesa_environment') == 'production' else 'sandbox')
@@ -331,19 +331,19 @@ def create_loan_product():
     data = request.get_json()
     cur = execute(
         """INSERT INTO loan_products (name, code, description, min_amount, max_amount, interest_rate,
-               interest_type, repayment_frequency, min_term, max_term, penalty_rate, processing_fee,
+               interest_type, repayment_frequency, min_term, max_term, penalty_rate,
                insurance_fee, require_guarantor, require_collateral, is_active, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)""",
         (data.get('name'), data.get('code'), data.get('description'),
          float(data.get('min_amount', 0)), float(data.get('max_amount', 0)),
          float(data.get('interest_rate', 0)), data.get('interest_type', 'flat'),
          data.get('repayment_frequency', 'monthly'), int(data.get('min_term', 1)),
          int(data.get('max_term', 24)), float(data.get('penalty_rate', 0)),
-         float(data.get('processing_fee', 0)), float(data.get('insurance_fee', 0)),
+         float(data.get('insurance_fee', 0)),
          1 if data.get('require_guarantor') else 0, 1 if data.get('require_collateral') else 0,
          utcnow())
     )
-    product = get_db().execute("SELECT * FROM loan_products WHERE id = ?", (cur.lastrowid,)).fetchone()
+    product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (cur.lastrowid,)).fetchone()
     return jsonify({'message': 'Product created', 'product': loan_product_public(product)}), 201
 
 
@@ -351,22 +351,22 @@ def create_loan_product():
 @login_required
 @role_required('admin')
 def update_loan_product(product_id):
-    product = get_db().execute("SELECT * FROM loan_products WHERE id = ?", (product_id,)).fetchone()
+    product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (product_id,)).fetchone()
     if not product:
         return jsonify({'error': 'Product not found'}), 404
     data = request.get_json()
 
     editable = ['name', 'description', 'interest_rate', 'min_amount', 'max_amount',
-                'min_term', 'max_term', 'penalty_rate', 'processing_fee', 'insurance_fee',
+                'min_term', 'max_term', 'penalty_rate', 'insurance_fee',
                 'interest_type', 'repayment_frequency']
     values = {f: data.get(f, product[f]) for f in editable}
     is_active = 1 if data.get('is_active', product['is_active']) else 0
 
     execute(
-        f"UPDATE loan_products SET {', '.join(f'{f} = ?' for f in editable)}, is_active = ? WHERE id = ?",
+        f"UPDATE loan_products SET {', '.join(f'{f} = %s' for f in editable)}, is_active = %s WHERE id = %s",
         tuple(values[f] for f in editable) + (is_active, product_id)
     )
-    updated = get_db().execute("SELECT * FROM loan_products WHERE id = ?", (product_id,)).fetchone()
+    updated = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (product_id,)).fetchone()
     return jsonify({'message': 'Product updated', 'product': loan_product_public(updated)})
 
 
@@ -374,18 +374,18 @@ def update_loan_product(product_id):
 @login_required
 @role_required('admin')
 def delete_loan_product(product_id):
-    product = get_db().execute("SELECT * FROM loan_products WHERE id = ?", (product_id,)).fetchone()
+    product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (product_id,)).fetchone()
     if not product:
         return jsonify({'error': 'Product not found'}), 404
 
     in_use = get_db().execute(
-        "SELECT id FROM loans WHERE product_id = ?", (product_id,)
+        "SELECT id FROM loans WHERE product_id = %s", (product_id,)
     ).fetchone()
     if in_use:
         return jsonify({'error': 'Cannot delete a loan product with existing loans. Deactivate it instead.'}), 400
 
     old_data = loan_product_public(product)
-    execute("DELETE FROM loan_products WHERE id = ?", (product_id,))
+    execute("DELETE FROM loan_products WHERE id = %s", (product_id,))
     log_audit('DELETE_LOAN_PRODUCT', 'loan_product', product_id, old_values=old_data)
 
     return jsonify({'message': 'Loan product deleted successfully'})
@@ -409,7 +409,7 @@ def create_savings_product():
     data = request.get_json()
     execute(
         """INSERT INTO savings_products (name, code, description, interest_rate, min_balance, is_active, created_at)
-           VALUES (?, ?, ?, ?, ?, 1, ?)""",
+           VALUES (%s, %s, %s, %s, %s, 1, %s)""",
         (data.get('name'), data.get('code'), data.get('description'),
          float(data.get('interest_rate', 0)), float(data.get('min_balance', 0)), utcnow())
     )
@@ -420,7 +420,7 @@ def create_savings_product():
 @login_required
 @role_required('admin')
 def update_savings_product(product_id):
-    product = get_db().execute("SELECT * FROM savings_products WHERE id = ?", (product_id,)).fetchone()
+    product = get_db().execute("SELECT * FROM savings_products WHERE id = %s", (product_id,)).fetchone()
     if not product:
         return jsonify({'error': 'Product not found'}), 404
     data = request.get_json()
@@ -430,10 +430,10 @@ def update_savings_product(product_id):
     is_active = 1 if data.get('is_active', product['is_active']) else 0
 
     execute(
-        f"UPDATE savings_products SET {', '.join(f'{f} = ?' for f in editable)}, is_active = ? WHERE id = ?",
+        f"UPDATE savings_products SET {', '.join(f'{f} = %s' for f in editable)}, is_active = %s WHERE id = %s",
         tuple(values[f] for f in editable) + (is_active, product_id)
     )
-    updated = get_db().execute("SELECT * FROM savings_products WHERE id = ?", (product_id,)).fetchone()
+    updated = get_db().execute("SELECT * FROM savings_products WHERE id = %s", (product_id,)).fetchone()
     return jsonify({'message': 'Product updated', 'product': {
         'id': updated['id'], 'name': updated['name'], 'code': updated['code'],
         'description': updated['description'], 'interest_rate': updated['interest_rate'],
@@ -445,12 +445,12 @@ def update_savings_product(product_id):
 @login_required
 @role_required('admin')
 def delete_savings_product(product_id):
-    product = get_db().execute("SELECT * FROM savings_products WHERE id = ?", (product_id,)).fetchone()
+    product = get_db().execute("SELECT * FROM savings_products WHERE id = %s", (product_id,)).fetchone()
     if not product:
         return jsonify({'error': 'Product not found'}), 404
 
     in_use = get_db().execute(
-        "SELECT id FROM savings_accounts WHERE product_id = ?", (product_id,)
+        "SELECT id FROM savings_accounts WHERE product_id = %s", (product_id,)
     ).fetchone()
     if in_use:
         return jsonify({'error': 'Cannot delete a savings product with existing accounts. Deactivate it instead.'}), 400
@@ -460,7 +460,7 @@ def delete_savings_product(product_id):
         'description': product['description'], 'interest_rate': product['interest_rate'],
         'min_balance': product['min_balance'], 'is_active': bool(product['is_active'])
     }
-    execute("DELETE FROM savings_products WHERE id = ?", (product_id,))
+    execute("DELETE FROM savings_products WHERE id = %s", (product_id,))
     log_audit('DELETE_SAVINGS_PRODUCT', 'savings_product', product_id, old_values=old_data)
 
     return jsonify({'message': 'Savings product deleted successfully'})
@@ -482,15 +482,15 @@ def create_region():
     if not name:
         return jsonify({'error': 'Region name is required'}), 400
 
-    existing = get_db().execute("SELECT id FROM regions WHERE name = ?", (name,)).fetchone()
+    existing = get_db().execute("SELECT id FROM regions WHERE name = %s", (name,)).fetchone()
     if existing:
         return jsonify({'error': 'A region with this name already exists'}), 400
 
     cur = execute(
-        "INSERT INTO regions (name, is_active, created_at) VALUES (?, 1, ?)",
+        "INSERT INTO regions (name, is_active, created_at) VALUES (%s, 1, %s)",
         (name, utcnow())
     )
-    region = get_db().execute("SELECT * FROM regions WHERE id = ?", (cur.lastrowid,)).fetchone()
+    region = get_db().execute("SELECT * FROM regions WHERE id = %s", (cur.lastrowid,)).fetchone()
     log_audit('CREATE_REGION', 'region', region['id'], new_values={'name': name})
     return jsonify({'message': 'Region created', 'region': {'id': region['id'], 'name': region['name'], 'is_active': bool(region['is_active'])}}), 201
 
@@ -499,7 +499,7 @@ def create_region():
 @login_required
 @role_required('admin')
 def update_region(region_id):
-    region = get_db().execute("SELECT * FROM regions WHERE id = ?", (region_id,)).fetchone()
+    region = get_db().execute("SELECT * FROM regions WHERE id = %s", (region_id,)).fetchone()
     if not region:
         return jsonify({'error': 'Region not found'}), 404
     data = request.get_json()
@@ -509,7 +509,7 @@ def update_region(region_id):
         return jsonify({'error': 'Region name is required'}), 400
 
     duplicate = get_db().execute(
-        "SELECT id FROM regions WHERE name = ? AND id != ?", (name, region_id)
+        "SELECT id FROM regions WHERE name = %s AND id != %s", (name, region_id)
     ).fetchone()
     if duplicate:
         return jsonify({'error': 'A region with this name already exists'}), 400
@@ -517,14 +517,14 @@ def update_region(region_id):
     is_active = 1 if data.get('is_active', region['is_active']) else 0
     old_name = region['name']
 
-    execute("UPDATE regions SET name = ?, is_active = ? WHERE id = ?", (name, is_active, region_id))
+    execute("UPDATE regions SET name = %s, is_active = %s WHERE id = %s", (name, is_active, region_id))
 
     # Keep existing member/client records in sync if the region was renamed.
     if name != old_name:
-        execute("UPDATE members SET region = ? WHERE region = ?", (name, old_name))
-        execute("UPDATE clients SET region = ? WHERE region = ?", (name, old_name))
+        execute("UPDATE members SET region = %s WHERE region = %s", (name, old_name))
+        execute("UPDATE clients SET region = %s WHERE region = %s", (name, old_name))
 
-    updated = get_db().execute("SELECT * FROM regions WHERE id = ?", (region_id,)).fetchone()
+    updated = get_db().execute("SELECT * FROM regions WHERE id = %s", (region_id,)).fetchone()
     log_audit('UPDATE_REGION', 'region', region_id, old_values={'name': old_name})
     return jsonify({'message': 'Region updated', 'region': {'id': updated['id'], 'name': updated['name'], 'is_active': bool(updated['is_active'])}})
 
@@ -533,18 +533,18 @@ def update_region(region_id):
 @login_required
 @role_required('admin')
 def delete_region(region_id):
-    region = get_db().execute("SELECT * FROM regions WHERE id = ?", (region_id,)).fetchone()
+    region = get_db().execute("SELECT * FROM regions WHERE id = %s", (region_id,)).fetchone()
     if not region:
         return jsonify({'error': 'Region not found'}), 404
 
     in_use = get_db().execute(
-        "SELECT id FROM members WHERE region = ? UNION SELECT id FROM clients WHERE region = ?",
+        "SELECT id FROM members WHERE region = %s UNION SELECT id FROM clients WHERE region = %s",
         (region['name'], region['name'])
     ).fetchone()
     if in_use:
         return jsonify({'error': 'Cannot delete a region assigned to existing members or clients. Deactivate it instead.'}), 400
 
-    execute("DELETE FROM regions WHERE id = ?", (region_id,))
+    execute("DELETE FROM regions WHERE id = %s", (region_id,))
     log_audit('DELETE_REGION', 'region', region_id, old_values={'name': region['name']})
     return jsonify({'message': 'Region deleted successfully'})
 
@@ -564,12 +564,12 @@ def list_notifications():
     page = request.args.get('page', 1, type=int)
 
     rows, total, pages = paginate(
-        "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC",
-        "SELECT COUNT(*) FROM notifications WHERE user_id = ?",
+        "SELECT * FROM notifications WHERE user_id = %s ORDER BY created_at DESC",
+        "SELECT COUNT(*) FROM notifications WHERE user_id = %s",
         (user['id'],), page, 20
     )
     unread = get_db().execute(
-        "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0", (user['id'],)
+        "SELECT COUNT(*) FROM notifications WHERE user_id = %s AND is_read = 0", (user['id'],)
     ).fetchone()[0]
 
     return jsonify({
@@ -584,7 +584,7 @@ def list_notifications():
 @login_required
 def mark_all_read():
     user = get_current_user()
-    execute("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0", (user['id'],))
+    execute("UPDATE notifications SET is_read = 1 WHERE user_id = %s AND is_read = 0", (user['id'],))
     return jsonify({'message': 'All marked as read'})
 
 
@@ -642,7 +642,7 @@ def loan_agreement(loan_id):
     loan = db.execute(
         """SELECT loans.*, loan_products.name AS product_name FROM loans
            LEFT JOIN loan_products ON loan_products.id = loans.product_id
-           WHERE loans.id = ?""", (loan_id,)
+           WHERE loans.id = %s""", (loan_id,)
     ).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
@@ -650,11 +650,11 @@ def loan_agreement(loan_id):
     company_name = _company_name()
     borrower, borrower_phone = 'N/A', ''
     if loan['member_id']:
-        m = db.execute("SELECT * FROM members WHERE id = ?", (loan['member_id'],)).fetchone()
+        m = db.execute("SELECT * FROM members WHERE id = %s", (loan['member_id'],)).fetchone()
         if m:
             borrower, borrower_phone = member_full_name(m), m['phone']
     elif loan['client_id']:
-        c = db.execute("SELECT * FROM clients WHERE id = ?", (loan['client_id'],)).fetchone()
+        c = db.execute("SELECT * FROM clients WHERE id = %s", (loan['client_id'],)).fetchone()
         if c:
             borrower, borrower_phone = client_full_name(c), c['phone']
 
@@ -686,8 +686,7 @@ def loan_agreement(loan_id):
         ['Loan Product:', loan['product_name'] or '', 'Status:', (loan['status'] or '').upper()],
         ['Principal Amount:', f"Ksh {loan['principal_amount']:,.2f}", 'Interest Rate:', f"{loan['interest_rate']}%"],
         ['Loan Term:', f"{loan['term']} {loan['repayment_frequency']} installments", 'Total Repayable:', f"Ksh {loan['total_repayable']:,.2f}"],
-        ['Processing Fee:', f"Ksh {loan['processing_fee']:,.2f}", 'Insurance Fee:', f"Ksh {loan['insurance_fee']:,.2f}"],
-        ['Purpose:', loan['purpose'] or 'N/A', '', ''],
+        ['Insurance Fee:', f"Ksh {loan['insurance_fee']:,.2f}", 'Purpose:', loan['purpose'] or 'N/A'],
     ]
 
     table = Table(loan_data, colWidths=[4*cm, 6*cm, 3.5*cm, 4*cm])
@@ -757,19 +756,19 @@ def repayment_receipt_pdf(repayment_id):
     from reportlab.lib.enums import TA_CENTER
 
     db = get_db()
-    repayment = db.execute("SELECT * FROM repayments WHERE id = ?", (repayment_id,)).fetchone()
+    repayment = db.execute("SELECT * FROM repayments WHERE id = %s", (repayment_id,)).fetchone()
     if not repayment:
         return jsonify({'error': 'Repayment not found'}), 404
-    loan = db.execute("SELECT * FROM loans WHERE id = ?", (repayment['loan_id'],)).fetchone()
+    loan = db.execute("SELECT * FROM loans WHERE id = %s", (repayment['loan_id'],)).fetchone()
 
     company_name = _company_name()
     borrower = 'N/A'
     if loan and loan['member_id']:
-        m = db.execute("SELECT * FROM members WHERE id = ?", (loan['member_id'],)).fetchone()
+        m = db.execute("SELECT * FROM members WHERE id = %s", (loan['member_id'],)).fetchone()
         if m:
             borrower = member_full_name(m)
     elif loan and loan['client_id']:
-        c = db.execute("SELECT * FROM clients WHERE id = ?", (loan['client_id'],)).fetchone()
+        c = db.execute("SELECT * FROM clients WHERE id = %s", (loan['client_id'],)).fetchone()
         if c:
             borrower = client_full_name(c)
 
@@ -845,21 +844,21 @@ def create_user():
     data = request.get_json()
     db = get_db()
 
-    if db.execute("SELECT id FROM users WHERE username = ?", (data.get('username'),)).fetchone():
+    if db.execute("SELECT id FROM users WHERE username = %s", (data.get('username'),)).fetchone():
         return jsonify({'error': 'Username already taken'}), 400
-    if db.execute("SELECT id FROM users WHERE email = ?", (data.get('email'),)).fetchone():
+    if db.execute("SELECT id FROM users WHERE email = %s", (data.get('email'),)).fetchone():
         return jsonify({'error': 'Email already registered'}), 400
 
     now = utcnow()
     cur = execute(
         """INSERT INTO users (username, email, password_hash, full_name, role, phone,
                is_active, must_change_password, totp_enabled, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, 1, 1, 0, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, 1, 1, 0, %s, %s)""",
         (data.get('username'), data.get('email'),
          hash_password(data.get('password', 'Jodala@2024')),
          data.get('full_name'), data.get('role', 'loan_officer'), data.get('phone'), now, now)
     )
-    new_user = db.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+    new_user = db.execute("SELECT * FROM users WHERE id = %s", (cur.lastrowid,)).fetchone()
 
     temp_password = data.get('password', 'Jodala@2024')
     notify(
@@ -890,7 +889,7 @@ def update_user(user_id):
     if current['role'] != 'admin' and current['id'] != user_id:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    target = get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    target = get_db().execute("SELECT * FROM users WHERE id = %s", (user_id,)).fetchone()
     if not target:
         return jsonify({'error': 'User not found'}), 404
     data = request.get_json()
@@ -913,17 +912,17 @@ def update_user(user_id):
         # own password here already knows it, so clear the flag instead.
         force_change = 1 if current['id'] != user_id else 0
         execute(
-            "UPDATE users SET full_name=?, email=?, phone=?, role=?, is_active=?, password_hash=?, "
-            "must_change_password=?, updated_at=? WHERE id=?",
+            "UPDATE users SET full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, password_hash=%s, "
+            "must_change_password=%s, updated_at=%s WHERE id=%s",
             (full_name, email, phone, role, is_active, password_hash, force_change, utcnow(), user_id)
         )
     else:
         execute(
-            "UPDATE users SET full_name=?, email=?, phone=?, role=?, is_active=?, updated_at=? WHERE id=?",
+            "UPDATE users SET full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, updated_at=%s WHERE id=%s",
             (full_name, email, phone, role, is_active, utcnow(), user_id)
         )
 
-    updated = get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    updated = get_db().execute("SELECT * FROM users WHERE id = %s", (user_id,)).fetchone()
     return jsonify({'message': 'User updated', 'user': user_public(updated)})
 
 
@@ -935,33 +934,33 @@ def delete_user(user_id):
     if current['id'] == user_id:
         return jsonify({'error': 'Cannot delete your own account'}), 400
 
-    target = get_db().execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    target = get_db().execute("SELECT * FROM users WHERE id = %s", (user_id,)).fetchone()
     if not target:
         return jsonify({'error': 'User not found'}), 404
 
     db = get_db()
     activity_checks = [
-        ("SELECT id FROM members WHERE created_by = ?", 'registered members'),
-        ("SELECT id FROM clients WHERE created_by = ?", 'registered clients'),
-        ("SELECT id FROM loans WHERE loan_officer_id = ? OR approved_by = ? OR disbursed_by = ?", 'loans'),
-        ("SELECT id FROM repayments WHERE collected_by = ?", 'repayments'),
-        ("SELECT id FROM savings_accounts WHERE created_by = ?", 'savings accounts'),
-        ("SELECT id FROM savings_transactions WHERE processed_by = ?", 'savings transactions'),
-        ("SELECT id FROM journal_entries WHERE created_by = ?", 'journal entries'),
-        ("SELECT id FROM income WHERE recorded_by = ?", 'income records'),
-        ("SELECT id FROM expenses WHERE recorded_by = ? OR approved_by = ?", 'expense records'),
-        ("SELECT id FROM audit_logs WHERE user_id = ?", 'audit log history'),
+        ("SELECT id FROM members WHERE created_by = %s", 'registered members'),
+        ("SELECT id FROM clients WHERE created_by = %s", 'registered clients'),
+        ("SELECT id FROM loans WHERE loan_officer_id = %s OR approved_by = %s OR disbursed_by = %s", 'loans'),
+        ("SELECT id FROM repayments WHERE collected_by = %s", 'repayments'),
+        ("SELECT id FROM savings_accounts WHERE created_by = %s", 'savings accounts'),
+        ("SELECT id FROM savings_transactions WHERE processed_by = %s", 'savings transactions'),
+        ("SELECT id FROM journal_entries WHERE created_by = %s", 'journal entries'),
+        ("SELECT id FROM income WHERE recorded_by = %s", 'income records'),
+        ("SELECT id FROM expenses WHERE recorded_by = %s OR approved_by = %s", 'expense records'),
+        ("SELECT id FROM audit_logs WHERE user_id = %s", 'audit log history'),
     ]
     for query, label in activity_checks:
-        param_count = query.count('?')
+        param_count = query.count('%s')
         if db.execute(query, (user_id,) * param_count).fetchone():
             return jsonify({
                 'error': f'Cannot delete a user with existing {label}. Deactivate the account instead.'
             }), 400
 
     old_data = user_public(target)
-    execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
-    execute("DELETE FROM users WHERE id = ?", (user_id,))
+    execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
+    execute("DELETE FROM users WHERE id = %s", (user_id,))
     log_audit('DELETE_USER', 'user', user_id, old_values=old_data)
 
     return jsonify({'message': 'User deleted successfully'})

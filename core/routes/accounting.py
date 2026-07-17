@@ -34,13 +34,13 @@ def list_income():
 
     where, params = [], []
     if date_from:
-        where.append("income_date >= ?")
+        where.append("income_date >= %s")
         params.append(date_from)
     if date_to:
-        where.append("income_date <= ?")
+        where.append("income_date <= %s")
         params.append(date_to)
     if category:
-        where.append("category = ?")
+        where.append("category = %s")
         params.append(category)
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
@@ -67,12 +67,12 @@ def record_income():
     user = get_current_user()
     cur = execute(
         """INSERT INTO income (reference, description, category, amount, income_date, payment_method,
-               recorded_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               recorded_by, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
         (generate_income_reference(), data.get('description', '').strip(), data.get('category', 'other'),
          float(data.get('amount', 0)), data.get('income_date', date.today().isoformat()),
          data.get('payment_method', 'cash'), user['id'], utcnow())
     )
-    income = get_db().execute("SELECT * FROM income WHERE id = ?", (cur.lastrowid,)).fetchone()
+    income = get_db().execute("SELECT * FROM income WHERE id = %s", (cur.lastrowid,)).fetchone()
     log_audit('RECORD_INCOME', 'income', income['id'])
     adjust_main_account_balance(income['amount'])
     # Post to the matching ledger income account (falls back to Fee Income
@@ -93,10 +93,10 @@ def list_expenses():
 
     where, params = [], []
     if date_from:
-        where.append("expense_date >= ?")
+        where.append("expense_date >= %s")
         params.append(date_from)
     if date_to:
-        where.append("expense_date <= ?")
+        where.append("expense_date <= %s")
         params.append(date_to)
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
@@ -121,13 +121,13 @@ def record_expense():
     user = get_current_user()
     cur = execute(
         """INSERT INTO expenses (reference, description, category, amount, expense_date, payment_method,
-               vendor, receipt_ref, recorded_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               vendor, receipt_ref, recorded_by, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (generate_expense_reference(), data.get('description', '').strip(), data.get('category', 'other'),
          float(data.get('amount', 0)), data.get('expense_date', date.today().isoformat()),
          data.get('payment_method', 'cash'), data.get('vendor'), data.get('receipt_ref'),
          user['id'], utcnow())
     )
-    expense = get_db().execute("SELECT * FROM expenses WHERE id = ?", (cur.lastrowid,)).fetchone()
+    expense = get_db().execute("SELECT * FROM expenses WHERE id = %s", (cur.lastrowid,)).fetchone()
     log_audit('RECORD_EXPENSE', 'expense', expense['id'])
     adjust_main_account_balance(-expense['amount'])
     adjust_account_balance('5000', expense['amount'])
@@ -156,7 +156,7 @@ def create_journal_entry():
 
     cur = execute(
         """INSERT INTO journal_entries (entry_number, description, entry_date, reference, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s)""",
         (generate_journal_number(), data.get('description', ''), data.get('entry_date', date.today().isoformat()),
          data.get('reference'), user['id'], utcnow())
     )
@@ -165,12 +165,12 @@ def create_journal_entry():
     for line in lines:
         execute(
             """INSERT INTO journal_entry_lines (entry_id, debit_account_id, credit_account_id, amount, description)
-               VALUES (?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s)""",
             (entry_id, line.get('debit_account_id'), line.get('credit_account_id'),
              float(line.get('amount', 0)), line.get('description', ''))
         )
 
-    entry = get_db().execute("SELECT * FROM journal_entries WHERE id = ?", (entry_id,)).fetchone()
+    entry = get_db().execute("SELECT * FROM journal_entries WHERE id = %s", (entry_id,)).fetchone()
     return jsonify({'message': 'Journal entry created', 'entry': journal_entry_public(entry)}), 201
 
 
@@ -213,11 +213,11 @@ def profit_loss():
     income_where, income_params = [], []
     expense_where, expense_params = [], []
     if date_from:
-        income_where.append("income_date >= ?"); income_params.append(date_from)
-        expense_where.append("expense_date >= ?"); expense_params.append(date_from)
+        income_where.append("income_date >= %s"); income_params.append(date_from)
+        expense_where.append("expense_date >= %s"); expense_params.append(date_from)
     if date_to:
-        income_where.append("income_date <= ?"); income_params.append(date_to)
-        expense_where.append("expense_date <= ?"); expense_params.append(date_to)
+        income_where.append("income_date <= %s"); income_params.append(date_to)
+        expense_where.append("expense_date <= %s"); expense_params.append(date_to)
 
     income_where_sql = (" WHERE " + " AND ".join(income_where)) if income_where else ""
     expense_where_sql = (" WHERE " + " AND ".join(expense_where)) if expense_where else ""
@@ -252,14 +252,14 @@ def cashbook_data():
     date_to = request.args.get('date_to', date.today().isoformat())
 
     db = get_db()
-    income = db.execute("SELECT * FROM income WHERE income_date >= ? AND income_date <= ?",
+    income = db.execute("SELECT * FROM income WHERE income_date >= %s AND income_date <= %s",
                          (date_from, date_to)).fetchall()
-    expenses = db.execute("SELECT * FROM expenses WHERE expense_date >= ? AND expense_date <= ?",
+    expenses = db.execute("SELECT * FROM expenses WHERE expense_date >= %s AND expense_date <= %s",
                            (date_from, date_to)).fetchall()
     repayments = db.execute(
         """SELECT repayments.*, loans.loan_number, loans.member_id
            FROM repayments LEFT JOIN loans ON loans.id = repayments.loan_id
-           WHERE repayments.payment_date >= ? AND repayments.payment_date <= ?""",
+           WHERE repayments.payment_date >= %s AND repayments.payment_date <= %s""",
         (date_from, date_to)
     ).fetchall()
 
@@ -267,7 +267,7 @@ def cashbook_data():
     for r in repayments:
         borrower = 'Client'
         if r['member_id']:
-            member = db.execute("SELECT * FROM members WHERE id = ?", (r['member_id'],)).fetchone()
+            member = db.execute("SELECT * FROM members WHERE id = %s", (r['member_id'],)).fetchone()
             if member:
                 borrower = member_full_name(member)
         entries.append({

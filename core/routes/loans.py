@@ -13,10 +13,10 @@ def _borrower_contact(loan_row):
     """Resolve (name, email) for whoever this loan belongs to -- a member or a client."""
     db = get_db()
     if loan_row['member_id']:
-        p = db.execute("SELECT first_name, last_name, email FROM members WHERE id = ?",
+        p = db.execute("SELECT first_name, last_name, email FROM members WHERE id = %s",
                         (loan_row['member_id'],)).fetchone()
     elif loan_row['client_id']:
-        p = db.execute("SELECT first_name, last_name, email FROM clients WHERE id = ?",
+        p = db.execute("SELECT first_name, last_name, email FROM clients WHERE id = %s",
                         (loan_row['client_id'],)).fetchone()
     else:
         return None, None
@@ -81,7 +81,7 @@ def quote_loan():
     """Preview the summary numbers (installment, total interest/repayable, fees)
     for a proposed loan before submitting the application."""
     data = request.get_json()
-    product = get_db().execute("SELECT * FROM loan_products WHERE id = ?", (data.get('product_id'),)).fetchone()
+    product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (data.get('product_id'),)).fetchone()
     if not product:
         return jsonify({'error': 'Invalid loan product'}), 400
 
@@ -94,7 +94,7 @@ def quote_loan():
         return jsonify({'error': f"Term must be between {product['min_term']} and {product['max_term']}"}), 400
 
     summary = loan_summary(principal, product['interest_rate'], term, product['interest_type'],
-                            product['processing_fee'], product['insurance_fee'])
+                            product['insurance_fee'])
     return jsonify(summary)
 
 
@@ -109,13 +109,13 @@ def list_loans():
 
     where, params = [], []
     if search:
-        where.append("loans.loan_number LIKE ?")
+        where.append("loans.loan_number LIKE %s")
         params.append(f'%{search}%')
     if status:
-        where.append("loans.status = ?")
+        where.append("loans.status = %s")
         params.append(status)
     if product_id:
-        where.append("loans.product_id = ?")
+        where.append("loans.product_id = %s")
         params.append(int(product_id))
 
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
@@ -124,7 +124,7 @@ def list_loans():
     total = get_db().execute(f"SELECT COUNT(*) FROM loans{where_sql}", tuple(params)).fetchone()[0]
     pages = max(1, (total + per_page - 1) // per_page)
     offset = (page - 1) * per_page
-    rows = get_db().execute(base + " LIMIT ? OFFSET ?", tuple(params) + (per_page, offset)).fetchall()
+    rows = get_db().execute(base + " LIMIT %s OFFSET %s", tuple(params) + (per_page, offset)).fetchall()
 
     return jsonify({
         'loans': [loan_public(r) for r in rows],
@@ -140,7 +140,7 @@ def create_loan():
     data = request.get_json()
     user = get_current_user()
 
-    product = get_db().execute("SELECT * FROM loan_products WHERE id = ?", (data.get('product_id'),)).fetchone()
+    product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (data.get('product_id'),)).fetchone()
     if not product:
         return jsonify({'error': 'Invalid loan product'}), 400
 
@@ -153,7 +153,7 @@ def create_loan():
         return jsonify({'error': f"Term must be between {product['min_term']} and {product['max_term']}"}), 400
 
     summary = loan_summary(principal, product['interest_rate'], term, product['interest_type'],
-                            product['processing_fee'], product['insurance_fee'])
+                            product['insurance_fee'])
 
     borrower_type = data.get('borrower_type', 'member')
     now = utcnow()
@@ -161,20 +161,20 @@ def create_loan():
     cur = execute(
         """INSERT INTO loans (loan_number, member_id, client_id, product_id, borrower_type,
                principal_amount, interest_rate, interest_type, term, repayment_frequency,
-               total_interest, total_repayable, processing_fee, insurance_fee, outstanding_balance,
+               total_interest, total_repayable, insurance_fee, outstanding_balance,
                purpose, collateral, guarantor_name, guarantor_phone, status, application_date,
                loan_officer_id, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s)""",
         (generate_loan_number(),
          data.get('member_id') if borrower_type == 'member' else None,
          data.get('client_id') if borrower_type == 'client' else None,
          product['id'], borrower_type, principal, product['interest_rate'], product['interest_type'],
          term, product['repayment_frequency'], summary['total_interest'], summary['total_repayable'],
-         summary['processing_fee'], summary['insurance_fee'], summary['total_repayable'],
+         summary['insurance_fee'], summary['total_repayable'],
          data.get('purpose'), data.get('collateral'), data.get('guarantor_name'), data.get('guarantor_phone'),
          date.today().isoformat(), user['id'], data.get('notes'), now, now)
     )
-    loan = get_db().execute(_borrower_name_sql() + " WHERE loans.id = ?", (cur.lastrowid,)).fetchone()
+    loan = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (cur.lastrowid,)).fetchone()
     log_audit('LOAN_APPLICATION', 'loan', loan['id'])
 
     return jsonify({'message': 'Loan application submitted', 'loan': loan_public(loan)}), 201
@@ -183,31 +183,31 @@ def create_loan():
 @loans_bp.route('/api/<int:loan_id>', methods=['GET'])
 @login_required
 def get_loan(loan_id):
-    loan = get_db().execute(_borrower_name_sql() + " WHERE loans.id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
 
     data = loan_public(loan)
 
     schedule = get_db().execute(
-        "SELECT * FROM loan_schedules WHERE loan_id = ? ORDER BY installment_number", (loan_id,)
+        "SELECT * FROM loan_schedules WHERE loan_id = %s ORDER BY installment_number", (loan_id,)
     ).fetchall()
     data['schedule'] = [loan_schedule_public(s) for s in schedule]
 
     repayments = get_db().execute(
-        "SELECT * FROM repayments WHERE loan_id = ? ORDER BY created_at", (loan_id,)
+        "SELECT * FROM repayments WHERE loan_id = %s ORDER BY created_at", (loan_id,)
     ).fetchall()
     data['repayments'] = [repayment_public({**dict(r), 'loan_number': loan['loan_number']}) for r in repayments]
 
     if loan['member_id']:
-        member = get_db().execute("SELECT * FROM members WHERE id = ?", (loan['member_id'],)).fetchone()
+        member = get_db().execute("SELECT * FROM members WHERE id = %s", (loan['member_id'],)).fetchone()
         if member:
             data['borrower_details'] = {
                 'type': 'member', 'name': member_full_name(member),
                 'phone': member['phone'], 'member_number': member['member_number']
             }
     elif loan['client_id']:
-        client = get_db().execute("SELECT * FROM clients WHERE id = ?", (loan['client_id'],)).fetchone()
+        client = get_db().execute("SELECT * FROM clients WHERE id = %s", (loan['client_id'],)).fetchone()
         if client:
             data['borrower_details'] = {
                 'type': 'client', 'name': client_full_name(client),
@@ -221,7 +221,7 @@ def get_loan(loan_id):
 @login_required
 @role_required('admin', 'loan_officer')
 def approve_loan(loan_id):
-    loan = get_db().execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
     if loan['status'] != 'pending':
@@ -229,11 +229,11 @@ def approve_loan(loan_id):
 
     user = get_current_user()
     execute(
-        "UPDATE loans SET status = 'approved', approval_date = ?, approved_by = ?, updated_at = ? WHERE id = ?",
+        "UPDATE loans SET status = 'approved', approval_date = %s, approved_by = %s, updated_at = %s WHERE id = %s",
         (date.today().isoformat(), user['id'], utcnow(), loan_id)
     )
     log_audit('LOAN_APPROVED', 'loan', loan_id)
-    updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = ?", (loan_id,)).fetchone()
+    updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
 
     borrower_name, borrower_email = _borrower_contact(loan)
     notify(
@@ -257,7 +257,7 @@ def approve_loan(loan_id):
 @loans_bp.route('/api/<int:loan_id>/reject', methods=['POST'])
 @login_required
 def reject_loan(loan_id):
-    loan = get_db().execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
     if loan['status'] not in ('pending', 'approved'):
@@ -265,7 +265,7 @@ def reject_loan(loan_id):
 
     data = request.get_json()
     execute(
-        "UPDATE loans SET status = 'rejected', rejection_reason = ?, updated_at = ? WHERE id = ?",
+        "UPDATE loans SET status = 'rejected', rejection_reason = %s, updated_at = %s WHERE id = %s",
         (data.get('reason', ''), utcnow(), loan_id)
     )
     log_audit('LOAN_REJECTED', 'loan', loan_id)
@@ -322,7 +322,7 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
     out via M-Pesa posts to the schedule and accounting exactly the same way
     as one disbursed by cash/bank. Raises _DisbursementError on validation
     failure; returns the updated loan row on success."""
-    loan = get_db().execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         raise _DisbursementError('Loan not found', 404)
     if loan['status'] != 'approved':
@@ -336,7 +336,7 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
     # unpaid balance rolled over on paper -- no new cash moves for that
     # portion, so it must not be deducted from the main account again.
     amount_disbursed = (loan['principal_amount'] - loan['rollover_amount']
-                         - loan['processing_fee'] - loan['insurance_fee'])
+                         - loan['insurance_fee'])
 
     schedule_data = build_loan_schedule(
         loan['principal_amount'], loan['interest_rate'], loan['term'], loan['interest_type'],
@@ -345,10 +345,10 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
     expected_end_date = schedule_data[-1]['due_date'].isoformat() if schedule_data else None
 
     execute(
-        """UPDATE loans SET status = 'active', disbursement_date = ?, first_repayment_date = ?,
-               amount_disbursed = ?, disbursed_by = ?, disbursement_method = ?, expected_end_date = ?,
-               updated_at = ?
-           WHERE id = ?""",
+        """UPDATE loans SET status = 'active', disbursement_date = %s, first_repayment_date = %s,
+               amount_disbursed = %s, disbursed_by = %s, disbursement_method = %s, expected_end_date = %s,
+               updated_at = %s
+           WHERE id = %s""",
         (disbursement_date.isoformat(), first_repayment.isoformat(), amount_disbursed,
          user_id, disbursement_method, expected_end_date, utcnow(), loan_id)
     )
@@ -357,7 +357,7 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
         execute(
             """INSERT INTO loan_schedules (loan_id, installment_number, due_date, principal_due,
                    interest_due, total_due, balance_after, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')""",
             (loan_id, s['installment_number'], s['due_date'].isoformat(),
              s['principal_due'], s['interest_due'], s['total_due'], s['balance_after'])
         )
@@ -367,15 +367,15 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
     # Loans Receivable only grows by the *new* money owed -- for a top-up,
     # the rollover portion was already on the books from the parent loan's
     # own disbursement, so re-adding the full new principal would double
-    # count it. processing/insurance fees are money the SACCO earns
-    # up-front (deducted from cash disbursed rather than paid out), so they
-    # post as Fee Income; the remainder is the genuine new receivable.
+    # count it. The insurance fee is money the SACCO earns up-front
+    # (deducted from cash disbursed rather than paid out), so it posts as
+    # Fee Income; the remainder is the genuine new receivable.
     receivable_increase = loan['principal_amount'] - loan['rollover_amount']
-    fees = (loan['processing_fee'] or 0) + (loan['insurance_fee'] or 0)
+    fees = loan['insurance_fee'] or 0
     adjust_account_balance('1100', receivable_increase)
     if fees:
         adjust_account_balance('4100', fees)
-    updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = ?", (loan_id,)).fetchone()
+    updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
 
     borrower_name, borrower_email = _borrower_contact(loan)
     receipt_note = f" (M-Pesa receipt {mpesa_receipt})" if mpesa_receipt else ""
@@ -410,12 +410,12 @@ def send_overdue_reminders():
     loan_ids = get_overdue_loan_ids()
     sent, skipped = 0, 0
     for loan_id in loan_ids:
-        loan = db.execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+        loan = db.execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
         if not loan or loan['status'] != 'active':
             continue
         overdue_total = db.execute(
             """SELECT COALESCE(SUM(total_due - total_paid), 0) AS amt, COUNT(*) AS cnt
-               FROM loan_schedules WHERE loan_id = ? AND due_date < ? AND status IN ('pending', 'partial')""",
+               FROM loan_schedules WHERE loan_id = %s AND due_date < %s AND status IN ('pending', 'partial')""",
             (loan_id, date.today().isoformat())
         ).fetchone()
         borrower_name, borrower_email = _borrower_contact(loan)
@@ -456,13 +456,13 @@ def trigger_overdue_reminders():
 @loans_bp.route('/api/<int:loan_id>/topup', methods=['POST'])
 @login_required
 def topup_loan(loan_id):
-    loan = get_db().execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
     if loan['status'] != 'active':
         return jsonify({'error': 'Can only top-up active loans'}), 400
 
-    product = get_db().execute("SELECT * FROM loan_products WHERE id = ?", (loan['product_id'],)).fetchone()
+    product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (loan['product_id'],)).fetchone()
     data = request.get_json()
     user = get_current_user()
 
@@ -477,7 +477,7 @@ def topup_loan(loan_id):
     # remaining principal is the sum of each schedule row's unpaid principal.
     remaining_principal_row = get_db().execute(
         "SELECT COALESCE(SUM(principal_due - principal_paid), 0) AS remaining "
-        "FROM loan_schedules WHERE loan_id = ?", (loan_id,)
+        "FROM loan_schedules WHERE loan_id = %s", (loan_id,)
     ).fetchone()
     remaining_principal = remaining_principal_row['remaining']
     new_principal = remaining_principal + topup_amount
@@ -492,7 +492,7 @@ def topup_loan(loan_id):
     repayment_frequency = loan['repayment_frequency']
 
     summary = loan_summary(new_principal, interest_rate, term, interest_type,
-                            product['processing_fee'], product['insurance_fee'])
+                            product['insurance_fee'])
     now = utcnow()
     today = date.today()
 
@@ -500,12 +500,12 @@ def topup_loan(loan_id):
     # replacing whatever was left of the old one -- the loan keeps its
     # original id/loan_number, it's simply re-amortized on the bigger
     # principal instead of spawning a new loan record.
-    execute("DELETE FROM loan_schedules WHERE loan_id = ? AND status IN ('pending', 'partial')", (loan_id,))
+    execute("DELETE FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')", (loan_id,))
     already_paid_principal = get_db().execute(
-        "SELECT COALESCE(SUM(principal_paid), 0) AS p FROM loan_schedules WHERE loan_id = ?", (loan_id,)
+        "SELECT COALESCE(SUM(principal_paid), 0) AS p FROM loan_schedules WHERE loan_id = %s", (loan_id,)
     ).fetchone()['p']
     already_paid_interest = get_db().execute(
-        "SELECT COALESCE(SUM(interest_paid), 0) AS i FROM loan_schedules WHERE loan_id = ?", (loan_id,)
+        "SELECT COALESCE(SUM(interest_paid), 0) AS i FROM loan_schedules WHERE loan_id = %s", (loan_id,)
     ).fetchone()['i']
 
     schedule_data = build_loan_schedule(
@@ -516,7 +516,7 @@ def topup_loan(loan_id):
         execute(
             """INSERT INTO loan_schedules (loan_id, installment_number, due_date, principal_due,
                    interest_due, total_due, balance_after, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')""",
             (loan_id, s['installment_number'], s['due_date'].isoformat(),
              s['principal_due'], s['interest_due'], s['total_due'], s['balance_after'])
         )
@@ -527,13 +527,13 @@ def topup_loan(loan_id):
     new_outstanding = round(max(0, new_total_repayable - new_total_paid), 2)
 
     execute(
-        """UPDATE loans SET principal_amount = ?, total_interest = ?, total_repayable = ?,
-               processing_fee = ?, insurance_fee = ?, outstanding_balance = ?, total_paid = ?,
-               amount_disbursed = amount_disbursed + ?, expected_end_date = ?,
-               is_topup = 1, rollover_amount = ?, updated_at = ?
-           WHERE id = ?""",
+        """UPDATE loans SET principal_amount = %s, total_interest = %s, total_repayable = %s,
+               insurance_fee = %s, outstanding_balance = %s, total_paid = %s,
+               amount_disbursed = amount_disbursed + %s, expected_end_date = %s,
+               is_topup = 1, rollover_amount = %s, updated_at = %s
+           WHERE id = %s""",
         (new_principal, summary['total_interest'], new_total_repayable,
-         summary['processing_fee'], summary['insurance_fee'], new_outstanding, new_total_paid,
+         summary['insurance_fee'], new_outstanding, new_total_paid,
          topup_amount, expected_end_date, remaining_principal, now, loan_id)
     )
 
@@ -547,14 +547,14 @@ def topup_loan(loan_id):
     adjust_main_account_balance(-topup_amount)
     adjust_account_balance('1100', topup_amount)
 
-    updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = ?", (loan_id,)).fetchone()
+    updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
     return jsonify({'message': 'Loan topped up', 'loan': loan_public(updated)}), 200
 
 
 @loans_bp.route('/api/<int:loan_id>/extend', methods=['POST'])
 @login_required
 def extend_loan(loan_id):
-    loan = get_db().execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
     if loan['status'] != 'active':
@@ -575,12 +575,12 @@ def extend_loan(loan_id):
             new_end_date = end_date + timedelta(days=extension_periods)
 
     execute(
-        "UPDATE loans SET term = ?, expected_end_date = ?, updated_at = ? WHERE id = ?",
+        "UPDATE loans SET term = %s, expected_end_date = %s, updated_at = %s WHERE id = %s",
         (new_term, new_end_date.isoformat() if new_end_date else loan['expected_end_date'], utcnow(), loan_id)
     )
     log_audit('LOAN_EXTENDED', 'loan', loan_id)
 
-    updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = ?", (loan_id,)).fetchone()
+    updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
     return jsonify({'message': f'Loan extended by {extension_periods} periods', 'loan': loan_public(updated)})
 
 
@@ -588,7 +588,7 @@ def extend_loan(loan_id):
 @login_required
 @role_required('admin')
 def write_off_loan(loan_id):
-    loan = get_db().execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
     if loan['status'] != 'active':
@@ -597,7 +597,7 @@ def write_off_loan(loan_id):
     data = request.get_json()
     new_notes = (loan['notes'] or '') + f"\nWritten off: {data.get('reason', '')}"
     execute(
-        "UPDATE loans SET status = 'written_off', notes = ?, actual_end_date = ?, updated_at = ? WHERE id = ?",
+        "UPDATE loans SET status = 'written_off', notes = %s, actual_end_date = %s, updated_at = %s WHERE id = %s",
         (new_notes, date.today().isoformat(), utcnow(), loan_id)
     )
     log_audit('LOAN_WRITTEN_OFF', 'loan', loan_id)
@@ -608,15 +608,15 @@ def write_off_loan(loan_id):
 @login_required
 @role_required('admin')
 def delete_loan(loan_id):
-    loan = get_db().execute("SELECT * FROM loans WHERE id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
     if loan['status'] in ('active', 'completed'):
         return jsonify({'error': 'Cannot delete a disbursed loan. Write it off instead.'}), 400
 
-    execute("DELETE FROM loan_schedules WHERE loan_id = ?", (loan_id,))
-    execute("DELETE FROM repayments WHERE loan_id = ?", (loan_id,))
-    execute("DELETE FROM loans WHERE id = ?", (loan_id,))
+    execute("DELETE FROM loan_schedules WHERE loan_id = %s", (loan_id,))
+    execute("DELETE FROM repayments WHERE loan_id = %s", (loan_id,))
+    execute("DELETE FROM loans WHERE id = %s", (loan_id,))
     log_audit('DELETE_LOAN', 'loan', loan_id)
 
     return jsonify({'message': 'Loan deleted successfully'})
@@ -625,5 +625,5 @@ def delete_loan(loan_id):
 @loans_bp.route('/<int:loan_id>')
 @login_required
 def detail(loan_id):
-    loan = get_db().execute(_borrower_name_sql() + " WHERE loans.id = ?", (loan_id,)).fetchone()
+    loan = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
     return render_template('loans/detail.html', user=get_current_user(), loan=loan)

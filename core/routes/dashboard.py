@@ -36,18 +36,18 @@ def stats():
     ).fetchone()[0]
 
     due_today = db.execute(
-        "SELECT COUNT(*) FROM loan_schedules WHERE due_date = ? AND status IN ('pending', 'partial')",
+        "SELECT COUNT(*) FROM loan_schedules WHERE due_date = %s AND status IN ('pending', 'partial')",
         (today_iso,)
     ).fetchone()[0]
 
     overdue_loan_ids = [r[0] for r in db.execute(
         """SELECT DISTINCT loan_id FROM loan_schedules
-           WHERE due_date < ? AND status IN ('pending', 'partial')""", (today_iso,)
+           WHERE due_date < %s AND status IN ('pending', 'partial')""", (today_iso,)
     ).fetchall()]
 
     overdue_balance = 0
     if overdue_loan_ids:
-        placeholders = ','.join('?' * len(overdue_loan_ids))
+        placeholders = ','.join(['%s'] * len(overdue_loan_ids))
         overdue_balance = db.execute(
             f"SELECT COALESCE(SUM(outstanding_balance), 0) FROM loans WHERE id IN ({placeholders})",
             overdue_loan_ids
@@ -55,21 +55,21 @@ def stats():
     par = (overdue_balance / total_outstanding * 100) if total_outstanding > 0 else 0
 
     monthly_collections = db.execute(
-        "SELECT COALESCE(SUM(amount), 0) FROM repayments WHERE payment_date >= ? AND payment_date <= ?",
+        "SELECT COALESCE(SUM(amount), 0) FROM repayments WHERE payment_date >= %s AND payment_date <= %s",
         (month_start, today_iso)
     ).fetchone()[0]
     monthly_income_manual = db.execute(
-        "SELECT COALESCE(SUM(amount), 0) FROM income WHERE income_date >= ? AND income_date <= ?",
+        "SELECT COALESCE(SUM(amount), 0) FROM income WHERE income_date >= %s AND income_date <= %s",
         (month_start, today_iso)
     ).fetchone()[0]
     monthly_income_repayments = db.execute(
         """SELECT COALESCE(SUM(interest_portion + penalty_portion), 0)
-           FROM repayments WHERE payment_date >= ? AND payment_date <= ?""",
+           FROM repayments WHERE payment_date >= %s AND payment_date <= %s""",
         (month_start, today_iso)
     ).fetchone()[0]
     monthly_income = monthly_income_manual + monthly_income_repayments
     monthly_expenses = db.execute(
-        "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date >= ? AND expense_date <= ?",
+        "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date >= %s AND expense_date <= %s",
         (month_start, today_iso)
     ).fetchone()[0]
     total_savings = db.execute(
@@ -122,11 +122,11 @@ def loan_trend():
             next_month = date(month_start.year, month_start.month + 1, 1)
 
         disbursed = db.execute(
-            "SELECT COALESCE(SUM(amount_disbursed), 0) FROM loans WHERE disbursement_date >= ? AND disbursement_date < ?",
+            "SELECT COALESCE(SUM(amount_disbursed), 0) FROM loans WHERE disbursement_date >= %s AND disbursement_date < %s",
             (month_start.isoformat(), next_month.isoformat())
         ).fetchone()[0]
         collected = db.execute(
-            "SELECT COALESCE(SUM(amount), 0) FROM repayments WHERE payment_date >= ? AND payment_date < ?",
+            "SELECT COALESCE(SUM(amount), 0) FROM repayments WHERE payment_date >= %s AND payment_date < %s",
             (month_start.isoformat(), next_month.isoformat())
         ).fetchone()[0]
 
@@ -162,16 +162,16 @@ def income_expense_trend():
             next_month = date(month_start.year, month_start.month + 1, 1)
 
         manual_income = db.execute(
-            "SELECT COALESCE(SUM(amount), 0) FROM income WHERE income_date >= ? AND income_date < ?",
+            "SELECT COALESCE(SUM(amount), 0) FROM income WHERE income_date >= %s AND income_date < %s",
             (month_start.isoformat(), next_month.isoformat())
         ).fetchone()[0]
         repayment_income = db.execute(
             """SELECT COALESCE(SUM(interest_portion + penalty_portion), 0)
-               FROM repayments WHERE payment_date >= ? AND payment_date < ?""",
+               FROM repayments WHERE payment_date >= %s AND payment_date < %s""",
             (month_start.isoformat(), next_month.isoformat())
         ).fetchone()[0]
         expenses = db.execute(
-            "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date >= ? AND expense_date < ?",
+            "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date >= %s AND expense_date < %s",
             (month_start.isoformat(), next_month.isoformat())
         ).fetchone()[0]
 
@@ -200,11 +200,11 @@ def member_growth():
             next_month = date(month_start.year, month_start.month + 1, 1)
 
         members = db.execute(
-            "SELECT COUNT(*) FROM members WHERE created_at >= ? AND created_at < ?",
+            "SELECT COUNT(*) FROM members WHERE created_at >= %s AND created_at < %s",
             (month_start.isoformat(), next_month.isoformat())
         ).fetchone()[0]
         clients = db.execute(
-            "SELECT COUNT(*) FROM clients WHERE created_at >= ? AND created_at < ?",
+            "SELECT COUNT(*) FROM clients WHERE created_at >= %s AND created_at < %s",
             (month_start.isoformat(), next_month.isoformat())
         ).fetchone()[0]
 
@@ -236,7 +236,7 @@ def due_today():
     schedules = db.execute(
         """SELECT loan_schedules.*, loans.loan_number, loans.member_id, loans.client_id
            FROM loan_schedules LEFT JOIN loans ON loans.id = loan_schedules.loan_id
-           WHERE loan_schedules.due_date = ? AND loan_schedules.status IN ('pending', 'partial')
+           WHERE loan_schedules.due_date = %s AND loan_schedules.status IN ('pending', 'partial')
            LIMIT 10""", (today,)
     ).fetchall()
 
@@ -244,11 +244,11 @@ def due_today():
     for s in schedules:
         borrower = 'N/A'
         if s['member_id']:
-            m = db.execute("SELECT * FROM members WHERE id = ?", (s['member_id'],)).fetchone()
+            m = db.execute("SELECT * FROM members WHERE id = %s", (s['member_id'],)).fetchone()
             if m:
                 borrower = member_full_name(m)
         elif s['client_id']:
-            c = db.execute("SELECT * FROM clients WHERE id = ?", (s['client_id'],)).fetchone()
+            c = db.execute("SELECT * FROM clients WHERE id = %s", (s['client_id'],)).fetchone()
             if c:
                 borrower = client_full_name(c)
         result.append({
@@ -268,28 +268,28 @@ def overdue_loans():
     today = date.today()
     loan_ids = [r[0] for r in db.execute(
         """SELECT DISTINCT loan_id FROM loan_schedules
-           WHERE due_date < ? AND status IN ('pending', 'partial')""", (today.isoformat(),)
+           WHERE due_date < %s AND status IN ('pending', 'partial')""", (today.isoformat(),)
     ).fetchall()]
 
     result = []
     if loan_ids:
-        placeholders = ','.join('?' * len(loan_ids))
+        placeholders = ','.join(['%s'] * len(loan_ids))
         loans = db.execute(
             f"SELECT * FROM loans WHERE id IN ({placeholders}) AND status = 'active' LIMIT 10", loan_ids
         ).fetchall()
         for loan in loans:
             borrower = 'N/A'
             if loan['member_id']:
-                m = db.execute("SELECT * FROM members WHERE id = ?", (loan['member_id'],)).fetchone()
+                m = db.execute("SELECT * FROM members WHERE id = %s", (loan['member_id'],)).fetchone()
                 if m:
                     borrower = member_full_name(m)
             elif loan['client_id']:
-                c = db.execute("SELECT * FROM clients WHERE id = ?", (loan['client_id'],)).fetchone()
+                c = db.execute("SELECT * FROM clients WHERE id = %s", (loan['client_id'],)).fetchone()
                 if c:
                     borrower = client_full_name(c)
             earliest_overdue = db.execute(
                 """SELECT MIN(due_date) FROM loan_schedules
-                   WHERE loan_id = ? AND due_date < ? AND status IN ('pending', 'partial')""",
+                   WHERE loan_id = %s AND due_date < %s AND status IN ('pending', 'partial')""",
                 (loan['id'], today.isoformat())
             ).fetchone()[0]
             overdue_days = (today - date.fromisoformat(earliest_overdue)).days if earliest_overdue else 0
@@ -308,7 +308,7 @@ def overdue_loans():
 def notifications():
     user = get_current_user()
     notifs = get_db().execute(
-        """SELECT * FROM notifications WHERE user_id = ? AND is_read = 0
+        """SELECT * FROM notifications WHERE user_id = %s AND is_read = 0
            ORDER BY created_at DESC LIMIT 10""", (user['id'],)
     ).fetchall()
     return jsonify([notification_public(n) for n in notifs])
@@ -318,7 +318,7 @@ def notifications():
 @login_required
 def mark_read(notif_id):
     user = get_current_user()
-    execute("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?", (notif_id, user['id']))
+    execute("UPDATE notifications SET is_read = 1 WHERE id = %s AND user_id = %s", (notif_id, user['id']))
     return jsonify({'message': 'Marked as read'})
 
 
@@ -326,5 +326,5 @@ def mark_read(notif_id):
 @login_required
 def mark_all_read():
     user = get_current_user()
-    execute("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0", (user['id'],))
+    execute("UPDATE notifications SET is_read = 1 WHERE user_id = %s AND is_read = 0", (user['id'],))
     return jsonify({'message': 'All marked as read'})

@@ -51,12 +51,12 @@
     <div style="font-family:'Space Grotesk',sans-serif;font-weight:600">Regions</div>
     <button class="btn btn-brand btn-sm" data-bs-toggle="modal" data-bs-target="#regionModal" onclick="openRegionModal()"><i class="bi bi-plus me-1"></i>New Region</button>
   </div>
-  <div class="jd-card"><div class="jd-card-body p-0">
+  <div class="jd-card"><div class="jd-card-body p-0"><div class="table-responsive">
     <table class="table mb-0" id="regionsTable">
       <thead><tr><th style="padding-left:16px">Name</th><th>Status</th><th style="padding-right:16px" class="text-end">Actions</th></tr></thead>
       <tbody id="regionsBody"><tr><td colspan="3" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
     </table>
-  </div></div>
+  </div></div></div>
 </div>
 
 <!-- Notifications (Gmail) Settings -->
@@ -74,9 +74,9 @@
       <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>.
     </div>
     <hr class="my-4" />
-    <div class="d-flex justify-content-between align-items-center">
-      <div class="d-flex gap-2 align-items-center">
-        <input type="email" class="form-control form-control-sm" id="testEmailTo" placeholder="Send test to (optional, defaults to you)" style="width:280px" />
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex gap-2 align-items-center flex-wrap" style="flex:1 1 320px">
+        <input type="email" class="form-control form-control-sm" id="testEmailTo" placeholder="Send test to (optional, defaults to you)" style="flex:1 1 200px;min-width:0;max-width:280px" />
         <button class="btn btn-outline-secondary btn-sm" onclick="sendTestEmail()" id="testEmailBtn">
           <i class="bi bi-send me-1"></i>Send Test Email
         </button>
@@ -92,12 +92,12 @@
     </div>
     <button class="btn btn-outline-secondary btn-sm" onclick="loadEmailLog()"><i class="bi bi-arrow-clockwise"></i></button>
   </div>
-  <div class="jd-card-body p-0">
+  <div class="jd-card-body p-0"><div class="table-responsive">
     <table class="table mb-0" style="font-size:12.5px">
       <thead><tr><th style="padding-left:16px">When</th><th>To</th><th>Subject</th><th>Status</th><th style="padding-right:16px">Detail</th></tr></thead>
       <tbody id="emailLogBody"><tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
     </table>
-  </div></div>
+  </div></div></div>
 </div>
 
 <!-- M-Pesa Settings -->
@@ -166,12 +166,12 @@
     </div>
     <button class="btn btn-outline-secondary btn-sm" onclick="loadMpesaLog()"><i class="bi bi-arrow-clockwise"></i></button>
   </div>
-  <div class="jd-card-body p-0">
+  <div class="jd-card-body p-0"><div class="table-responsive">
     <table class="table mb-0" style="font-size:12.5px">
       <thead><tr><th style="padding-left:16px">When</th><th>Purpose</th><th>Phone</th><th>Amount</th><th>Status</th><th style="padding-right:16px">Receipt / Detail</th></tr></thead>
       <tbody id="mpesaLogBody"><tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
     </table>
-  </div></div>
+  </div></div></div>
 </div>
 
 <!-- Region Modal -->
