@@ -6,6 +6,8 @@ const NAV = [
   { to: '/loans', label: 'Loans' },
   { to: '/loans/apply', label: 'New application' },
   { to: '/members', label: 'Members' },
+  { to: '/savings', label: 'Savings' },
+  { to: '/repayments', label: 'Repayments' },
 ]
 
 export default function Layout() {

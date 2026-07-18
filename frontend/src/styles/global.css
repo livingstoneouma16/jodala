@@ -223,6 +223,30 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .search-input { padding: 8px 12px; border: 1px solid var(--rule-strong); border-radius: var(--radius); min-width: 220px; }
 .filter-select { padding: 8px 10px; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--paper-raised); }
 
+/* ---------- Modal dialogs (open account, record repayment, etc.) ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 30, 24, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  overflow-y: auto;
+  z-index: 100;
+}
+.modal-panel {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: 100%;
+  max-width: 560px;
+  box-shadow: 0 12px 32px rgba(20, 30, 24, 0.25);
+}
+.modal-panel h3 { margin-top: 0; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
 /* ---------- Quote panel (loan summary preview) ---------- */
 .quote-panel {
   background: var(--mint-50);

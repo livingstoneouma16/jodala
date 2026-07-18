@@ -7,6 +7,8 @@ import Dashboard from './components/Dashboard'
 import LoanList from './components/LoanList'
 import LoanForm from './components/LoanForm'
 import MemberTable from './components/MemberTable'
+import SavingsAccounts from './components/SavingsAccounts'
+import Repayments from './components/Repayments'
 
 export default function App() {
   return (
@@ -27,6 +29,8 @@ export default function App() {
             <Route path="loans" element={<LoanList />} />
             <Route path="loans/apply" element={<LoanForm />} />
             <Route path="members" element={<MemberTable />} />
+            <Route path="savings" element={<SavingsAccounts />} />
+            <Route path="repayments" element={<Repayments />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
