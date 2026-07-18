@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify
+from flask import Blueprint, render_template, jsonify, request, url_for
 from datetime import date
 
 from core.database import get_db, execute
@@ -301,6 +301,85 @@ def overdue_loans():
             })
 
     return jsonify(result)
+
+
+@dashboard_bp.route('/search')
+@login_required
+def search():
+    """Global quick-search backing the navbar search box (static/js/app.js,
+    initGlobalSearch). Matches members and clients by name/number/phone/
+    national ID, and loans by loan number or borrower name -- each capped
+    to a handful of results so the dropdown stays scannable. ILIKE (rather
+    than the case-sensitive LIKE the per-page list filters use) so casing
+    doesn't matter for a box meant for fast, casual lookups."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify({'members': [], 'clients': [], 'loans': []})
+
+    db = get_db()
+    like = f'%{q}%'
+    limit = 6
+
+    member_rows = db.execute(
+        """SELECT id, member_number, first_name, middle_name, last_name, phone, status
+           FROM members
+           WHERE first_name ILIKE %s OR last_name ILIKE %s OR member_number ILIKE %s
+              OR phone ILIKE %s OR national_id ILIKE %s
+           ORDER BY created_at DESC LIMIT %s""",
+        (like, like, like, like, like, limit)
+    ).fetchall()
+
+    client_rows = db.execute(
+        """SELECT id, client_number, first_name, last_name, phone, status
+           FROM clients
+           WHERE first_name ILIKE %s OR last_name ILIKE %s OR client_number ILIKE %s
+              OR phone ILIKE %s OR national_id ILIKE %s
+           ORDER BY created_at DESC LIMIT %s""",
+        (like, like, like, like, like, limit)
+    ).fetchall()
+
+    loan_rows = db.execute(
+        """SELECT loans.id, loans.loan_number, loans.status, loans.outstanding_balance,
+                  COALESCE(
+                      NULLIF(TRIM(members.first_name || ' ' || COALESCE(members.middle_name, '') || ' ' || members.last_name), ''),
+                      NULLIF(TRIM(clients.first_name || ' ' || clients.last_name), '')
+                  ) AS borrower_name
+           FROM loans
+           LEFT JOIN members ON members.id = loans.member_id
+           LEFT JOIN clients ON clients.id = loans.client_id
+           WHERE loans.loan_number ILIKE %s
+              OR members.first_name ILIKE %s OR members.last_name ILIKE %s
+              OR clients.first_name ILIKE %s OR clients.last_name ILIKE %s
+           ORDER BY loans.created_at DESC LIMIT %s""",
+        (like, like, like, like, like, limit)
+    ).fetchall()
+
+    return jsonify({
+        'members': [{
+            'id': r['id'],
+            'full_name': member_full_name(r),
+            'member_number': r['member_number'],
+            'phone': r['phone'],
+            'status': r['status'],
+            'url': url_for('members.detail', member_id=r['id'])
+        } for r in member_rows],
+        'clients': [{
+            'id': r['id'],
+            'full_name': client_full_name(r),
+            'client_number': r['client_number'],
+            'phone': r['phone'],
+            'status': r['status'],
+            'url': url_for('clients.detail', client_id=r['id'])
+        } for r in client_rows],
+        'loans': [{
+            'id': r['id'],
+            'loan_number': r['loan_number'],
+            'borrower_name': r['borrower_name'] or 'N/A',
+            'outstanding_balance': r['outstanding_balance'],
+            'status': r['status'],
+            'url': url_for('loans.detail', loan_id=r['id'])
+        } for r in loan_rows]
+    })
 
 
 @dashboard_bp.route('/notifications')

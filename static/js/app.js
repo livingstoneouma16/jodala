@@ -173,6 +173,119 @@ function initTheme() {
   });
 }
 
+// ── Global Quick Search ────────────────────────────────────
+// The navbar search box (#globalSearch) only renders a <input> in
+// base.html -- nothing was ever wired up to it. This hits
+// /dashboard/search as the person types and shows a categorized
+// (Members / Clients / Loans) results dropdown they can click or
+// arrow-key + Enter into.
+function initGlobalSearch() {
+  const input = document.getElementById('globalSearch');
+  const panel = document.getElementById('globalSearchResults');
+  if (!input || !panel) return;
+
+  let activeIndex = -1;
+  let requestId = 0;
+
+  function close() {
+    panel.classList.remove('visible');
+    panel.innerHTML = '';
+    activeIndex = -1;
+  }
+
+  function setActive(items, index) {
+    activeIndex = index;
+    items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+    if (items[activeIndex]) items[activeIndex].scrollIntoView({ block: 'nearest' });
+  }
+
+  function renderGroup(label, iconClass, items, renderSub) {
+    if (!items.length) return '';
+    const rows = items.map(item => `
+      <a class="gsr-item" href="${item.url}">
+        <i class="bi ${iconClass}"></i>
+        <div class="gsr-item-text">
+          <div class="gsr-item-title">${escapeHtml(item._title)}</div>
+          <div class="gsr-item-sub">${renderSub(item)}</div>
+        </div>
+        ${statusPill(item.status)}
+      </a>`).join('');
+    return `<div class="gsr-section-label">${label}</div>${rows}`;
+  }
+
+  function render(data) {
+    const members = data.members || [];
+    const clients = data.clients || [];
+    const loans = data.loans || [];
+    members.forEach(m => { m._title = m.full_name; });
+    clients.forEach(c => { c._title = c.full_name; });
+    loans.forEach(l => { l._title = l.loan_number; });
+
+    if (!members.length && !clients.length && !loans.length) {
+      panel.innerHTML = '<div class="gsr-empty">No matches found</div>';
+      panel.classList.add('visible');
+      return;
+    }
+
+    panel.innerHTML =
+      renderGroup('Members', 'bi-person-fill', members,
+        m => `${escapeHtml(m.member_number)} · ${escapeHtml(m.phone || '—')}`) +
+      renderGroup('Clients', 'bi-building', clients,
+        c => `${escapeHtml(c.client_number)} · ${escapeHtml(c.phone || '—')}`) +
+      renderGroup('Loans', 'bi-cash-coin', loans,
+        l => `${escapeHtml(l.borrower_name)} · ${fmtCurrency(l.outstanding_balance)} outstanding`);
+    panel.classList.add('visible');
+    activeIndex = -1;
+  }
+
+  const runSearch = debounce(async (q) => {
+    const myRequestId = ++requestId;
+    try {
+      const data = await API.get(`/dashboard/search?q=${encodeURIComponent(q)}`);
+      if (myRequestId !== requestId) return; // a newer keystroke already superseded this
+      if (data) render(data);
+    } catch (_) {
+      if (myRequestId === requestId) {
+        panel.innerHTML = '<div class="gsr-error">Search failed — try again</div>';
+        panel.classList.add('visible');
+      }
+    }
+  }, 300);
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    if (q.length < 2) { requestId++; close(); return; }
+    panel.innerHTML = '<div class="gsr-loading">Searching…</div>';
+    panel.classList.add('visible');
+    runSearch(q);
+  });
+
+  input.addEventListener('focus', () => {
+    if (panel.innerHTML && input.value.trim().length >= 2) panel.classList.add('visible');
+  });
+
+  input.addEventListener('keydown', e => {
+    const items = Array.from(panel.querySelectorAll('.gsr-item'));
+    if (e.key === 'Escape') {
+      close();
+      input.blur();
+    } else if (e.key === 'ArrowDown' && items.length) {
+      e.preventDefault();
+      setActive(items, Math.min(activeIndex + 1, items.length - 1));
+    } else if (e.key === 'ArrowUp' && items.length) {
+      e.preventDefault();
+      setActive(items, Math.max(activeIndex - 1, 0));
+    } else if (e.key === 'Enter' && activeIndex >= 0 && items[activeIndex]) {
+      e.preventDefault();
+      window.location.href = items[activeIndex].getAttribute('href');
+    }
+  });
+
+  document.addEventListener('click', e => {
+    if (!panel.contains(e.target) && e.target !== input) close();
+  });
+}
+
 // ── Notifications ─────────────────────────────────────────
 async function loadNotifications() {
   try {
@@ -393,6 +506,7 @@ document.addEventListener('input', e => {
 document.addEventListener('DOMContentLoaded', () => {
   initSidebar();
   initTheme();
+  initGlobalSearch();
   loadNotifications();
 
   // Refresh notifications every 2 minutes
