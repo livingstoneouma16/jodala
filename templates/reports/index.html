@@ -12,6 +12,7 @@
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('arrears',this)">Arrears</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('collections',this)">Collections</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('members',this)">Members</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('regional',this)">Regional</button></li>
 </ul>
 
 <!-- Loans Report -->
@@ -20,10 +21,11 @@
     <div class="row g-2 align-items-end">
       <div class="col-md-2"><label class="form-label">Status</label>
         <select class="form-select" id="lrStatus"><option value="">All</option><option value="active">Active</option><option value="completed">Completed</option><option value="pending">Pending</option></select></div>
-      <div class="col-md-3"><label class="form-label">From</label><input type="date" class="form-control" id="lrFrom" /></div>
-      <div class="col-md-3"><label class="form-label">To</label><input type="date" class="form-control" id="lrTo" /></div>
+      <div class="col-md-2"><label class="form-label">From</label><input type="date" class="form-control" id="lrFrom" /></div>
+      <div class="col-md-2"><label class="form-label">To</label><input type="date" class="form-control" id="lrTo" /></div>
       <div class="col-md-2"><button class="btn btn-brand w-100" onclick="loadLoanReport()"><i class="bi bi-search me-1"></i>Generate</button></div>
       <div class="col-md-2"><button class="btn btn-brand-outline w-100" onclick="API.download('/reports/api/export/loans/excel','loans_report.xlsx').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button></div>
+      <div class="col-md-2"><button class="btn btn-brand-outline w-100" onclick="API.download('/reports/api/export/loans/csv','loans_report.csv').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-filetype-csv me-1"></i>CSV</button></div>
     </div>
   </div></div>
   <div class="row g-3 mb-3" id="lrSummary"></div>
@@ -85,6 +87,7 @@
       <div class="col-md-3"><label class="form-label">From</label><input type="date" class="form-control" id="colFrom" /></div>
       <div class="col-md-3"><label class="form-label">To</label><input type="date" class="form-control" id="colTo" /></div>
       <div class="col-md-3"><button class="btn btn-brand w-100" onclick="loadCollections()"><i class="bi bi-search me-1"></i>Generate</button></div>
+      <div class="col-md-3"><button class="btn btn-brand-outline w-100" onclick="exportCollectionsCsv()"><i class="bi bi-filetype-csv me-1"></i>CSV</button></div>
     </div>
   </div></div>
   <div class="row g-3 mb-3">
@@ -122,6 +125,7 @@
     <div class="d-flex gap-2">
       <button class="btn btn-brand" onclick="loadMemberReport()"><i class="bi bi-search me-1"></i>Generate</button>
       <button class="btn btn-brand-outline" onclick="API.download('/reports/api/export/members/excel','members_report.xlsx').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+      <button class="btn btn-brand-outline" onclick="API.download('/reports/api/export/members/csv','members_report.csv').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
     </div>
   </div></div>
   <div class="row g-3 mb-3">
@@ -143,6 +147,39 @@
     <div class="table-responsive"><table class="table mb-0">
       <thead><tr><th>Member No.</th><th>Name</th><th>Phone</th><th>Region</th><th>Occupation</th><th>Status</th><th>Joined</th></tr></thead>
       <tbody id="memTable"><tr><td colspan="7" class="text-center p-4 text-muted">Click Generate</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- Regional Performance Report -->
+<div id="regionalRep" class="d-none">
+  <div class="jd-card mb-3"><div class="jd-card-body">
+    <div class="d-flex gap-2">
+      <button class="btn btn-brand" onclick="loadRegionalReport()"><i class="bi bi-search me-1"></i>Generate</button>
+      <button class="btn btn-brand-outline" onclick="API.download('/reports/api/export/regional/excel','regional_performance.xlsx').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+      <button class="btn btn-brand-outline" onclick="API.download('/reports/api/export/regional/csv','regional_performance.csv').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+    </div>
+  </div></div>
+  <div class="row g-3 mb-3" id="regSummary"></div>
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-7">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-bar-chart" style="color:var(--brand-mid)"></i>Outstanding vs Collected by Region</div></div>
+        <div class="jd-card-body"><canvas id="regOutstandingChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-5">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-exclamation-triangle" style="color:var(--danger)"></i>Portfolio at Risk by Region</div></div>
+        <div class="jd-card-body"><canvas id="regParChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Regional Performance <span id="regBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-dark)"></span></div></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Region</th><th>Members</th><th>Active/Total Loans</th><th>Principal</th><th>Outstanding</th><th>Collected</th><th>Arrears</th><th>PAR%</th><th>Collection Rate</th></tr></thead>
+      <tbody id="regTable"><tr><td colspan="9" class="text-center p-4 text-muted">Click Generate</td></tr></tbody>
     </table></div>
   </div>
 </div>
@@ -173,7 +210,7 @@ const STATUS_COLORS = {
 function showRep(tab, el) {
   document.querySelectorAll('.nav-link').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['loans','arrears','collections','members'].forEach(t=>document.getElementById(t+'Rep').classList.toggle('d-none',t!==tab));
+  ['loans','arrears','collections','members','regional'].forEach(t=>document.getElementById(t+'Rep').classList.toggle('d-none',t!==tab));
 }
 
 async function loadLoanReport() {
@@ -253,6 +290,12 @@ async function loadArrears() {
   } catch(e) { Toast.error(e.message); }
 }
 
+function exportCollectionsCsv() {
+  const from=document.getElementById('colFrom').value, to=document.getElementById('colTo').value;
+  API.download(`/reports/api/export/collections/csv?date_from=${from}&date_to=${to}`, 'collections_report.csv')
+    .then(()=>Toast.success('Downloaded!'));
+}
+
 async function loadCollections() {
   const from=document.getElementById('colFrom').value, to=document.getElementById('colTo').value;
   const tbody=document.getElementById('colTable');
@@ -323,6 +366,53 @@ async function loadMemberReport() {
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.occupation||'—')}</td>
       <td>${statusPill(m.status)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${fmtDate(m.created_at)}</td>
+    </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function loadRegionalReport() {
+  const tbody=document.getElementById('regTable');
+  tbody.innerHTML='<tr><td colspan="9" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data=await API.get('/reports/api/regional-performance');
+    const t=data.totals;
+    document.getElementById('regBadge').textContent=t.region_count+' regions';
+    document.getElementById('regSummary').innerHTML=`
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon blue"><i class="bi bi-people"></i></div><div class="stat-body"><div class="stat-label">Members Reached</div><div class="stat-value">${t.member_count}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-exclamation-circle"></i></div><div class="stat-body"><div class="stat-label">Outstanding</div><div class="stat-value" style="font-size:18px">${fmtCurrency(t.total_outstanding)}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card gold"><div class="stat-icon gold"><i class="bi bi-check-circle"></i></div><div class="stat-body"><div class="stat-label">Total Collected</div><div class="stat-value" style="font-size:18px">${fmtCurrency(t.total_collected)}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon purple"><i class="bi bi-clock-history"></i></div><div class="stat-body"><div class="stat-label">Total Arrears</div><div class="stat-value" style="font-size:18px">${fmtCurrency(t.arrears_amount)}</div></div></div></div>`;
+
+    const regions = data.regions;
+    renderChart('regOutstandingChart', {
+      type: 'bar',
+      data: { labels: regions.map(r=>r.region), datasets: [
+        { label:'Outstanding', data: regions.map(r=>r.total_outstanding), backgroundColor:'#E63946', borderRadius:6 },
+        { label:'Collected', data: regions.map(r=>r.total_collected), backgroundColor:'#52B788', borderRadius:6 },
+      ] },
+      options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } },
+        scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
+    });
+
+    renderChart('regParChart', {
+      type: 'bar',
+      data: { labels: regions.map(r=>r.region), datasets: [{ label:'PAR %', data: regions.map(r=>r.par_pct),
+        backgroundColor: regions.map(r=>r.par_pct>20?'#E63946':r.par_pct>5?'#F4A261':'#52B788'), borderRadius: 6 }] },
+      options: { responsive:true, plugins:{ legend:{ display:false } },
+        scales: { y: { beginAtZero:true, ticks:{ callback:v=>v+'%' } } } }
+    });
+
+    if (!regions.length) { tbody.innerHTML='<tr><td colspan="9"><div class="empty-state"><i class="bi bi-geo-alt"></i><p>No regional data yet</p></div></td></tr>'; return; }
+    tbody.innerHTML=regions.map(r=>`<tr>
+      <td style="font-weight:600;font-size:13px">${escapeHtml(r.region)}</td>
+      <td style="font-size:13px">${r.member_count}</td>
+      <td style="font-size:13px">${r.active_loan_count} / ${r.loan_count}</td>
+      <td style="font-weight:600">${fmtCurrency(r.total_principal)}</td>
+      <td style="color:var(--danger);font-weight:600">${fmtCurrency(r.total_outstanding)}</td>
+      <td style="color:var(--brand-light);font-weight:600">${fmtCurrency(r.total_collected)}</td>
+      <td style="font-size:13px;color:${r.arrears_amount>0?'var(--danger)':'var(--text-muted)'}">${fmtCurrency(r.arrears_amount)}</td>
+      <td><span class="status-pill ${r.par_pct>20?'status-rejected':r.par_pct>5?'status-overdue':'status-active'}">${r.par_pct}%</span></td>
+      <td style="font-size:13px">${r.collection_rate_pct}%</td>
     </tr>`).join('');
   } catch(e) { Toast.error(e.message); }
 }

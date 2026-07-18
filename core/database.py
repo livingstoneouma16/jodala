@@ -894,6 +894,27 @@ def _migration_0012_remove_processing_fee(conn):
             conn.execute(f"ALTER TABLE {table} DROP COLUMN processing_fee")
 
 
+def _migration_0013_resend_email_settings(conn):
+    """Switches email delivery from Gmail SMTP to the Resend HTTP API --
+    Gmail SMTP doesn't work on Render/most PaaS hosts because they block
+    outbound SMTP ports at the network level. Seeds the new resend_*
+    company_settings keys; the old gmail_* rows are left in place (unused,
+    harmless) rather than deleted, in case anyone wants to roll back."""
+    now = utcnow()
+    resend_defaults = {
+        'resend_api_key': '',
+        'resend_from_email': '',
+        'resend_sender_name': 'Jodala Microfinance',
+    }
+    for key, value in resend_defaults.items():
+        row = conn.execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)",
+                (key, value, now)
+            )
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
     (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
@@ -907,6 +928,7 @@ MIGRATIONS = [
     (10, 'bring clients KYC fields up to parity with members', _migration_0010_client_full_kyc_fields),
     (11, 'force password change for admin accounts still on the seeded default', _migration_0011_force_default_admin_password_change),
     (12, 'permanently remove processing fee from loan products and loans', _migration_0012_remove_processing_fee),
+    (13, 'switch email delivery from Gmail SMTP to Resend HTTP API', _migration_0013_resend_email_settings),
 ]
 
 

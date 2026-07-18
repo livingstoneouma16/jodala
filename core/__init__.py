@@ -195,6 +195,36 @@ def create_app():
         from flask import send_from_directory
         return send_from_directory(app.static_folder, 'sw.js', mimetype='application/javascript')
 
+    # Security headers on every response. This app doesn't use a cookie-only
+    # auth pattern for its mutating routes (see core/routes/auth.py + app.js:
+    # the JWT is sent as an explicit Authorization header, not read ambiently
+    # from the cookie), so CSRF tokens aren't the gap here -- but clickjacking
+    # (X-Frame-Options), MIME-sniffing (X-Content-Type-Options), and protocol
+    # downgrade (HSTS) are still open without these. CSP is scoped to what the
+    # app actually loads (Bootstrap/Bootstrap Icons/Google Fonts from
+    # cdnjs.cloudflare.com and fonts.googleapis.com/fonts.gstatic.com, see
+    # base.html) rather than a blanket allow-all.
+    @app.after_request
+    def set_security_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers.setdefault('Content-Security-Policy', (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+            "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'"
+        ))
+        # HSTS only makes sense once we're actually being served over HTTPS --
+        # sending it over plain HTTP (e.g. local dev) does nothing useful and
+        # risks locking a dev browser into https:// for localhost.
+        if app.config['COOKIE_SECURE']:
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        return response
+
     # Health check for load balancers / uptime monitors / container
     # orchestrators (e.g. Docker HEALTHCHECK, k8s liveness probe). Does a
     # real (tiny) DB query rather than just returning 200 unconditionally,

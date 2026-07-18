@@ -1,16 +1,24 @@
 """
-Email sending via Gmail SMTP.
+Email sending via the Resend HTTP API.
+
+Gmail SMTP does not work on Render (and most free-tier PaaS hosts) because
+outbound SMTP ports (25/465/587) are blocked at the network level to stop
+the platform being used for spam -- no code or credential change can fix
+that ("[Errno 101] Network is unreachable" is the platform, not Gmail
+rejecting anything). Resend sends over a normal HTTPS POST, which is never
+blocked.
 
 Credentials can come from either source, checked in this order:
-  1. The `company_settings` DB table (keys: gmail_address, gmail_app_password,
-     gmail_sender_name) -- set from the Settings > Notifications page in-app.
-  2. Environment variables (.env): GMAIL_ADDRESS, GMAIL_APP_PASSWORD,
-     GMAIL_SENDER_NAME.
+  1. The `company_settings` DB table (keys: resend_api_key, resend_from_email,
+     resend_sender_name) -- set from the Settings > Notifications page in-app.
+  2. Environment variables (.env): RESEND_API_KEY, RESEND_FROM_EMAIL,
+     RESEND_SENDER_NAME.
 
 DB settings take precedence so an admin can configure/rotate credentials
-without redeploying. Uses a Google Account "App Password" (not the regular
-account password -- Google requires 2-Step Verification to be on and an
-App Password generated at https://myaccount.google.com/apppasswords).
+without redeploying. Get an API key at https://resend.com/api-keys. The
+"from" address must be on a domain you've verified with Resend (or use
+their shared onboarding domain onboarding@resend.dev for testing --
+see https://resend.com/docs/dashboard/domains/introduction).
 
 Every send attempt (success or failure) is written to the `email_log` table
 and to the Python logger, so failures are never silent -- check Settings >
@@ -18,14 +26,15 @@ Notifications > Recent Email Activity, or the server console/log file.
 """
 import logging
 import os
-import smtplib
-import ssl
 import threading
-from email.message import EmailMessage
+
+import requests
 
 from core.database import get_db, execute, utcnow
 
 logger = logging.getLogger('jodala.mailer')
+
+RESEND_API_URL = 'https://api.resend.com/emails'
 
 
 def _setting(key, default=None):
@@ -41,22 +50,24 @@ def _setting(key, default=None):
 
 
 def get_mail_config():
-    """Resolve Gmail credentials: DB settings first, then env vars."""
-    address = _setting('gmail_address') or os.getenv('GMAIL_ADDRESS')
-    app_password = _setting('gmail_app_password') or os.getenv('GMAIL_APP_PASSWORD')
-    sender_name = _setting('gmail_sender_name') or os.getenv('GMAIL_SENDER_NAME') or 'Jodala Microfinance'
+    """Resolve Resend credentials: DB settings first, then env vars."""
+    api_key = _setting('resend_api_key') or os.getenv('RESEND_API_KEY')
+    from_email = _setting('resend_from_email') or os.getenv('RESEND_FROM_EMAIL')
+    sender_name = _setting('resend_sender_name') or os.getenv('RESEND_SENDER_NAME') or 'Jodala Microfinance'
     enabled = _setting('email_notifications_enabled', '1') != '0'
     return {
-        'address': (address or '').strip(),
-        'app_password': (app_password or '').strip().replace(' ', ''),
+        'api_key': (api_key or '').strip(),
+        'from_email': (from_email or '').strip(),
         'sender_name': sender_name,
         'enabled': enabled,
+        # Kept for backward compatibility with any code checking cfg['address']
+        'address': (from_email or '').strip(),
     }
 
 
 def is_configured():
     cfg = get_mail_config()
-    return bool(cfg['address'] and cfg['app_password'])
+    return bool(cfg['api_key'] and cfg['from_email'])
 
 
 def _log_attempt(to_email, subject, status, error=None):
@@ -75,47 +86,48 @@ def _log_attempt(to_email, subject, status, error=None):
         logger.exception("Failed to write email_log row")
 
 
-def _build_message(cfg, to_email, subject, body_text, body_html):
-    msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['From'] = f"{cfg['sender_name']} <{cfg['address']}>"
-    msg['To'] = to_email
-    msg.set_content(body_text)
+def _build_payload(cfg, to_email, subject, body_text, body_html):
+    payload = {
+        'from': f"{cfg['sender_name']} <{cfg['from_email']}>",
+        'to': [to_email],
+        'subject': subject,
+        'text': body_text,
+    }
     if body_html:
-        msg.add_alternative(body_html, subtype='html')
-    return msg
+        payload['html'] = body_html
+    return payload
 
 
-def _try_send(cfg, msg):
-    """Attempt delivery over SSL:465 first, falling back to STARTTLS:587
-    if the connection itself fails (some networks/ISPs/firewalls block one
-    or the other). Returns (success, error)."""
-    context = ssl.create_default_context()
+def _try_send(cfg, payload):
+    """POST to the Resend HTTP API. Returns (success, error)."""
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context, timeout=15) as server:
-            server.login(cfg['address'], cfg['app_password'])
-            server.send_message(msg)
+        resp = requests.post(
+            RESEND_API_URL,
+            headers={
+                'Authorization': f"Bearer {cfg['api_key']}",
+                'Content-Type': 'application/json',
+            },
+            json=payload,
+            timeout=15,
+        )
+    except requests.RequestException as e:
+        return False, f'Could not reach Resend API: {e}'
+
+    if resp.ok:
         return True, None
-    except smtplib.SMTPAuthenticationError as e:
-        # Auth failures won't be fixed by switching ports -- stop here.
-        return False, f'Gmail rejected the credentials (check address / App Password): {e}'
-    except (smtplib.SMTPException, OSError, ssl.SSLError) as e:
-        logger.warning("SMTP_SSL:465 failed (%s), retrying via STARTTLS:587", e)
-        try:
-            with smtplib.SMTP('smtp.gmail.com', 587, timeout=15) as server:
-                server.starttls(context=context)
-                server.login(cfg['address'], cfg['app_password'])
-                server.send_message(msg)
-            return True, None
-        except smtplib.SMTPAuthenticationError as e2:
-            return False, f'Gmail rejected the credentials (check address / App Password): {e2}'
-        except Exception as e2:
-            return False, f'Could not reach Gmail on ports 465 or 587: {e2}'
+
+    # Surface Resend's own error message where possible (bad API key,
+    # unverified sending domain, etc.) instead of a bare status code.
+    try:
+        detail = resp.json().get('message', resp.text)
+    except ValueError:
+        detail = resp.text
+    return False, f'Resend rejected the request ({resp.status_code}): {detail}'
 
 
 def send_email(to_email, subject, body_text, body_html=None):
     """
-    Send a single email via Gmail SMTP. Returns (success: bool, error: str|None).
+    Send a single email via the Resend HTTP API. Returns (success: bool, error: str|None).
     Never raises -- callers should not have a notification failure break the
     calling request. Every attempt is logged (see email_log table / server log).
     """
@@ -128,13 +140,13 @@ def send_email(to_email, subject, body_text, body_html=None):
         logger.info("Skipped email '%s' to %s: notifications disabled in Settings", subject, to_email)
         _log_attempt(to_email, subject, 'skipped', 'Email notifications disabled')
         return False, 'Email notifications disabled'
-    if not cfg['address'] or not cfg['app_password']:
-        logger.warning("Skipped email '%s' to %s: Gmail credentials not configured", subject, to_email)
-        _log_attempt(to_email, subject, 'skipped', 'Gmail credentials not configured')
-        return False, 'Gmail credentials not configured'
+    if not cfg['api_key'] or not cfg['from_email']:
+        logger.warning("Skipped email '%s' to %s: Resend credentials not configured", subject, to_email)
+        _log_attempt(to_email, subject, 'skipped', 'Resend API key / from-address not configured')
+        return False, 'Resend API key / from-address not configured'
 
-    msg = _build_message(cfg, to_email, subject, body_text, body_html)
-    ok, error = _try_send(cfg, msg)
+    payload = _build_payload(cfg, to_email, subject, body_text, body_html)
+    ok, error = _try_send(cfg, payload)
 
     if ok:
         logger.info("Sent email '%s' to %s", subject, to_email)
