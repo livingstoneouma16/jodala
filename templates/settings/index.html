@@ -72,6 +72,8 @@
       Use a Gmail <strong>App Password</strong>, not your normal Gmail password. Turn on 2-Step Verification
       on the Gmail account, then generate one at
       <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>.
+      Note: outbound SMTP is blocked on Render and most free PaaS hosts, so this only works when running
+      locally or on a host that allows it.
     </div>
     <hr class="my-4" />
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -571,14 +573,13 @@ async function loadNotificationSettings() {
   try {
     const data = await API.get('/settings/api/notifications');
     document.getElementById('notifForm').innerHTML = `
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">From Email</label>
-        <input type="email" class="form-control" id="nFromEmail" placeholder="notifications@yourdomain.com" value="${escapeHtml(data.resend_from_email||'')}" />
-        <div class="text-muted mt-1" style="font-size:11.5px">Must be on a domain verified with Resend, or use onboarding@resend.dev for testing.</div></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Gmail Address</label>
+        <input type="email" class="form-control" id="nGmailAddress" placeholder="yourname@gmail.com" value="${escapeHtml(data.gmail_address||'')}" /></div>
       <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Sender Display Name</label>
-        <input type="text" class="form-control" id="nSenderName" value="${escapeHtml(data.resend_sender_name||'')}" /></div>
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Resend API Key</label>
-        <input type="password" class="form-control" id="nApiKey" placeholder="${data.resend_api_key_set ? '•••••••••••••••• (saved — leave blank to keep)' : 're_xxxxxxxxxxxx'}" />
-        <div class="text-muted mt-1" style="font-size:11.5px">${data.resend_api_key_set ? 'A key is already saved. Leave blank to keep it.' : 'Get a key at resend.com/api-keys. Not yet configured.'}</div></div>
+        <input type="text" class="form-control" id="nSenderName" value="${escapeHtml(data.gmail_sender_name||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Gmail App Password</label>
+        <input type="password" class="form-control" id="nAppPassword" placeholder="${data.gmail_app_password_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'xxxx xxxx xxxx xxxx'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.gmail_app_password_set ? 'A password is already saved. Leave blank to keep it.' : 'Generate at myaccount.google.com/apppasswords. Not yet configured.'}</div></div>
       <div class="col-md-6 d-flex align-items-end">
         <div class="form-check form-switch">
           <input class="form-check-input" type="checkbox" id="nEnabled" ${data.email_notifications_enabled ? 'checked' : ''} />
@@ -593,12 +594,12 @@ async function saveNotificationSettings() {
   setLoading(btn, true);
   try {
     const body = {
-      resend_from_email: document.getElementById('nFromEmail').value,
-      resend_sender_name: document.getElementById('nSenderName').value,
+      gmail_address: document.getElementById('nGmailAddress').value,
+      gmail_sender_name: document.getElementById('nSenderName').value,
       email_notifications_enabled: document.getElementById('nEnabled').checked,
     };
-    const key = document.getElementById('nApiKey').value;
-    if (key) body.resend_api_key = key;
+    const pwd = document.getElementById('nAppPassword').value;
+    if (pwd) body.gmail_app_password = pwd;
     await API.put('/settings/api/notifications', body);
     Toast.success('Notification settings saved');
     loadNotificationSettings();
