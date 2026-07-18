@@ -13,3 +13,4 @@ pillow==12.3.0
 requests==2.34.2
 cryptography==49.0.0
 gunicorn==26.0.0
+apscheduler==3.11.0

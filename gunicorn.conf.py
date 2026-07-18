@@ -33,6 +33,13 @@ timeout = int(os.getenv('GUNICORN_TIMEOUT', '30'))
 graceful_timeout = 30
 keepalive = 5
 
+# NOTE: app.py's daily overdue-reminder scheduler (core/scheduler.py) relies
+# on preload_app=True below -- it means app.py (and its top-level
+# start_scheduler(app) call) runs exactly once in the master process before
+# forking workers, rather than once per worker. Don't flip this to False
+# without also moving the scheduler start into a gunicorn `post_fork`/
+# `when_ready` hook, or every worker will run its own copy of the job and
+# reminder emails will go out duplicated (once per worker).
 accesslog = '-'   # stdout -- let the platform/container runtime collect it
 errorlog = '-'
 loglevel = os.getenv('GUNICORN_LOG_LEVEL', 'info')
