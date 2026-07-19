@@ -20,6 +20,7 @@ the small helper functions below (query_one/query_all/execute).
 import os
 import psycopg2
 import psycopg2.extensions
+import psycopg2.pool
 from datetime import datetime, timezone
 from flask import g, current_app
 
@@ -198,11 +199,43 @@ class ConnectionWrapper:
 
 
 # ---------------------------------------------------------------------------
-# Connection management (one connection per request, stashed on flask.g)
+# Connection management (pooled -- one *borrowed* connection per request,
+# stashed on flask.g, returned to the pool at teardown instead of closed)
 # ---------------------------------------------------------------------------
+#
+# Previously get_db() called psycopg2.connect() fresh on every single
+# request and close_db() fully closed it. Against a remote-hosted Postgres
+# (Render/Railway/Fly/etc, not a local socket) that means a full TCP
+# handshake + SSL negotiation + auth round trip -- often 50-150ms -- paid
+# on *every* request before any query even runs. The dashboard alone fires
+# ~8 concurrent requests on load, so that was ~8 fresh connections opened
+# and torn down at once, on top of the query time itself.
+#
+# _pool is intentionally a lazily-created module global, NOT created at
+# import time. gunicorn.conf.py sets preload_app=True, which loads this
+# module once in the master process *before* forking workers -- a pool
+# opened at import time would have its live sockets duplicated across
+# every forked worker (all sharing the same underlying file descriptors),
+# which silently corrupts connections under real concurrency. Creating it
+# lazily on first get_db() call means each worker process builds its own
+# pool the first time it actually handles a request, safely after the fork.
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        # minconn=1 so an idle worker doesn't hold connections it isn't
+        # using; maxconn covers gunicorn's threads-per-worker (default 4,
+        # see gunicorn.conf.py) with headroom for the background scheduler.
+        maxconn = int(os.getenv('DB_POOL_MAX_CONN', '10'))
+        _pool = psycopg2.pool.ThreadedConnectionPool(1, maxconn, current_app.config['DATABASE_URL'])
+    return _pool
+
+
 def get_db():
     if 'db_conn' not in g:
-        raw_conn = psycopg2.connect(current_app.config['DATABASE_URL'])
+        raw_conn = _get_pool().getconn()
         raw_conn.autocommit = False
         g.db_conn = ConnectionWrapper(raw_conn)
     return g.db_conn
@@ -211,7 +244,21 @@ def get_db():
 def close_db(e=None):
     conn = g.pop('db_conn', None)
     if conn is not None:
-        conn.close()
+        raw_conn = conn._conn
+        is_broken = raw_conn.closed != 0
+        if not is_broken:
+            try:
+                # Reads never call commit(), so a read-only request can
+                # leave a transaction open (autocommit=False) -- rolling
+                # back before the connection goes back in the pool closes
+                # that transaction out cleanly instead of leaving it
+                # idle-in-transaction on Postgres until some later,
+                # unrelated request reuses this connection and happens to
+                # commit.
+                conn.rollback()
+            except Exception:
+                is_broken = True
+        _get_pool().putconn(raw_conn, close=is_broken)
 
 
 def query_all(sql, params=()):
