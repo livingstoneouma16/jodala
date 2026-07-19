@@ -234,10 +234,10 @@ def account_public(row):
     }
 
 
-def journal_entry_public(row):
+def journal_entry_public(row, lines=None):
     if row is None:
         return None
-    return {
+    result = {
         'id': row['id'],
         'entry_number': row['entry_number'],
         'description': row['description'],
@@ -245,6 +245,16 @@ def journal_entry_public(row):
         'reference': row['reference'],
         'created_at': row['created_at'],
     }
+    if lines is not None:
+        result['lines'] = [{
+            'amount': l['amount'],
+            'description': l['line_description'],
+            'debit_account_code': l['debit_code'],
+            'debit_account_name': l['debit_name'],
+            'credit_account_code': l['credit_code'],
+            'credit_account_name': l['credit_name'],
+        } for l in lines]
+    return result
 
 
 def income_public(row):

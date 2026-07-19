@@ -61,13 +61,53 @@ def adjust_account_balance(code, delta):
     Accounts / Trial Balance screens -- without calling this, those pages
     stay at zero forever no matter how much real activity happens.
     Silently does nothing if the account code doesn't exist, so seeding
-    differences across environments can't crash a request."""
+    differences across environments can't crash a request.
+
+    `delta` is pre-signed by the caller to already mean "increase in this
+    account's own normal-balance direction" -- e.g. +100 to an asset means
+    a debit (cash coming in), +100 to a liability/equity/income account
+    means a credit. Callers posting a plain debit/credit pair against
+    accounts of unknown type (e.g. a user-entered manual journal line)
+    should use post_journal_line() instead, which works out the correct
+    sign for each side itself."""
     account = get_db().execute("SELECT id, balance FROM accounts WHERE code = %s", (code,)).fetchone()
     if not account:
         return None
     new_balance = round((account['balance'] or 0) + delta, 2)
     execute("UPDATE accounts SET balance = %s WHERE id = %s", (new_balance, account['id']))
     return new_balance
+
+
+_DEBIT_NORMAL_TYPES = ('asset', 'expense')
+
+
+def post_journal_line(debit_account_id, credit_account_id, amount):
+    """Posts one manual journal line -- `amount` debited to `debit_account_id`
+    and the same amount credited to `credit_account_id` -- onto the ledger,
+    working out the correct sign for each account from its own
+    account_type rather than assuming the caller already knows it (unlike
+    adjust_account_balance, which takes a pre-signed delta). Debiting a
+    debit-normal account (asset/expense) increases its balance; debiting a
+    credit-normal account (liability/equity/income) decreases it, and vice
+    versa for the credit side -- this is what keeps a manual entry that
+    debits Cash and credits Equity, say, correctly increasing both, while
+    one that debits an expense and credits Cash correctly decreases Cash.
+    Returns False (posts nothing) if either account id doesn't exist, so a
+    bad id from a stale dropdown can't partially post a one-sided entry."""
+    db = get_db()
+    debit_account = db.execute("SELECT id, account_type, balance FROM accounts WHERE id = %s", (debit_account_id,)).fetchone()
+    credit_account = db.execute("SELECT id, account_type, balance FROM accounts WHERE id = %s", (credit_account_id,)).fetchone()
+    if not debit_account or not credit_account:
+        return False
+
+    debit_sign = 1 if debit_account['account_type'] in _DEBIT_NORMAL_TYPES else -1
+    credit_sign = -1 if credit_account['account_type'] in _DEBIT_NORMAL_TYPES else 1
+
+    execute("UPDATE accounts SET balance = %s WHERE id = %s",
+            (round((debit_account['balance'] or 0) + debit_sign * amount, 2), debit_account['id']))
+    execute("UPDATE accounts SET balance = %s WHERE id = %s",
+            (round((credit_account['balance'] or 0) + credit_sign * amount, 2), credit_account['id']))
+    return True
 
 
 def adjust_main_account_balance(delta):

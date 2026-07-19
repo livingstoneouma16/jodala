@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Loans — Jodala Microfinance{% endblock %}
+{% block page_title %}Loans{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">Loan Management</h4>
+    <p class="text-muted mb-0" style="font-size:13px">Track and manage all loan accounts</p>
+  </div>
+  <a href="{{ url_for('loans.apply_page') }}" class="btn btn-brand">
+    <i class="bi bi-plus-lg me-1"></i>New Loan Application
+  </a>
+</div>
+
+<!-- Quick Filter Pills -->
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <button class="btn btn-sm filter-pill active" data-status="" onclick="quickFilter('',this)">All Loans</button>
+  <button class="btn btn-sm filter-pill" data-status="pending" onclick="quickFilter('pending',this)">Pending</button>
+  <button class="btn btn-sm filter-pill" data-status="approved" onclick="quickFilter('approved',this)">Approved</button>
+  <button class="btn btn-sm filter-pill" data-status="active" onclick="quickFilter('active',this)">Active</button>
+  <button class="btn btn-sm filter-pill" data-status="completed" onclick="quickFilter('completed',this)">Completed</button>
+  <button class="btn btn-sm filter-pill" data-status="rejected" onclick="quickFilter('rejected',this)">Rejected</button>
+  <button class="btn btn-sm filter-pill" data-status="written_off" onclick="quickFilter('written_off',this)">Written Off</button>
+</div>
+
+<style>
+.filter-pill { background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted); border-radius: 20px; font-size: 12px; padding: 4px 14px; }
+.filter-pill.active, .filter-pill:hover { background: var(--brand-dark); color: #fff; border-color: var(--brand-dark); }
+</style>
+
+<!-- Search Bar -->
+<div class="jd-card mb-3">
+  <div class="jd-card-body py-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <div class="search-input-wrapper">
+          <i class="bi bi-search"></i>
+          <input type="text" class="form-control" id="searchInput" placeholder="Search by loan number…" />
+        </div>
+      </div>
+      <div class="col-md-3">
+        <select class="form-select" id="productFilter">
+          <option value="">All Products</option>
+          {% for p in products %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-brand w-100" onclick="loadLoans(1)">Filter</button>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-brand-outline w-100" onclick="exportLoans()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loans Table -->
+<div class="data-table-wrapper">
+  <div class="data-table-header">
+    <div class="data-table-title">Loan Portfolio <span id="totalBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-dark)"></span></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table mb-0">
+      <thead>
+        <tr>
+          <th>Loan No.</th><th>Borrower</th><th>Product</th><th>Principal</th>
+          <th>Outstanding</th><th>Term</th><th>Status</th><th>Date</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="loansTable">
+        <tr><td colspan="9" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination-wrapper">
+    <div class="page-info" id="pageInfo"></div>
+    <div class="page-btns" id="pageBtns"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let activeStatus = '';
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadLoans(1);
+  document.getElementById('searchInput').addEventListener('input', debounce(() => loadLoans(1), 400));
+  document.getElementById('productFilter').addEventListener('change', () => loadLoans(1));
+});
+
+function quickFilter(status, el) {
+  activeStatus = status;
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  loadLoans(1);
+}
+
+async function loadLoans(page = 1) {
+  currentPage = page;
+  const search = document.getElementById('searchInput').value;
+  const product = document.getElementById('productFilter').value;
+  const tbody = document.getElementById('loansTable');
+
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+
+  try {
+    const params = new URLSearchParams({ page, per_page: 15, search, status: activeStatus, product_id: product });
+    const data = await API.get(`/loans/api?${params}`);
+
+    document.getElementById('totalBadge').textContent = data.total + ' loans';
+    document.getElementById('pageInfo').textContent = `Showing ${(page-1)*15+1}–${Math.min(page*15, data.total)} of ${data.total}`;
+
+    if (!data.loans.length) {
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="bi bi-cash-coin"></i><p>No loans found</p></div></td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.loans.map(l => `
+      <tr>
+        <td><a href="/loans/${l.id}" style="font-weight:600;color:var(--brand-mid);font-size:12px">${escapeHtml(l.loan_number)}</a></td>
+        <td style="font-size:13px">${escapeHtml(l.member_name)}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(l.product_name)}</td>
+        <td style="font-weight:600">${fmtCurrency(l.principal_amount)}</td>
+        <td style="font-weight:600;color:${l.outstanding_balance > 0 ? 'var(--danger)' : 'var(--brand-light)'}">${fmtCurrency(l.outstanding_balance)}</td>
+        <td style="font-size:12px">${l.term} months</td>
+        <td>${statusPill(l.status)}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${fmtDate(l.application_date)}</td>
+        <td>
+          <div class="d-flex gap-1">
+            <a href="/loans/${l.id}" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--surface-2);border:1px solid var(--border)" title="View">
+              <i class="bi bi-eye"></i>
+            </a>
+            ${l.status === 'pending' ? `
+            <button onclick="approveLoan(${l.id})" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:#D1FAE5;border:1px solid #6EE7B7;color:#065F46" title="Approve">
+              <i class="bi bi-check-lg"></i>
+            </button>
+            <button onclick="rejectLoan(${l.id})" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:#FFE4E6;border:1px solid #FCA5A5;color:#991B1B" title="Reject">
+              <i class="bi bi-x-lg"></i>
+            </button>` : ''}
+            {% if user and user.role == 'admin' %}
+            ${['active', 'completed'].includes(l.status) ? '' : `
+            <button onclick="deleteLoan(${l.id})" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:#FFE4E6;border:1px solid #FCA5A5;color:#991B1B" title="Delete">
+              <i class="bi bi-trash"></i>
+            </button>`}
+            {% endif %}
+          </div>
+        </td>
+      </tr>`).join('');
+
+    renderPagination('pageBtns', data.current_page, data.pages, loadLoans);
+  } catch(e) {
+    Toast.error(e.message);
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger p-4">Failed to load loans</td></tr>';
+  }
+}
+
+async function approveLoan(id) {
+  confirm('Approve this loan application?', async () => {
+    try {
+      await API.post(`/loans/api/${id}/approve`, {});
+      Toast.success('Loan approved successfully');
+      loadLoans(currentPage);
+    } catch(e) { Toast.error(e.message); }
+  }, 'success');
+}
+
+async function rejectLoan(id) {
+  const reason = prompt('Enter rejection reason:');
+  if (!reason) return;
+  try {
+    await API.post(`/loans/api/${id}/reject`, { reason });
+    Toast.success('Loan rejected');
+    loadLoans(currentPage);
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function deleteLoan(id) {
+  confirm('Delete this loan application? This cannot be undone.', async () => {
+    try {
+      await API.delete(`/loans/api/${id}`);
+      Toast.success('Loan deleted');
+      loadLoans(currentPage);
+    } catch(e) { Toast.error(e.message); }
+  }, 'danger');
+}
+
+async function exportLoans() {
+  Toast.info('Preparing export…');
+  try {
+    await API.download('/reports/api/export/loans/excel', 'loans_report.xlsx');
+    Toast.success('Export ready!');
+  } catch(e) { Toast.error('Export failed'); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,788 @@
+{% extends "base.html" %}
+{% block title %}Settings — Jodala Microfinance{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block content %}
+<div class="mb-4"><h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">System Settings</h4>
+<p class="text-muted mb-0" style="font-size:13px">Configure company information, loan products, savings products, and regions</p></div>
+
+<ul class="nav nav-tabs border-0 gap-1 mb-3">
+  <li class="nav-item"><button class="nav-link active" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('company',this)">Company</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('loanProducts',this)">Loan Products</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('savingsProducts',this)">Savings Products</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('regions',this)">Regions</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('notifications',this)">Notifications</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('mpesa',this)">M-Pesa</button></li>
+</ul>
+
+<!-- Company Settings -->
+<div id="companySet">
+  <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-building" style="color:var(--brand-light)"></i>Company Profile</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">SACCO or chama identity used across the app and statements</div></div>
+  <div class="jd-card-body">
+    <div class="row g-4" id="companyForm">
+      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+    </div>
+    <hr class="my-4" />
+    <div class="d-flex justify-content-end"><button class="btn btn-brand" id="saveCompanyBtn" onclick="saveCompany()"><i class="bi bi-save me-1"></i>Save Settings</button></div>
+  </div></div>
+</div>
+
+<!-- Loan Products -->
+<div id="loanProductsSet" class="d-none">
+  <div class="d-flex justify-content-between mb-3">
+    <div style="font-family:'Space Grotesk',sans-serif;font-weight:600">Loan Products</div>
+    <button class="btn btn-brand btn-sm" data-bs-toggle="modal" data-bs-target="#lpModal" onclick="openLPModal()"><i class="bi bi-plus me-1"></i>New Product</button>
+  </div>
+  <div class="row g-3" id="lpGrid"><div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div></div>
+</div>
+
+<!-- Savings Products -->
+<div id="savingsProductsSet" class="d-none">
+  <div class="d-flex justify-content-between mb-3">
+    <div style="font-family:'Space Grotesk',sans-serif;font-weight:600">Savings Products</div>
+    <button class="btn btn-brand btn-sm" data-bs-toggle="modal" data-bs-target="#spModal" onclick="openSPModal()"><i class="bi bi-plus me-1"></i>New Product</button>
+  </div>
+  <div class="row g-3" id="spGrid"><div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div></div>
+</div>
+
+<!-- Regions -->
+<div id="regionsSet" class="d-none">
+  <div class="d-flex justify-content-between mb-3">
+    <div style="font-family:'Space Grotesk',sans-serif;font-weight:600">Regions</div>
+    <button class="btn btn-brand btn-sm" data-bs-toggle="modal" data-bs-target="#regionModal" onclick="openRegionModal()"><i class="bi bi-plus me-1"></i>New Region</button>
+  </div>
+  <div class="jd-card"><div class="jd-card-body p-0"><div class="table-responsive">
+    <table class="table mb-0" id="regionsTable">
+      <thead><tr><th style="padding-left:16px">Name</th><th>Status</th><th style="padding-right:16px" class="text-end">Actions</th></tr></thead>
+      <tbody id="regionsBody"><tr><td colspan="3" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+    </table>
+  </div></div></div>
+</div>
+
+<!-- Notifications (Gmail) Settings -->
+<div id="notificationsSet" class="d-none">
+  <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-envelope" style="color:var(--brand-light)"></i>Email Notifications (Gmail)</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">Sends emails for loan approvals, disbursements, repayment receipts, overdue reminders, and new registrations</div></div>
+  <div class="jd-card-body">
+    <div class="row g-4" id="notifForm">
+      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+    </div>
+    <div class="alert alert-warning mt-3" style="font-size:12.5px">
+      <i class="bi bi-info-circle me-1"></i>
+      Use a Gmail <strong>App Password</strong>, not your normal Gmail password. Turn on 2-Step Verification
+      on the Gmail account, then generate one at
+      <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>.
+      Note: outbound SMTP is blocked on Render and most free PaaS hosts, so this only works when running
+      locally or on a host that allows it.
+    </div>
+    <hr class="my-4" />
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex gap-2 align-items-center flex-wrap" style="flex:1 1 320px">
+        <input type="email" class="form-control form-control-sm" id="testEmailTo" placeholder="Send test to (optional, defaults to you)" style="flex:1 1 200px;min-width:0;max-width:280px" />
+        <button class="btn btn-outline-secondary btn-sm" onclick="sendTestEmail()" id="testEmailBtn">
+          <i class="bi bi-send me-1"></i>Send Test Email
+        </button>
+      </div>
+      <button class="btn btn-brand" id="saveNotifBtn" onclick="saveNotificationSettings()"><i class="bi bi-save me-1"></i>Save Settings</button>
+    </div>
+  </div></div>
+
+  <div class="jd-card mt-3"><div class="jd-card-header d-flex justify-content-between align-items-center">
+    <div>
+      <div class="jd-card-title"><i class="bi bi-clock-history" style="color:var(--brand-light)"></i>Recent Email Activity</div>
+      <div class="text-muted" style="font-size:12px;margin-top:2px">Last 25 send attempts — check here first if an expected email didn't arrive</div>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadEmailLog()"><i class="bi bi-arrow-clockwise"></i></button>
+  </div>
+  <div class="jd-card-body p-0"><div class="table-responsive">
+    <table class="table mb-0" style="font-size:12.5px">
+      <thead><tr><th style="padding-left:16px">When</th><th>To</th><th>Subject</th><th>Status</th><th style="padding-right:16px">Detail</th></tr></thead>
+      <tbody id="emailLogBody"><tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+    </table>
+  </div></div></div>
+</div>
+
+<!-- M-Pesa Settings -->
+<div id="mpesaSet" class="d-none">
+  <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-phone" style="color:var(--brand-light)"></i>M-Pesa STK Push (Lipa Na M-Pesa Online)</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">Lets staff trigger a payment prompt on a member's phone for loan repayments and savings deposits</div></div>
+  <div class="jd-card-body">
+    <div id="mpesaSandboxNotice" class="alert alert-info d-none" style="font-size:12.5px">
+      <i class="bi bi-info-circle me-1"></i>
+      Running against Safaricom's <strong>sandbox</strong> using their public test shortcode/passkey.
+      Set your own Consumer Key &amp; Secret below (from
+      <a href="https://developer.safaricom.co.ke" target="_blank" rel="noopener">developer.safaricom.co.ke</a>) to send
+      real sandbox test pushes, then switch to Production with your live shortcode when ready to go live.
+    </div>
+    <div class="row g-4" id="mpesaForm">
+      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+    </div>
+    <div class="alert alert-warning mt-3" style="font-size:12.5px">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      Safaricom must be able to reach your <strong>Callback URL</strong> over the public internet with a valid HTTPS
+      certificate. If this app is only running locally, use a tunnel (e.g. ngrok) and paste its HTTPS URL +
+      <code>/mpesa/callback</code> below — otherwise payments will show "pending" forever since the confirmation can
+      never arrive.
+    </div>
+    <hr class="my-4" />
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm" id="testMpesaPhone" placeholder="Test phone e.g. 0712345678" style="width:220px" />
+        <button class="btn btn-outline-secondary btn-sm" onclick="sendTestMpesaPush()" id="testMpesaBtn">
+          <i class="bi bi-send me-1"></i>Send KSh 1 Test Push
+        </button>
+      </div>
+      <button class="btn btn-brand" id="saveMpesaBtn" onclick="saveMpesaSettings()"><i class="bi bi-save me-1"></i>Save Settings</button>
+    </div>
+  </div></div>
+
+  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-cash-stack" style="color:var(--brand-light)"></i>M-Pesa B2C (Loan Disbursement)</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">Lets staff send loan funds directly to a member's phone instead of cash/bank</div></div>
+  <div class="jd-card-body">
+    <div class="alert alert-info" style="font-size:12.5px">
+      <i class="bi bi-info-circle me-1"></i>
+      B2C has <strong>no shared sandbox default</strong> — even for testing you need your own Initiator Name,
+      Initiator Password, and Certificate from your Daraja app's
+      <a href="https://developer.safaricom.co.ke/test_credentials" target="_blank" rel="noopener">test credentials page</a>,
+      plus a shortcode approved for B2C ("Go Live for B2C"). The Consumer Key/Secret above are reused for B2C too.
+    </div>
+    <div class="row g-4" id="mpesaB2cForm">
+      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+    </div>
+    <hr class="my-4" />
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm" id="testB2cPhone" placeholder="Test phone e.g. 0712345678" style="width:220px" />
+        <button class="btn btn-outline-secondary btn-sm" onclick="sendTestMpesaB2c()" id="testB2cBtn">
+          <i class="bi bi-send me-1"></i>Send KSh 1 Test Payout
+        </button>
+      </div>
+      <button class="btn btn-brand" id="saveMpesaB2cBtn" onclick="saveMpesaSettings()"><i class="bi bi-save me-1"></i>Save Settings</button>
+    </div>
+  </div></div>
+
+  <div class="jd-card mt-3"><div class="jd-card-header d-flex justify-content-between align-items-center">
+    <div>
+      <div class="jd-card-title"><i class="bi bi-clock-history" style="color:var(--brand-light)"></i>Recent M-Pesa Activity</div>
+      <div class="text-muted" style="font-size:12px;margin-top:2px">Last 25 STK push attempts — check here if a payment seems stuck on "pending"</div>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadMpesaLog()"><i class="bi bi-arrow-clockwise"></i></button>
+  </div>
+  <div class="jd-card-body p-0"><div class="table-responsive">
+    <table class="table mb-0" style="font-size:12.5px">
+      <thead><tr><th style="padding-left:16px">When</th><th>Purpose</th><th>Phone</th><th>Amount</th><th>Status</th><th style="padding-right:16px">Receipt / Detail</th></tr></thead>
+      <tbody id="mpesaLogBody"><tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+    </table>
+  </div></div></div>
+</div>
+
+<!-- Region Modal -->
+<div class="modal fade" id="regionModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title" id="regionModalTitle">New Region</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <label class="form-label">Region Name *</label>
+        <input type="text" class="form-control" id="regionName" placeholder="e.g. Nakuru" />
+      </div>
+      <div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-brand" id="saveRegionBtn" onclick="saveRegion()">Save Region</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Loan Product Modal -->
+<div class="modal fade" id="lpModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title" id="lpModalTitle">New Loan Product</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-8"><label class="form-label">Product Name *</label><input type="text" class="form-control" id="lpName" /></div>
+          <div class="col-md-4"><label class="form-label">Code *</label><input type="text" class="form-control" id="lpCode" /></div>
+          <div class="col-12"><label class="form-label">Description</label><textarea class="form-control" id="lpDesc" rows="2"></textarea></div>
+          <div class="col-md-6"><label class="form-label">Min Amount (Ksh) *</label><input type="number" class="form-control" id="lpMinAmt" /></div>
+          <div class="col-md-6"><label class="form-label">Max Amount (Ksh) *</label><input type="number" class="form-control" id="lpMaxAmt" /></div>
+          <div class="col-md-4"><label class="form-label">Interest Rate (%) *</label><input type="number" class="form-control" id="lpRate" step="0.1" /></div>
+          <div class="col-md-4"><label class="form-label">Interest Type</label>
+            <select class="form-select" id="lpType"><option value="flat">Flat</option><option value="reducing">Reducing Balance</option></select></div>
+          <div class="col-md-4"><label class="form-label">Repayment Frequency</label>
+            <select class="form-select" id="lpFreq"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option></select></div>
+          <div class="col-md-4"><label class="form-label">Min Term</label><input type="number" class="form-control" id="lpMinTerm" /></div>
+          <div class="col-md-4"><label class="form-label">Max Term</label><input type="number" class="form-control" id="lpMaxTerm" /></div>
+          <div class="col-md-4"><label class="form-label">Penalty Rate (%/day)</label><input type="number" class="form-control" id="lpPenalty" step="0.1" /></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-brand" id="saveLpBtn" onclick="saveLoanProduct()">Save Product</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Savings Product Modal -->
+<div class="modal fade" id="spModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title" id="spModalTitle">New Savings Product</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><div class="row g-3">
+        <div class="col-md-8"><label class="form-label">Product Name *</label><input type="text" class="form-control" id="spName" /></div>
+        <div class="col-md-4"><label class="form-label">Code *</label><input type="text" class="form-control" id="spCode" /></div>
+        <div class="col-12"><label class="form-label">Description</label><textarea class="form-control" id="spDesc" rows="2"></textarea></div>
+        <div class="col-md-6"><label class="form-label">Interest Rate (% p.a.)</label><input type="number" class="form-control" id="spRate" step="0.1" /></div>
+        <div class="col-md-6"><label class="form-label">Min Balance (Ksh)</label><input type="number" class="form-control" id="spMinBal" /></div>
+      </div></div>
+      <div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-brand" id="saveSpBtn" onclick="saveSavingsProduct()">Save Product</button></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+let editingLP = null;
+let editingSP = null;
+let editingRegion = null;
+
+function showSet(tab, el) {
+  document.querySelectorAll('.nav-link').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  ['company','loanProducts','savingsProducts','regions','notifications','mpesa'].forEach(t=>document.getElementById(t+'Set').classList.toggle('d-none',t!==tab));
+  if (tab==='loanProducts') loadLoanProducts();
+  else if (tab==='savingsProducts') loadSavingsProducts();
+  else if (tab==='regions') loadRegions();
+  else if (tab==='notifications') { loadNotificationSettings(); loadEmailLog(); }
+  else if (tab==='mpesa') { loadMpesaSettings(); loadMpesaLog(); }
+}
+
+let pendingLogo = undefined; // undefined = unchanged, '' = removed, dataURL = new logo
+
+async function loadCompany() {
+  try {
+    const data = await API.get('/settings/api/company');
+    pendingLogo = undefined;
+    document.getElementById('companyForm').innerHTML = `
+      <div class="col-md-6"><label class="form-label" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)">SACCO / Chama Name</label>
+        <input type="text" class="form-control" id="cName" value="${escapeHtml(data.company_name||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)">Phone</label>
+        <input type="text" class="form-control" id="cPhone" value="${escapeHtml(data.company_phone||'')}" /></div>
+
+      <div class="col-md-12">
+        <label class="form-label" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)">Logo Image</label>
+        <div class="d-flex align-items-center gap-2">
+          <div id="cLogoPreviewWrap" style="width:64px;height:64px;border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--surface-2)">
+            ${data.logo_image ? `<img id="cLogoPreview" src="${escapeHtml(data.logo_image)}" style="width:100%;height:100%;object-fit:contain" />` : `<i class="bi bi-image text-muted"></i>`}
+          </div>
+          <input type="file" id="cLogoFile" accept="image/*" class="d-none" onchange="onLogoChosen(this)" />
+          <button type="button" class="btn btn-brand-outline btn-sm" onclick="document.getElementById('cLogoFile').click()">Choose Logo</button>
+          <button type="button" class="btn btn-sm" style="border:1px solid var(--border)" onclick="removeLogo()">Remove</button>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)">Main Account Opening Balance (KES)</label>
+        <input type="number" step="0.01" class="form-control" id="cOpeningBalance" value="${escapeHtml(data.main_account_opening_balance||'0')}" />
+        <div class="text-muted mt-1" style="font-size:12px">This value auto-updates when loans are disbursed, repayments/savings are received, and expenses are recorded.</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)">Add to Main Account (KES)</label>
+        <div class="d-flex gap-2">
+          <input type="number" step="0.01" class="form-control" id="cAddAmount" placeholder="Amount to add" />
+          <button type="button" class="btn btn-brand-outline" id="addBalanceBtn" onclick="addToMainAccount()">Add</button>
+        </div>
+      </div>`;
+  } catch(e) {}
+}
+
+function onLogoChosen(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    pendingLogo = reader.result;
+    const wrap = document.getElementById('cLogoPreviewWrap');
+    wrap.innerHTML = `<img id="cLogoPreview" src="${escapeHtml(pendingLogo)}" style="width:100%;height:100%;object-fit:contain" />`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeLogo() {
+  pendingLogo = '';
+  document.getElementById('cLogoPreviewWrap').innerHTML = `<i class="bi bi-image text-muted"></i>`;
+  document.getElementById('cLogoFile').value = '';
+}
+
+async function addToMainAccount() {
+  const btn = document.getElementById('addBalanceBtn');
+  const amount = parseFloat(document.getElementById('cAddAmount').value);
+  if (!amount || amount <= 0) { Toast.error('Enter a valid amount to add'); return; }
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/settings/api/company/main-account', { amount });
+    document.getElementById('cOpeningBalance').value = data.main_account_opening_balance;
+    document.getElementById('cAddAmount').value = '';
+    Toast.success('Main account balance updated!');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function saveCompany() {
+  const btn = document.getElementById('saveCompanyBtn');
+  setLoading(btn, true);
+  try {
+    const body = {
+      company_name: document.getElementById('cName').value,
+      company_phone: document.getElementById('cPhone').value,
+      main_account_opening_balance: document.getElementById('cOpeningBalance').value
+    };
+    if (pendingLogo !== undefined) body.logo_image = pendingLogo;
+    await API.put('/settings/api/company', body);
+    Toast.success('Settings saved!');
+    pendingLogo = undefined;
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function loadLoanProducts() {
+  const grid = document.getElementById('lpGrid');
+  grid.innerHTML = '<div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>';
+  try {
+    const products = await API.get('/settings/api/loan-products');
+    if (!products.length) { grid.innerHTML='<div class="col-12 empty-state"><i class="bi bi-tag"></i><p>No products yet</p></div>'; return; }
+    grid.innerHTML = products.map(p=>`
+      <div class="col-md-4">
+        <div class="jd-card">
+          <div class="jd-card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div><div style="font-weight:700;font-size:14px">${escapeHtml(p.name)}</div><div style="font-size:11px;color:var(--text-muted)">${escapeHtml(p.code)}</div></div>
+              <span class="status-pill ${p.is_active?'status-active':'status-suspended'}" style="cursor:pointer" title="Click to ${p.is_active?'deactivate':'activate'}" onclick="toggleLoanProductActive(${p.id}, ${!p.is_active})">${p.is_active?'Active':'Inactive'}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${escapeHtml(p.description||'')}</div>
+            <div class="row g-1" style="font-size:12px">
+              <div class="col-6"><span style="color:var(--text-muted)">Rate:</span> <strong>${p.interest_rate}%</strong></div>
+              <div class="col-6"><span style="color:var(--text-muted)">Type:</span> <strong>${escapeHtml(p.interest_type)}</strong></div>
+              <div class="col-6"><span style="color:var(--text-muted)">Min:</span> <strong>KSh ${p.min_amount.toLocaleString()}</strong></div>
+              <div class="col-6"><span style="color:var(--text-muted)">Max:</span> <strong>KSh ${p.max_amount.toLocaleString()}</strong></div>
+              <div class="col-6"><span style="color:var(--text-muted)">Term:</span> <strong>${p.min_term}-${p.max_term}</strong></div>
+              <div class="col-6"><span style="color:var(--text-muted)">Freq:</span> <strong>${escapeHtml(p.repayment_frequency)}</strong></div>
+            </div>
+            <div class="d-flex gap-2 mt-2">
+              <button class="btn btn-sm btn-brand-outline flex-grow-1" onclick='editLP(${JSON.stringify(p)})'>
+                <i class="bi bi-pencil me-1"></i>Edit
+              </button>
+              <button class="btn btn-sm" style="background:#FFE4E6;border:1px solid #FCA5A5;color:#991B1B" title="Delete" onclick="deleteLoanProduct(${p.id}, '${jsAttr(p.name)}')">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+function openLPModal() { editingLP = null; document.getElementById('lpModalTitle').textContent='New Loan Product'; ['lpName','lpCode','lpDesc','lpMinAmt','lpMaxAmt','lpRate','lpMinTerm','lpMaxTerm','lpPenalty'].forEach(id=>document.getElementById(id).value=''); }
+
+function editLP(p) {
+  editingLP = p;
+  document.getElementById('lpModalTitle').textContent = 'Edit: '+p.name;
+  document.getElementById('lpName').value = p.name;
+  document.getElementById('lpCode').value = p.code;
+  document.getElementById('lpDesc').value = p.description||'';
+  document.getElementById('lpMinAmt').value = p.min_amount;
+  document.getElementById('lpMaxAmt').value = p.max_amount;
+  document.getElementById('lpRate').value = p.interest_rate;
+  document.getElementById('lpType').value = p.interest_type;
+  document.getElementById('lpFreq').value = p.repayment_frequency;
+  document.getElementById('lpMinTerm').value = p.min_term;
+  document.getElementById('lpMaxTerm').value = p.max_term;
+  document.getElementById('lpPenalty').value = p.penalty_rate;
+  new bootstrap.Modal(document.getElementById('lpModal')).show();
+}
+
+async function saveLoanProduct() {
+  const btn = document.getElementById('saveLpBtn');
+  setLoading(btn, true);
+  const body = { name:document.getElementById('lpName').value, code:document.getElementById('lpCode').value, description:document.getElementById('lpDesc').value,
+    min_amount:document.getElementById('lpMinAmt').value, max_amount:document.getElementById('lpMaxAmt').value,
+    interest_rate:document.getElementById('lpRate').value, interest_type:document.getElementById('lpType').value,
+    repayment_frequency:document.getElementById('lpFreq').value, min_term:document.getElementById('lpMinTerm').value,
+    max_term:document.getElementById('lpMaxTerm').value, penalty_rate:document.getElementById('lpPenalty').value };
+  try {
+    if (editingLP) await API.put(`/settings/api/loan-products/${editingLP.id}`, body);
+    else await API.post('/settings/api/loan-products', body);
+    Toast.success('Product saved!');
+    bootstrap.Modal.getInstance(document.getElementById('lpModal')).hide();
+    loadLoanProducts();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function toggleLoanProductActive(id, makeActive) {
+  try {
+    await API.put(`/settings/api/loan-products/${id}`, { is_active: makeActive });
+    Toast.success(makeActive ? 'Product activated' : 'Product deactivated');
+    loadLoanProducts();
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function deleteLoanProduct(id, name) {
+  confirm(`Delete loan product "${name}"? This cannot be undone.`, async () => {
+    try {
+      await API.delete(`/settings/api/loan-products/${id}`);
+      Toast.success('Loan product deleted');
+      loadLoanProducts();
+    } catch(e) { Toast.error(e.message); }
+  });
+}
+
+async function loadSavingsProducts() {
+  const grid = document.getElementById('spGrid');
+  grid.innerHTML = '<div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>';
+  try {
+    const products = await API.get('/settings/api/savings-products');
+    grid.innerHTML = products.map(p=>`
+      <div class="col-md-4"><div class="jd-card"><div class="jd-card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div><div style="font-weight:700;font-size:14px">${escapeHtml(p.name)}</div><div style="font-size:11px;color:var(--text-muted)">${escapeHtml(p.code)}</div></div>
+          <span class="status-pill ${p.is_active?'status-active':'status-suspended'}" style="cursor:pointer" title="Click to ${p.is_active?'deactivate':'activate'}" onclick="toggleSavingsProductActive(${p.id}, ${!p.is_active})">${p.is_active?'Active':'Inactive'}</span>
+        </div>
+        <div class="row g-1 mt-2" style="font-size:12px">
+          <div class="col-6"><span style="color:var(--text-muted)">Interest:</span> <strong>${p.interest_rate}% p.a.</strong></div>
+          <div class="col-6"><span style="color:var(--text-muted)">Min Bal:</span> <strong>KSh ${p.min_balance}</strong></div>
+        </div>
+        <button class="btn btn-sm btn-brand-outline w-100 mt-2" onclick='editSP(${JSON.stringify(p)})'>
+          <i class="bi bi-pencil me-1"></i>Edit
+        </button>
+        <button class="btn btn-sm w-100 mt-2" style="background:#FFE4E6;border:1px solid #FCA5A5;color:#991B1B" onclick="deleteSavingsProduct(${p.id}, '${jsAttr(p.name)}')">
+          <i class="bi bi-trash me-1"></i>Delete
+        </button>
+      </div></div></div>`).join('');
+  } catch(e) {}
+}
+
+function openSPModal() {
+  editingSP = null;
+  document.getElementById('spModalTitle').textContent = 'New Savings Product';
+  ['spName','spCode','spDesc','spRate','spMinBal'].forEach(id => document.getElementById(id).value = '');
+}
+
+function editSP(p) {
+  editingSP = p;
+  document.getElementById('spModalTitle').textContent = 'Edit: ' + p.name;
+  document.getElementById('spName').value = p.name;
+  document.getElementById('spCode').value = p.code;
+  document.getElementById('spDesc').value = p.description || '';
+  document.getElementById('spRate').value = p.interest_rate;
+  document.getElementById('spMinBal').value = p.min_balance;
+  new bootstrap.Modal(document.getElementById('spModal')).show();
+}
+
+async function saveSavingsProduct() {
+  const btn = document.getElementById('saveSpBtn');
+  setLoading(btn, true);
+  const body = { name:document.getElementById('spName').value, code:document.getElementById('spCode').value, description:document.getElementById('spDesc').value, interest_rate:document.getElementById('spRate').value, min_balance:document.getElementById('spMinBal').value };
+  try {
+    if (editingSP) await API.put(`/settings/api/savings-products/${editingSP.id}`, body);
+    else await API.post('/settings/api/savings-products', body);
+    Toast.success(editingSP ? 'Product updated!' : 'Savings product created!');
+    bootstrap.Modal.getInstance(document.getElementById('spModal')).hide();
+    loadSavingsProducts();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function toggleSavingsProductActive(id, makeActive) {
+  try {
+    await API.put(`/settings/api/savings-products/${id}`, { is_active: makeActive });
+    Toast.success(makeActive ? 'Product activated' : 'Product deactivated');
+    loadSavingsProducts();
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function deleteSavingsProduct(id, name) {
+  confirm(`Delete savings product "${name}"? This cannot be undone.`, async () => {
+    try {
+      await API.delete(`/settings/api/savings-products/${id}`);
+      Toast.success('Savings product deleted');
+      loadSavingsProducts();
+    } catch(e) { Toast.error(e.message); }
+  });
+}
+
+async function loadRegions() {
+  const body = document.getElementById('regionsBody');
+  body.innerHTML = '<tr><td colspan="3" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const regions = await API.get('/settings/api/regions');
+    body.innerHTML = regions.length ? regions.map(r=>`
+      <tr>
+        <td style="padding-left:16px">${escapeHtml(r.name)}</td>
+        <td><span class="status-pill ${r.is_active?'status-active':'status-suspended'}" style="cursor:pointer" title="Click to ${r.is_active?'deactivate':'activate'}" onclick="toggleRegionActive(${r.id}, ${!r.is_active})">${r.is_active?'Active':'Inactive'}</span></td>
+        <td style="padding-right:16px" class="text-end">
+          <button class="btn btn-sm" style="border:1px solid var(--border)" title="Edit" onclick='editRegion(${JSON.stringify(r)})'><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-sm" style="background:#FFE4E6;border:1px solid #FCA5A5;color:#991B1B" title="Delete" onclick="deleteRegion(${r.id}, '${jsAttr(r.name)}')"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>`).join('') : '<tr><td colspan="3" class="text-center p-4 text-muted">No regions yet</td></tr>';
+  } catch(e) { Toast.error(e.message); }
+}
+
+function openRegionModal() {
+  editingRegion = null;
+  document.getElementById('regionModalTitle').textContent = 'New Region';
+  document.getElementById('regionName').value = '';
+}
+
+function editRegion(r) {
+  editingRegion = r;
+  document.getElementById('regionModalTitle').textContent = 'Edit: ' + r.name;
+  document.getElementById('regionName').value = r.name;
+  new bootstrap.Modal(document.getElementById('regionModal')).show();
+}
+
+async function saveRegion() {
+  const btn = document.getElementById('saveRegionBtn');
+  setLoading(btn, true);
+  const body = { name: document.getElementById('regionName').value };
+  try {
+    if (editingRegion) await API.put(`/settings/api/regions/${editingRegion.id}`, body);
+    else await API.post('/settings/api/regions', body);
+    Toast.success(editingRegion ? 'Region updated!' : 'Region created!');
+    bootstrap.Modal.getInstance(document.getElementById('regionModal')).hide();
+    loadRegions();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function toggleRegionActive(id, makeActive) {
+  try {
+    await API.put(`/settings/api/regions/${id}`, { is_active: makeActive });
+    Toast.success(makeActive ? 'Region activated' : 'Region deactivated');
+    loadRegions();
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function deleteRegion(id, name) {
+  confirm(`Delete region "${name}"? This cannot be undone.`, async () => {
+    try {
+      await API.delete(`/settings/api/regions/${id}`);
+      Toast.success('Region deleted');
+      loadRegions();
+    } catch(e) { Toast.error(e.message); }
+  });
+}
+
+async function loadNotificationSettings() {
+  try {
+    const data = await API.get('/settings/api/notifications');
+    document.getElementById('notifForm').innerHTML = `
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Gmail Address</label>
+        <input type="email" class="form-control" id="nGmailAddress" placeholder="yourname@gmail.com" value="${escapeHtml(data.gmail_address||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Sender Display Name</label>
+        <input type="text" class="form-control" id="nSenderName" value="${escapeHtml(data.gmail_sender_name||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Gmail App Password</label>
+        <input type="password" class="form-control" id="nAppPassword" placeholder="${data.gmail_app_password_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'xxxx xxxx xxxx xxxx'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.gmail_app_password_set ? 'A password is already saved. Leave blank to keep it.' : 'Generate at myaccount.google.com/apppasswords. Not yet configured.'}</div></div>
+      <div class="col-md-6 d-flex align-items-end">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="nEnabled" ${data.email_notifications_enabled ? 'checked' : ''} />
+          <label class="form-check-label" for="nEnabled" style="font-size:12.5px">Email notifications enabled</label>
+        </div>
+      </div>`;
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function saveNotificationSettings() {
+  const btn = document.getElementById('saveNotifBtn');
+  setLoading(btn, true);
+  try {
+    const body = {
+      gmail_address: document.getElementById('nGmailAddress').value,
+      gmail_sender_name: document.getElementById('nSenderName').value,
+      email_notifications_enabled: document.getElementById('nEnabled').checked,
+    };
+    const pwd = document.getElementById('nAppPassword').value;
+    if (pwd) body.gmail_app_password = pwd;
+    await API.put('/settings/api/notifications', body);
+    Toast.success('Notification settings saved');
+    loadNotificationSettings();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function sendTestEmail() {
+  const btn = document.getElementById('testEmailBtn');
+  const to = document.getElementById('testEmailTo').value.trim();
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/settings/api/notifications/test', to ? { to } : {});
+    Toast.success(data.message || 'Test email sent');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); loadEmailLog(); }
+}
+
+// escapeHtml() and jsAttr() are provided globally by static/js/app.js —
+// no local redefinition needed here.
+
+async function loadEmailLog() {
+  try {
+    const rows = await API.get('/settings/api/notifications/log');
+    const body = document.getElementById('emailLogBody');
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="5" class="text-center text-muted p-4">No email attempts yet</td></tr>`;
+      return;
+    }
+    const badge = s => s==='sent' ? '<span class="badge bg-success">sent</span>'
+      : s==='failed' ? '<span class="badge bg-danger">failed</span>'
+      : '<span class="badge bg-secondary">skipped</span>';
+    body.innerHTML = rows.map(r => `
+      <tr>
+        <td style="padding-left:16px;white-space:nowrap">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+        <td>${escapeHtml(r.recipient)}</td>
+        <td>${escapeHtml(r.subject)}</td>
+        <td>${badge(r.status)}</td>
+        <td style="padding-right:16px;color:var(--danger,#dc3545)">${escapeHtml(r.error||'')}</td>
+      </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function loadMpesaSettings() {
+  try {
+    const data = await API.get('/settings/api/mpesa');
+    document.getElementById('mpesaSandboxNotice').classList.toggle('d-none', !data.using_sandbox_defaults);
+    document.getElementById('mpesaForm').innerHTML = `
+      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Environment</label>
+        <select class="form-select" id="mConsumerEnv">
+          <option value="sandbox" ${data.mpesa_environment!=='production'?'selected':''}>Sandbox (testing)</option>
+          <option value="production" ${data.mpesa_environment==='production'?'selected':''}>Production (live)</option>
+        </select></div>
+      <div class="col-md-4 d-flex align-items-end">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="mEnabled" ${data.mpesa_enabled ? 'checked' : ''} />
+          <label class="form-check-label" for="mEnabled" style="font-size:12.5px">M-Pesa payments enabled</label>
+        </div>
+      </div>
+      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Shortcode (Paybill/Till)</label>
+        <input type="text" class="form-control" id="mShortcode" placeholder="e.g. 174379" value="${escapeHtml(data.mpesa_shortcode||'')}" /></div>
+
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Consumer Key</label>
+        <input type="text" class="form-control" id="mConsumerKey" value="${escapeHtml(data.mpesa_consumer_key||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Consumer Secret</label>
+        <input type="password" class="form-control" id="mConsumerSecret" placeholder="${data.mpesa_consumer_secret_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'From developer.safaricom.co.ke'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.mpesa_consumer_secret_set ? 'A secret is already saved. Leave blank to keep it.' : 'Not yet configured.'}</div></div>
+
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Passkey</label>
+        <input type="password" class="form-control" id="mPasskey" placeholder="${data.mpesa_passkey_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'Lipa Na M-Pesa Online passkey'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.mpesa_passkey_set ? 'A passkey is already saved. Leave blank to keep it.' : 'Sandbox default is used until you set one.'}</div></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Callback URL</label>
+        <input type="text" class="form-control" id="mCallbackUrl" placeholder="https://your-public-domain.example.com/mpesa/callback" value="${escapeHtml(data.mpesa_callback_url||'')}" /></div>`;
+
+    document.getElementById('mpesaB2cForm').innerHTML = `
+      <div class="col-md-12">
+        <span class="badge ${data.mpesa_b2c_configured ? 'bg-success' : 'bg-secondary'}" style="font-size:11px">
+          ${data.mpesa_b2c_configured ? 'B2C fully configured' : 'B2C not fully configured yet'}
+        </span>
+      </div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Initiator Name</label>
+        <input type="text" class="form-control" id="mInitiatorName" placeholder="e.g. testapi" value="${escapeHtml(data.mpesa_initiator_name||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Initiator Password</label>
+        <input type="password" class="form-control" id="mInitiatorPassword" placeholder="${data.mpesa_initiator_password_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'From test_credentials page'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.mpesa_initiator_password_set ? 'Already saved. Leave blank to keep it.' : 'Not yet configured.'}</div></div>
+
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">B2C Shortcode</label>
+        <input type="text" class="form-control" id="mB2cShortcode" placeholder="Often same as Paybill above" value="${escapeHtml(data.mpesa_b2c_shortcode||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Command Type</label>
+        <select class="form-select" id="mB2cCommandId">
+          <option value="BusinessPayment" ${data.mpesa_b2c_command_id!=='SalaryPayment'&&data.mpesa_b2c_command_id!=='PromotionPayment'?'selected':''}>Business Payment (general)</option>
+          <option value="SalaryPayment" ${data.mpesa_b2c_command_id==='SalaryPayment'?'selected':''}>Salary Payment</option>
+          <option value="PromotionPayment" ${data.mpesa_b2c_command_id==='PromotionPayment'?'selected':''}>Promotion Payment</option>
+        </select></div>
+
+      <div class="col-md-12"><label class="form-label" style="font-size:12.5px">Certificate (.cer content, pasted as PEM or raw base64)</label>
+        <textarea class="form-control" id="mB2cCertificate" rows="4" style="font-family:monospace;font-size:11px" placeholder="${data.mpesa_b2c_certificate_set ? 'A certificate is already saved. Leave blank to keep it.' : '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}"></textarea>
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.mpesa_b2c_certificate_set ? 'Already saved. Leave blank to keep it.' : "Download from your Daraja app's \"My Apps\" page (sandbox and production certificates differ)."}</div></div>
+
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Result URL (optional override)</label>
+        <input type="text" class="form-control" id="mB2cResultUrl" placeholder="https://your-public-domain.example.com/mpesa/b2c/result" value="${escapeHtml(data.mpesa_b2c_result_url||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Queue Timeout URL (optional override)</label>
+        <input type="text" class="form-control" id="mB2cTimeoutUrl" placeholder="https://your-public-domain.example.com/mpesa/b2c/timeout" value="${escapeHtml(data.mpesa_b2c_timeout_url||'')}" /></div>`;
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function saveMpesaSettings() {
+  const btn = event?.target?.closest('button') || document.getElementById('saveMpesaBtn');
+  setLoading(btn, true);
+  try {
+    const body = {
+      mpesa_environment: document.getElementById('mConsumerEnv').value,
+      mpesa_enabled: document.getElementById('mEnabled').checked,
+      mpesa_shortcode: document.getElementById('mShortcode').value,
+      mpesa_consumer_key: document.getElementById('mConsumerKey').value,
+      mpesa_callback_url: document.getElementById('mCallbackUrl').value,
+      mpesa_initiator_name: document.getElementById('mInitiatorName').value,
+      mpesa_b2c_shortcode: document.getElementById('mB2cShortcode').value,
+      mpesa_b2c_command_id: document.getElementById('mB2cCommandId').value,
+      mpesa_b2c_result_url: document.getElementById('mB2cResultUrl').value,
+      mpesa_b2c_timeout_url: document.getElementById('mB2cTimeoutUrl').value,
+    };
+    const secret = document.getElementById('mConsumerSecret').value;
+    if (secret) body.mpesa_consumer_secret = secret;
+    const passkey = document.getElementById('mPasskey').value;
+    if (passkey) body.mpesa_passkey = passkey;
+    const initiatorPassword = document.getElementById('mInitiatorPassword').value;
+    if (initiatorPassword) body.mpesa_initiator_password = initiatorPassword;
+    const cert = document.getElementById('mB2cCertificate').value.trim();
+    if (cert) body.mpesa_b2c_certificate = cert;
+    await API.put('/settings/api/mpesa', body);
+    Toast.success('M-Pesa settings saved');
+    loadMpesaSettings();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function sendTestMpesaB2c() {
+  const btn = document.getElementById('testB2cBtn');
+  const phone = document.getElementById('testB2cPhone').value.trim();
+  if (!phone) { Toast.warning('Enter a phone number first'); return; }
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/settings/api/mpesa/test-b2c', { phone });
+    Toast.success(data.message || 'Test payout sent');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); loadMpesaLog(); }
+}
+
+async function sendTestMpesaPush() {
+  const btn = document.getElementById('testMpesaBtn');
+  const phone = document.getElementById('testMpesaPhone').value.trim();
+  if (!phone) { Toast.warning('Enter a phone number first'); return; }
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/settings/api/mpesa/test', { phone });
+    Toast.success(data.message || 'Test push sent');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); loadMpesaLog(); }
+}
+
+async function loadMpesaLog() {
+  try {
+    const rows = await API.get('/settings/api/mpesa/log');
+    const body = document.getElementById('mpesaLogBody');
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-4">No M-Pesa attempts yet</td></tr>`;
+      return;
+    }
+    const badge = s => s==='success' ? '<span class="badge bg-success">success</span>'
+      : s==='failed' ? '<span class="badge bg-danger">failed</span>'
+      : '<span class="badge bg-secondary">pending</span>';
+    body.innerHTML = rows.map(r => `
+      <tr>
+        <td style="padding-left:16px;white-space:nowrap">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+        <td style="text-transform:capitalize">${escapeHtml(String(r.purpose).replace('_',' '))}</td>
+        <td>${escapeHtml(r.phone)}</td>
+        <td>KSh ${Number(r.amount).toLocaleString()}</td>
+        <td>${badge(r.status)}</td>
+        <td style="padding-right:16px">${escapeHtml(r.mpesa_receipt_number || r.result_desc || '')}</td>
+      </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+loadCompany();
+</script>{% endblock %}

@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block title %}Reports — Jodala Microfinance{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div><h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">Reports & Analytics</h4>
+  <p class="text-muted mb-0" style="font-size:13px">Generate and export financial reports</p></div>
+</div>
+
+<ul class="nav nav-tabs border-0 gap-1 mb-3">
+  <li class="nav-item"><button class="nav-link active" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('loans',this)">Loans</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('arrears',this)">Arrears</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('collections',this)">Collections</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('members',this)">Members</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('regional',this)">Regional</button></li>
+</ul>
+
+<!-- Loans Report -->
+<div id="loansRep">
+  <div class="jd-card mb-3"><div class="jd-card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-2"><label class="form-label">Status</label>
+        <select class="form-select" id="lrStatus"><option value="">All</option><option value="active">Active</option><option value="completed">Completed</option><option value="pending">Pending</option></select></div>
+      <div class="col-md-2"><label class="form-label">From</label><input type="date" class="form-control" id="lrFrom" /></div>
+      <div class="col-md-2"><label class="form-label">To</label><input type="date" class="form-control" id="lrTo" /></div>
+      <div class="col-md-2"><button class="btn btn-brand w-100" onclick="loadLoanReport()"><i class="bi bi-search me-1"></i>Generate</button></div>
+      <div class="col-md-2"><button class="btn btn-brand-outline w-100" onclick="API.download('/reports/api/export/loans/excel','loans_report.xlsx').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button></div>
+      <div class="col-md-2"><button class="btn btn-brand-outline w-100" onclick="API.download('/reports/api/export/loans/csv','loans_report.csv').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-filetype-csv me-1"></i>CSV</button></div>
+    </div>
+  </div></div>
+  <div class="row g-3 mb-3" id="lrSummary"></div>
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-5">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-pie-chart" style="color:var(--brand-light)"></i>Loans by Status</div></div>
+        <div class="jd-card-body"><canvas id="lrStatusChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-7">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-bar-chart" style="color:var(--brand-mid)"></i>Principal, Outstanding & Collected</div></div>
+        <div class="jd-card-body"><canvas id="lrAmountsChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Loan Report <span id="lrBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-dark)"></span></div></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Loan No.</th><th>Borrower</th><th>Principal</th><th>Outstanding</th><th>Total Paid</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody id="lrTable"><tr><td colspan="7" class="text-center p-4 text-muted">Click Generate to load report</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- Arrears Report -->
+<div id="arrearsRep" class="d-none">
+  <div class="jd-card mb-3"><div class="jd-card-body">
+    <button class="btn btn-brand" onclick="loadArrears()"><i class="bi bi-search me-1"></i>Generate Arrears Report</button>
+  </div></div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-4"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div class="stat-body"><div class="stat-label">Total Arrears</div><div class="stat-value" id="arrTotal">—</div></div></div></div>
+    <div class="col-md-4"><div class="stat-card"><div class="stat-icon gold"><i class="bi bi-file-earmark-bar-graph"></i></div>
+      <div class="stat-body"><div class="stat-label">Overdue Accounts</div><div class="stat-value" id="arrCount">—</div></div></div></div>
+  </div>
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-bar-chart" style="color:var(--danger)"></i>Arrears Aging</div></div>
+        <div class="jd-card-body"><canvas id="arrAgingChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Arrears Report</div></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Loan No.</th><th>Borrower</th><th>Installment</th><th>Due Date</th><th>Amount Due</th><th>Days Overdue</th><th>Outstanding</th></tr></thead>
+      <tbody id="arrTable"><tr><td colspan="7" class="text-center p-4 text-muted">Click Generate to load</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- Collections Report -->
+<div id="collectionsRep" class="d-none">
+  <div class="jd-card mb-3"><div class="jd-card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3"><label class="form-label">From</label><input type="date" class="form-control" id="colFrom" /></div>
+      <div class="col-md-3"><label class="form-label">To</label><input type="date" class="form-control" id="colTo" /></div>
+      <div class="col-md-3"><button class="btn btn-brand w-100" onclick="loadCollections()"><i class="bi bi-search me-1"></i>Generate</button></div>
+      <div class="col-md-3"><button class="btn btn-brand-outline w-100" onclick="exportCollectionsCsv()"><i class="bi bi-filetype-csv me-1"></i>CSV</button></div>
+    </div>
+  </div></div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-4"><div class="stat-card"><div class="stat-icon green"><i class="bi bi-cash"></i></div>
+      <div class="stat-body"><div class="stat-label">Total Collected</div><div class="stat-value" id="colTotal">—</div></div></div></div>
+    <div class="col-md-4"><div class="stat-card"><div class="stat-icon blue"><i class="bi bi-arrow-repeat"></i></div>
+      <div class="stat-body"><div class="stat-label">Transactions</div><div class="stat-value" id="colCount">—</div></div></div></div>
+  </div>
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-5">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-pie-chart" style="color:var(--brand-light)"></i>Collections by Method</div></div>
+        <div class="jd-card-body"><canvas id="colMethodChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-7">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-graph-up" style="color:var(--brand-mid)"></i>Daily Collections</div></div>
+        <div class="jd-card-body"><canvas id="colDailyChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Collection Report</div></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Receipt No.</th><th>Loan No.</th><th>Amount</th><th>Method</th><th>Date</th></tr></thead>
+      <tbody id="colTable"><tr><td colspan="5" class="text-center p-4 text-muted">Click Generate</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- Members Report -->
+<div id="membersRep" class="d-none">
+  <div class="jd-card mb-3"><div class="jd-card-body">
+    <div class="d-flex gap-2">
+      <button class="btn btn-brand" onclick="loadMemberReport()"><i class="bi bi-search me-1"></i>Generate</button>
+      <button class="btn btn-brand-outline" onclick="API.download('/reports/api/export/members/excel','members_report.xlsx').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+      <button class="btn btn-brand-outline" onclick="API.download('/reports/api/export/members/csv','members_report.csv').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+    </div>
+  </div></div>
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-5">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-pie-chart" style="color:var(--brand-light)"></i>Members by Status</div></div>
+        <div class="jd-card-body"><canvas id="memStatusChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-7">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-bar-chart" style="color:var(--brand-mid)"></i>Members by Region</div></div>
+        <div class="jd-card-body"><canvas id="memRegionChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Member Report <span id="memBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-dark)"></span></div></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Member No.</th><th>Name</th><th>Phone</th><th>Region</th><th>Occupation</th><th>Status</th><th>Joined</th></tr></thead>
+      <tbody id="memTable"><tr><td colspan="7" class="text-center p-4 text-muted">Click Generate</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- Regional Performance Report -->
+<div id="regionalRep" class="d-none">
+  <div class="jd-card mb-3"><div class="jd-card-body">
+    <div class="d-flex gap-2">
+      <button class="btn btn-brand" onclick="loadRegionalReport()"><i class="bi bi-search me-1"></i>Generate</button>
+      <button class="btn btn-brand-outline" onclick="API.download('/reports/api/export/regional/excel','regional_performance.xlsx').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+      <button class="btn btn-brand-outline" onclick="API.download('/reports/api/export/regional/csv','regional_performance.csv').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+    </div>
+  </div></div>
+  <div class="row g-3 mb-3" id="regSummary"></div>
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-7">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-bar-chart" style="color:var(--brand-mid)"></i>Outstanding vs Collected by Region</div></div>
+        <div class="jd-card-body"><canvas id="regOutstandingChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-5">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-exclamation-triangle" style="color:var(--danger)"></i>Portfolio at Risk by Region</div></div>
+        <div class="jd-card-body"><canvas id="regParChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+  </div>
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Regional Performance <span id="regBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-dark)"></span></div></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Region</th><th>Members</th><th>Active/Total Loans</th><th>Principal</th><th>Outstanding</th><th>Collected</th><th>Arrears</th><th>PAR%</th><th>Collection Rate</th></tr></thead>
+      <tbody id="regTable"><tr><td colspan="9" class="text-center p-4 text-muted">Click Generate</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const today = new Date().toISOString().split('T')[0];
+const firstDay = new Date(new Date().setDate(1)).toISOString().split('T')[0];
+document.getElementById('lrFrom').value = firstDay;
+document.getElementById('lrTo').value = today;
+document.getElementById('colFrom').value = firstDay;
+document.getElementById('colTo').value = today;
+
+// Charts get rebuilt every time a report is (re)generated -- Chart.js
+// throws if you create a new chart on a canvas that already has one
+// attached, so we keep a handle per canvas id and destroy it first.
+const reportCharts = {};
+function renderChart(canvasId, config) {
+  if (reportCharts[canvasId]) reportCharts[canvasId].destroy();
+  reportCharts[canvasId] = new Chart(document.getElementById(canvasId).getContext('2d'), config);
+}
+const CHART_PALETTE = ['#4C9FE8','#52B788','#F4A261','#E63946','#7C3AED','#0F766E','#9CA3AF','#E9C46A'];
+const STATUS_COLORS = {
+  active:'#52B788', completed:'#4C9FE8', pending:'#F4A261', approved:'#4895EF',
+  rejected:'#E63946', defaulted:'#E63946', suspended:'#9CA3AF', closed:'#9CA3AF'
+};
+
+function showRep(tab, el) {
+  document.querySelectorAll('.nav-link').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  ['loans','arrears','collections','members','regional'].forEach(t=>document.getElementById(t+'Rep').classList.toggle('d-none',t!==tab));
+}
+
+async function loadLoanReport() {
+  const status=document.getElementById('lrStatus').value, from=document.getElementById('lrFrom').value, to=document.getElementById('lrTo').value;
+  const tbody=document.getElementById('lrTable');
+  tbody.innerHTML='<tr><td colspan="7" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data=await API.get(`/reports/api/loan-report?status=${status}&date_from=${from}&date_to=${to}`);
+    document.getElementById('lrBadge').textContent=data.summary.total+' loans';
+    const s=data.summary;
+    document.getElementById('lrSummary').innerHTML=`
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon blue"><i class="bi bi-hash"></i></div><div class="stat-body"><div class="stat-label">Total Loans</div><div class="stat-value">${s.total}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon green"><i class="bi bi-cash-coin"></i></div><div class="stat-body"><div class="stat-label">Total Principal</div><div class="stat-value" style="font-size:18px">${fmtCurrency(s.total_principal)}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-exclamation-circle"></i></div><div class="stat-body"><div class="stat-label">Outstanding</div><div class="stat-value" style="font-size:18px">${fmtCurrency(s.total_outstanding)}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card gold"><div class="stat-icon gold"><i class="bi bi-check-circle"></i></div><div class="stat-body"><div class="stat-label">Total Collected</div><div class="stat-value" style="font-size:18px">${fmtCurrency(s.total_collected)}</div></div></div></div>`;
+
+    const statusEntries = Object.entries(data.by_status || {});
+    renderChart('lrStatusChart', {
+      type: 'doughnut',
+      data: { labels: statusEntries.map(([k])=>k), datasets: [{ data: statusEntries.map(([,v])=>v),
+        backgroundColor: statusEntries.map(([k])=>STATUS_COLORS[k] || CHART_PALETTE[0]) }] },
+      options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
+    });
+    renderChart('lrAmountsChart', {
+      type: 'bar',
+      data: { labels: ['Principal','Outstanding','Collected'],
+        datasets: [{ data:[s.total_principal, s.total_outstanding, s.total_collected],
+          backgroundColor: ['#4C9FE8','#E63946','#52B788'], borderRadius: 6 }] },
+      options: { responsive:true, plugins:{ legend:{ display:false } },
+        scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
+    });
+
+    tbody.innerHTML=data.loans.map(l=>`<tr>
+      <td><a href="/loans/${l.id}" style="font-weight:600;color:var(--brand-mid);font-size:12px">${escapeHtml(l.loan_number)}</a></td>
+      <td style="font-size:13px">${escapeHtml(l.member_name)}</td>
+      <td style="font-weight:600">${fmtCurrency(l.principal_amount)}</td>
+      <td style="color:var(--danger);font-weight:600">${fmtCurrency(l.outstanding_balance)}</td>
+      <td style="color:var(--brand-light);font-weight:600">${fmtCurrency(l.total_paid)}</td>
+      <td>${statusPill(l.status)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${fmtDate(l.application_date)}</td>
+    </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function loadArrears() {
+  const tbody=document.getElementById('arrTable');
+  tbody.innerHTML='<tr><td colspan="7" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data=await API.get('/reports/api/arrears-report');
+    document.getElementById('arrTotal').textContent=fmtCurrency(data.total_arrears);
+    document.getElementById('arrCount').textContent=data.count;
+
+    const buckets = {'1-30 days':0, '31-60 days':0, '61-90 days':0, '90+ days':0};
+    data.arrears.forEach(a => {
+      const d = a.days_overdue;
+      const key = d<=30 ? '1-30 days' : d<=60 ? '31-60 days' : d<=90 ? '61-90 days' : '90+ days';
+      buckets[key] += a.amount_due;
+    });
+    renderChart('arrAgingChart', {
+      type: 'bar',
+      data: { labels: Object.keys(buckets), datasets: [{ data: Object.values(buckets),
+        backgroundColor: ['#F4A261','#E9C46A','#E63946','#991B1B'], borderRadius: 6 }] },
+      options: { responsive:true, plugins:{ legend:{ display:false } },
+        scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
+    });
+
+    if (!data.arrears.length) { tbody.innerHTML='<tr><td colspan="7"><div class="empty-state"><i class="bi bi-check-circle text-success"></i><p>No arrears — excellent!</p></div></td></tr>'; return; }
+    tbody.innerHTML=data.arrears.map(a=>`<tr style="${a.days_overdue>30?'background:rgba(230,57,70,.04)':''}">
+      <td style="font-weight:600;font-size:12px;color:var(--brand-mid)">${escapeHtml(a.loan_number)}</td>
+      <td style="font-size:13px">${escapeHtml(a.borrower)}</td>
+      <td style="font-size:12px">#${a.installment}</td>
+      <td style="font-size:12px;color:var(--danger)">${fmtDate(a.due_date)}</td>
+      <td style="font-weight:700;color:var(--danger)">${fmtCurrency(a.amount_due)}</td>
+      <td><span class="status-pill ${a.days_overdue>90?'status-rejected':a.days_overdue>30?'status-overdue':'status-suspended'}">${a.days_overdue}d</span></td>
+      <td style="font-weight:600">${fmtCurrency(a.outstanding_balance)}</td>
+    </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+function exportCollectionsCsv() {
+  const from=document.getElementById('colFrom').value, to=document.getElementById('colTo').value;
+  API.download(`/reports/api/export/collections/csv?date_from=${from}&date_to=${to}`, 'collections_report.csv')
+    .then(()=>Toast.success('Downloaded!'));
+}
+
+async function loadCollections() {
+  const from=document.getElementById('colFrom').value, to=document.getElementById('colTo').value;
+  const tbody=document.getElementById('colTable');
+  tbody.innerHTML='<tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data=await API.get(`/reports/api/collection-report?date_from=${from}&date_to=${to}`);
+    document.getElementById('colTotal').textContent=fmtCurrency(data.total);
+    document.getElementById('colCount').textContent=data.count;
+
+    const methodEntries = Object.entries(data.by_method || {});
+    renderChart('colMethodChart', {
+      type: 'doughnut',
+      data: { labels: methodEntries.map(([k])=>k.replace('_',' ')), datasets: [{ data: methodEntries.map(([,v])=>v),
+        backgroundColor: CHART_PALETTE }] },
+      options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
+    });
+
+    const dailyTotals = {};
+    data.repayments.forEach(r => { dailyTotals[r.payment_date] = (dailyTotals[r.payment_date]||0) + r.amount; });
+    const dailyLabels = Object.keys(dailyTotals).sort();
+    renderChart('colDailyChart', {
+      type: 'line',
+      data: { labels: dailyLabels.map(fmtDate), datasets: [{ label:'Collected', data: dailyLabels.map(d=>dailyTotals[d]),
+        borderColor:'#1D5A96', backgroundColor:'rgba(76,159,232,.15)', fill:true, tension:.3 }] },
+      options: { responsive:true, plugins:{ legend:{ display:false } },
+        scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
+    });
+
+    if (!data.repayments.length) { tbody.innerHTML='<tr><td colspan="5"><div class="empty-state"><i class="bi bi-arrow-repeat"></i><p>No collections</p></div></td></tr>'; return; }
+    tbody.innerHTML=data.repayments.map(r=>`<tr>
+      <td style="font-weight:600;font-size:12px;color:var(--brand-mid)">${escapeHtml(r.receipt_number)}</td>
+      <td style="font-size:12px">${escapeHtml(r.loan_number)}</td>
+      <td style="font-weight:700;color:var(--brand-light)">${fmtCurrency(r.amount)}</td>
+      <td style="font-size:12px;text-transform:capitalize">${escapeHtml(r.payment_method.replace('_',' '))}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${fmtDate(r.payment_date)}</td>
+    </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function loadMemberReport() {
+  const tbody=document.getElementById('memTable');
+  tbody.innerHTML='<tr><td colspan="7" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data=await API.get('/reports/api/member-report');
+    document.getElementById('memBadge').textContent=data.total+' members';
+
+    const statusEntries = Object.entries(data.by_status || {});
+    renderChart('memStatusChart', {
+      type: 'doughnut',
+      data: { labels: statusEntries.map(([k])=>k), datasets: [{ data: statusEntries.map(([,v])=>v),
+        backgroundColor: statusEntries.map(([k])=>STATUS_COLORS[k] || CHART_PALETTE[0]) }] },
+      options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
+    });
+
+    const regionEntries = Object.entries(data.by_region || {}).sort((a,b)=>b[1]-a[1]);
+    renderChart('memRegionChart', {
+      type: 'bar',
+      data: { labels: regionEntries.map(([k])=>k), datasets: [{ data: regionEntries.map(([,v])=>v),
+        backgroundColor: '#4C9FE8', borderRadius: 6 }] },
+      options: { responsive:true, plugins:{ legend:{ display:false } }, scales: { y: { beginAtZero:true } } }
+    });
+
+    tbody.innerHTML=data.members.map(m=>`<tr>
+      <td><a href="/members/${m.id}" style="font-weight:600;color:var(--brand-mid);font-size:12px">${escapeHtml(m.member_number)}</a></td>
+      <td style="font-size:13px">${escapeHtml(m.full_name)}</td>
+      <td style="font-size:13px">${escapeHtml(m.phone)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.region||'—')}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.occupation||'—')}</td>
+      <td>${statusPill(m.status)}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${fmtDate(m.created_at)}</td>
+    </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function loadRegionalReport() {
+  const tbody=document.getElementById('regTable');
+  tbody.innerHTML='<tr><td colspan="9" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data=await API.get('/reports/api/regional-performance');
+    const t=data.totals;
+    document.getElementById('regBadge').textContent=t.region_count+' regions';
+    document.getElementById('regSummary').innerHTML=`
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon blue"><i class="bi bi-people"></i></div><div class="stat-body"><div class="stat-label">Members Reached</div><div class="stat-value">${t.member_count}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-exclamation-circle"></i></div><div class="stat-body"><div class="stat-label">Outstanding</div><div class="stat-value" style="font-size:18px">${fmtCurrency(t.total_outstanding)}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card gold"><div class="stat-icon gold"><i class="bi bi-check-circle"></i></div><div class="stat-body"><div class="stat-label">Total Collected</div><div class="stat-value" style="font-size:18px">${fmtCurrency(t.total_collected)}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon purple"><i class="bi bi-clock-history"></i></div><div class="stat-body"><div class="stat-label">Total Arrears</div><div class="stat-value" style="font-size:18px">${fmtCurrency(t.arrears_amount)}</div></div></div></div>`;
+
+    const regions = data.regions;
+    renderChart('regOutstandingChart', {
+      type: 'bar',
+      data: { labels: regions.map(r=>r.region), datasets: [
+        { label:'Outstanding', data: regions.map(r=>r.total_outstanding), backgroundColor:'#E63946', borderRadius:6 },
+        { label:'Collected', data: regions.map(r=>r.total_collected), backgroundColor:'#52B788', borderRadius:6 },
+      ] },
+      options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } },
+        scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
+    });
+
+    renderChart('regParChart', {
+      type: 'bar',
+      data: { labels: regions.map(r=>r.region), datasets: [{ label:'PAR %', data: regions.map(r=>r.par_pct),
+        backgroundColor: regions.map(r=>r.par_pct>20?'#E63946':r.par_pct>5?'#F4A261':'#52B788'), borderRadius: 6 }] },
+      options: { responsive:true, plugins:{ legend:{ display:false } },
+        scales: { y: { beginAtZero:true, ticks:{ callback:v=>v+'%' } } } }
+    });
+
+    if (!regions.length) { tbody.innerHTML='<tr><td colspan="9"><div class="empty-state"><i class="bi bi-geo-alt"></i><p>No regional data yet</p></div></td></tr>'; return; }
+    tbody.innerHTML=regions.map(r=>`<tr>
+      <td style="font-weight:600;font-size:13px">${escapeHtml(r.region)}</td>
+      <td style="font-size:13px">${r.member_count}</td>
+      <td style="font-size:13px">${r.active_loan_count} / ${r.loan_count}</td>
+      <td style="font-weight:600">${fmtCurrency(r.total_principal)}</td>
+      <td style="color:var(--danger);font-weight:600">${fmtCurrency(r.total_outstanding)}</td>
+      <td style="color:var(--brand-light);font-weight:600">${fmtCurrency(r.total_collected)}</td>
+      <td style="font-size:13px;color:${r.arrears_amount>0?'var(--danger)':'var(--text-muted)'}">${fmtCurrency(r.arrears_amount)}</td>
+      <td><span class="status-pill ${r.par_pct>20?'status-rejected':r.par_pct>5?'status-overdue':'status-active'}">${r.par_pct}%</span></td>
+      <td style="font-size:13px">${r.collection_rate_pct}%</td>
+    </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+</script>{% endblock %}

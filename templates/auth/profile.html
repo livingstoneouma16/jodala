@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}My Profile — Jodala Microfinance{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div><h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">My Profile</h4>
+  <p class="text-muted mb-0" style="font-size:13px">Manage your account information and security</p></div>
+</div>
+<div class="row g-3 justify-content-center">
+  <div class="col-12 col-lg-7">
+    <!-- Profile Info -->
+    <div class="jd-card mb-3">
+      <div class="jd-card-header">
+        <div class="jd-card-title"><i class="bi bi-person-fill" style="color:var(--brand-light)"></i>Personal Information</div>
+      </div>
+      <div class="jd-card-body">
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <div style="width:64px;height:64px;border-radius:50%;background:var(--brand-mid);display:grid;place-items:center;font-size:26px;font-weight:700;color:#fff;flex-shrink:0">
+            {{ user.full_name[0] if user else 'U' }}
+          </div>
+          <div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px">{{ user.full_name if user else '' }}</div>
+            <div style="font-size:13px;color:var(--text-muted)">{{ user.role.replace('_',' ').title() if user else '' }}</div>
+            <div style="font-size:12px;color:var(--text-muted)">Member since {{ user.created_at|fmtdate('%B %Y') if user else '' }}</div>
+          </div>
+        </div>
+        <form id="profileForm">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Full Name</label>
+              <input type="text" class="form-control" name="full_name" value="{{ user.full_name if user else '' }}" required />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-control" value="{{ user.username if user else '' }}" disabled style="background:var(--surface-2)" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Email Address</label>
+              <input type="email" class="form-control" name="email" value="{{ user.email if user else '' }}" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Phone Number</label>
+              <input type="tel" class="form-control" name="phone" value="{{ user.phone if user else '' }}" />
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-brand" id="saveProfileBtn">
+              <i class="bi bi-save me-1"></i>Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Change Password -->
+    <div class="jd-card mb-3">
+      <div class="jd-card-header">
+        <div class="jd-card-title"><i class="bi bi-lock-fill" style="color:var(--gold)"></i>Change Password</div>
+      </div>
+      <div class="jd-card-body">
+        <form id="passwordForm">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Current Password</label>
+              <input type="password" class="form-control" id="curPwd" placeholder="Enter current password" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">New Password</label>
+              <input type="password" class="form-control" id="newPwd" placeholder="New password (min 8 chars)" />
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Confirm New Password</label>
+              <input type="password" class="form-control" id="confPwd" placeholder="Repeat new password" />
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-brand-outline" id="changePwdBtn">
+              <i class="bi bi-shield-lock me-1"></i>Change Password
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 2FA -->
+    <div class="jd-card">
+      <div class="jd-card-header">
+        <div class="jd-card-title"><i class="bi bi-shield-check-fill" style="color:var(--brand-light)"></i>Two-Factor Authentication</div>
+        <span class="status-pill {% if user and user.totp_enabled %}status-active{% else %}status-suspended{% endif %}">
+          {% if user and user.totp_enabled %}Enabled{% else %}Disabled{% endif %}
+        </span>
+      </div>
+      <div class="jd-card-body">
+        {% if user and user.totp_enabled %}
+        <p style="font-size:13px;color:var(--text-muted)">Two-factor authentication is currently enabled. Your account is protected.</p>
+        <button class="btn btn-danger btn-sm" onclick="disable2FA()"><i class="bi bi-shield-x me-1"></i>Disable 2FA</button>
+        {% else %}
+        <p style="font-size:13px;color:var(--text-muted)">Enable two-factor authentication to add an extra layer of security to your account.</p>
+        <button class="btn btn-brand btn-sm" onclick="setup2FA()"><i class="bi bi-shield-plus me-1"></i>Enable 2FA</button>
+        {% endif %}
+        <div id="tfaSetup" class="mt-3 d-none">
+          <div class="alert alert-info" style="font-size:13px">
+            <strong>Setup Instructions:</strong><br>
+            1. Scan the QR code below with Google Authenticator or Authy<br>
+            2. Enter the 6-digit code to confirm
+          </div>
+          <div class="text-center mb-3" id="qrContainer"></div>
+          <div class="d-flex gap-2">
+            <input type="text" class="form-control" id="totpVerify" placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" />
+            <button class="btn btn-brand" onclick="verify2FA()">Verify & Enable</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+let totpSecret = null;
+
+document.getElementById('profileForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('saveProfileBtn');
+  setLoading(btn, true);
+  const body = Object.fromEntries(new FormData(this).entries());
+  try {
+    await API.put('/auth/profile', body);
+    Toast.success('Profile updated successfully!');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+});
+
+document.getElementById('passwordForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const newPwd = document.getElementById('newPwd').value;
+  const confPwd = document.getElementById('confPwd').value;
+  if (newPwd !== confPwd) { Toast.error('Passwords do not match'); return; }
+  if (newPwd.length < 8) { Toast.error('Password must be at least 8 characters'); return; }
+  const btn = document.getElementById('changePwdBtn');
+  setLoading(btn, true);
+  try {
+    await API.put('/auth/profile', { new_password: newPwd });
+    Toast.success('Password changed successfully!');
+    document.getElementById('curPwd').value = '';
+    document.getElementById('newPwd').value = '';
+    document.getElementById('confPwd').value = '';
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+});
+
+async function setup2FA() {
+  try {
+    const data = await API.get('/auth/setup-2fa');
+    totpSecret = data.secret;
+    document.getElementById('tfaSetup').classList.remove('d-none');
+    // Generate QR code display
+    document.getElementById('qrContainer').innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Or enter this key manually:</div>
+      <code style="background:var(--surface-2);padding:6px 12px;border-radius:6px;font-size:13px;letter-spacing:.1em">${escapeHtml(data.secret)}</code>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Provisioning URI: <a href="${escapeHtml(data.provisioning_uri)}" style="font-size:10px;word-break:break-all">${escapeHtml(data.provisioning_uri)}</a></div>`;
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function verify2FA() {
+  const code = document.getElementById('totpVerify').value;
+  if (!code || code.length !== 6) { Toast.warning('Enter the 6-digit code'); return; }
+  try {
+    await API.post('/auth/setup-2fa', { secret: totpSecret, code });
+    Toast.success('Two-factor authentication enabled!');
+    setTimeout(() => location.reload(), 1500);
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function disable2FA() {
+  const pwd = prompt('Enter your password to disable 2FA:');
+  if (!pwd) return;
+  try {
+    await API.post('/auth/disable-2fa', { password: pwd });
+    Toast.success('2FA disabled');
+    setTimeout(() => location.reload(), 1500);
+  } catch(e) { Toast.error(e.message); }
+}
+</script>{% endblock %}

@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+{% block title %}Accounting — Jodala Microfinance{% endblock %}
+{% block page_title %}Accounting{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div><h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">Accounting</h4>
+  <p class="text-muted mb-0" style="font-size:13px">Income, expenses, and financial statements</p></div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-brand" data-bs-toggle="modal" data-bs-target="#incomeModal"><i class="bi bi-plus me-1"></i>Record Income</button>
+    <button class="btn btn-brand-outline" data-bs-toggle="modal" data-bs-target="#expenseModal"><i class="bi bi-dash me-1"></i>Record Expense</button>
+  </div>
+</div>
+
+<!-- Nav Tabs -->
+<ul class="nav nav-tabs border-0 gap-1 mb-3">
+  <li class="nav-item"><button class="nav-link active" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('overview',this)">Overview</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('income',this)">Income</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('expenses',this)">Expenses</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('journal',this)">Journal</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('trial',this)">Trial Balance</button></li>
+</ul>
+
+<!-- Overview Tab -->
+<div id="overviewTab">
+  <div class="row g-3 mb-3">
+    <div class="col-md-4"><div class="stat-card"><div class="stat-icon green"><i class="bi bi-arrow-down-circle-fill"></i></div>
+      <div class="stat-body"><div class="stat-label">Monthly Income</div><div class="stat-value" id="plIncome">—</div></div></div></div>
+    <div class="col-md-4"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-arrow-up-circle-fill"></i></div>
+      <div class="stat-body"><div class="stat-label">Monthly Expenses</div><div class="stat-value" id="plExpenses">—</div></div></div></div>
+    <div class="col-md-4"><div class="stat-card gold"><div class="stat-icon gold"><i class="bi bi-graph-up"></i></div>
+      <div class="stat-body"><div class="stat-label">Net Profit</div><div class="stat-value" id="plProfit">—</div></div></div></div>
+  </div>
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-bar-chart" style="color:var(--brand-light)"></i>Income by Category</div></div>
+        <div class="jd-card-body"><canvas id="incomeChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-bar-chart" style="color:var(--danger)"></i>Expenses by Category</div></div>
+        <div class="jd-card-body"><canvas id="expenseChart" style="max-height:220px"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Income Tab -->
+<div id="incomeTab" class="d-none">
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Income Records</div>
+      <div id="incomeTotalDisplay" style="font-weight:700;color:var(--brand-mid)"></div></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Reference</th><th>Description</th><th>Category</th><th>Amount</th><th>Method</th><th>Date</th></tr></thead>
+      <tbody id="incomeTable"><tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- Expenses Tab -->
+<div id="expensesTab" class="d-none">
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Expense Records</div></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Reference</th><th>Description</th><th>Category</th><th>Amount</th><th>Vendor</th><th>Date</th></tr></thead>
+      <tbody id="expenseTable"><tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- Journal Tab -->
+<div id="journalTab" class="d-none">
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Journal Entries</div>
+      <button class="btn btn-brand btn-sm" data-bs-toggle="modal" data-bs-target="#journalModal"><i class="bi bi-plus me-1"></i>New Entry</button></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Entry No.</th><th>Description</th><th>Reference</th><th>Date</th></tr></thead>
+      <tbody id="journalTable"><tr><td colspan="4" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- Trial Balance Tab -->
+<div id="trialTab" class="d-none">
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Trial Balance</div>
+      <button class="btn btn-brand-outline btn-sm" onclick="loadTrialBalance()"><i class="bi bi-arrow-repeat me-1"></i>Refresh</button></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Code</th><th>Account Name</th><th>Type</th><th>Debit</th><th>Credit</th></tr></thead>
+      <tbody id="trialTable"><tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+      <tfoot id="trialFoot"></tfoot>
+    </table></div>
+  </div>
+</div>
+
+<!-- Income Modal -->
+<div class="modal fade" id="incomeModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title">Record Income</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12"><label class="form-label">Description <span class="text-danger">*</span></label><input type="text" class="form-control" id="incDesc" placeholder="Income description" /></div>
+          <div class="col-md-6"><label class="form-label">Category</label>
+            <select class="form-select" id="incCat"><option value="interest">Interest Income</option><option value="fees">Fees</option><option value="penalties">Penalties</option><option value="other">Other</option></select></div>
+          <div class="col-md-6"><label class="form-label">Amount (Ksh) <span class="text-danger">*</span></label><input type="number" class="form-control" id="incAmt" step="0.01" placeholder="0.00" /></div>
+          <div class="col-md-6"><label class="form-label">Date</label><input type="date" class="form-control" id="incDate" /></div>
+          <div class="col-md-6"><label class="form-label">Payment Method</label>
+            <select class="form-select" id="incMethod"><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile Money</option></select></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-brand" id="incBtn" onclick="saveIncome()">Save Income</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Expense Modal -->
+<div class="modal fade" id="expenseModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title">Record Expense</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12"><label class="form-label">Description <span class="text-danger">*</span></label><input type="text" class="form-control" id="expDesc" placeholder="Expense description" /></div>
+          <div class="col-md-6"><label class="form-label">Category</label>
+            <select class="form-select" id="expCat"><option value="salaries">Salaries</option><option value="rent">Rent & Utilities</option><option value="supplies">Supplies</option><option value="transport">Transport</option><option value="marketing">Marketing</option><option value="other">Other</option></select></div>
+          <div class="col-md-6"><label class="form-label">Amount (Ksh) <span class="text-danger">*</span></label><input type="number" class="form-control" id="expAmt" step="0.01" placeholder="0.00" /></div>
+          <div class="col-md-6"><label class="form-label">Date</label><input type="date" class="form-control" id="expDate" /></div>
+          <div class="col-md-6"><label class="form-label">Vendor</label><input type="text" class="form-control" id="expVendor" placeholder="Vendor name" /></div>
+          <div class="col-md-6"><label class="form-label">Payment Method</label>
+            <select class="form-select" id="expMethod"><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile Money</option></select></div>
+          <div class="col-md-6"><label class="form-label">Receipt Ref.</label><input type="text" class="form-control" id="expReceipt" placeholder="Receipt number" /></div>
+        </div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-brand" id="expBtn" onclick="saveExpense()">Save Expense</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Journal Entry Modal -->
+<div class="modal fade" id="journalModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title">New Journal Entry</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3 mb-2">
+          <div class="col-md-8"><label class="form-label">Description <span class="text-danger">*</span></label><input type="text" class="form-control" id="jnlDesc" placeholder="What is this entry for?" /></div>
+          <div class="col-md-4"><label class="form-label">Date</label><input type="date" class="form-control" id="jnlDate" /></div>
+          <div class="col-12"><label class="form-label">Reference</label><input type="text" class="form-control" id="jnlRef" placeholder="Optional reference" /></div>
+        </div>
+        <hr>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <label class="form-label mb-0">Lines <span class="text-danger">*</span></label>
+          <button type="button" class="btn btn-sm btn-brand-outline" onclick="addJournalLine()"><i class="bi bi-plus"></i> Add Line</button>
+        </div>
+        <div id="jnlLines"></div>
+        <p class="text-muted mb-0" style="font-size:12px">Each line debits one account and credits another for the same amount, so every line balances on its own.</p>
+      </div>
+      <div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-brand" id="jnlBtn" onclick="saveJournalEntry()">Save Entry</button></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('incDate').value = today;
+document.getElementById('expDate').value = today;
+document.getElementById('jnlDate').value = today;
+
+function showAccTab(tab, el) {
+  document.querySelectorAll('.nav-link').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  ['overview','income','expenses','journal','trial'].forEach(t => {
+    document.getElementById(t+'Tab').classList.toggle('d-none', t!==tab);
+  });
+  if (tab==='income') loadIncome();
+  else if (tab==='expenses') loadExpenses();
+  else if (tab==='journal') loadJournal();
+  else if (tab==='trial') loadTrialBalance();
+}
+
+async function loadPL() {
+  try {
+    const data = await API.get('/accounting/api/profit-loss');
+    document.getElementById('plIncome').textContent = fmtCurrency(data.total_income + data.interest_income);
+    document.getElementById('plExpenses').textContent = fmtCurrency(data.total_expenses);
+    document.getElementById('plProfit').textContent = fmtCurrency(data.net_profit);
+
+    // Income chart
+    if (data.income.length) {
+      new Chart(document.getElementById('incomeChart').getContext('2d'), {
+        type:'doughnut',
+        data:{ labels:data.income.map(i=>i.category), datasets:[{data:data.income.map(i=>i.amount), backgroundColor:['#52B788','#4895EF','#E9C46A','#F4A261']}] },
+        options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
+      });
+    }
+    if (data.expenses.length) {
+      new Chart(document.getElementById('expenseChart').getContext('2d'), {
+        type:'doughnut',
+        data:{ labels:data.expenses.map(e=>e.category), datasets:[{data:data.expenses.map(e=>e.amount), backgroundColor:['#E63946','#F4A261','#4895EF','#7C3AED','#0F766E','#9CA3AF']}] },
+        options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
+      });
+    }
+  } catch(e) {}
+}
+
+async function loadIncome() {
+  const tbody = document.getElementById('incomeTable');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data = await API.get('/accounting/api/income?per_page=50');
+    document.getElementById('incomeTotalDisplay').textContent = 'Total: ' + fmtCurrency(data.total_amount);
+    if (!data.income.length) { tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><i class="bi bi-receipt"></i><p>No income recorded</p></div></td></tr>'; return; }
+    tbody.innerHTML = data.income.map(i=>`<tr>
+      <td style="font-weight:600;font-size:12px;color:var(--brand-mid)">${escapeHtml(i.reference)}</td>
+      <td style="font-size:13px">${escapeHtml(i.description)}</td>
+      <td><span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px">${escapeHtml(i.category)}</span></td>
+      <td style="font-weight:700;color:var(--brand-mid)">${fmtCurrency(i.amount)}</td>
+      <td style="font-size:12px;text-transform:capitalize">${escapeHtml(i.payment_method.replace('_',' '))}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${fmtDate(i.income_date)}</td>
+    </tr>`).join('');
+  } catch(e) {}
+}
+
+async function loadExpenses() {
+  const tbody = document.getElementById('expenseTable');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data = await API.get('/accounting/api/expenses?per_page=50');
+    if (!data.expenses.length) { tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><i class="bi bi-receipt-cutoff"></i><p>No expenses recorded</p></div></td></tr>'; return; }
+    tbody.innerHTML = data.expenses.map(e=>`<tr>
+      <td style="font-weight:600;font-size:12px;color:var(--danger)">${escapeHtml(e.reference)}</td>
+      <td style="font-size:13px">${escapeHtml(e.description)}</td>
+      <td><span class="badge" style="background:#FFE4E6;color:#991B1B;font-size:10px">${escapeHtml(e.category)}</span></td>
+      <td style="font-weight:700;color:var(--danger)">${fmtCurrency(e.amount)}</td>
+      <td style="font-size:12px">${escapeHtml(e.vendor||'—')}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${fmtDate(e.expense_date)}</td>
+    </tr>`).join('');
+  } catch(e) {}
+}
+
+async function loadJournal() {
+  const tbody = document.getElementById('journalTable');
+  tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data = await API.get('/accounting/api/journal');
+    if (!data.length) { tbody.innerHTML='<tr><td colspan="4"><div class="empty-state"><i class="bi bi-journal"></i><p>No journal entries</p></div></td></tr>'; return; }
+    tbody.innerHTML = data.map(j=>{
+      const lineSummary = (j.lines||[]).map(l =>
+        `Dr ${escapeHtml(l.debit_account_code||'')} ${escapeHtml(l.debit_account_name||'')} / Cr ${escapeHtml(l.credit_account_code||'')} ${escapeHtml(l.credit_account_name||'')} — ${fmtCurrency(l.amount)}`
+      ).join('<br>');
+      return `<tr>
+      <td style="font-weight:600;font-size:12px">${escapeHtml(j.entry_number)}</td>
+      <td style="font-size:13px">${escapeHtml(j.description)}<br><span style="font-size:11px;color:var(--text-muted)">${lineSummary}</span></td>
+      <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(j.reference||'—')}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${fmtDate(j.entry_date)}</td>
+    </tr>`;
+    }).join('');
+  } catch(e) {}
+}
+
+let jnlAccounts = [];
+let jnlLineCount = 0;
+
+async function loadJournalAccounts() {
+  if (jnlAccounts.length) return jnlAccounts;
+  try { jnlAccounts = await API.get('/accounting/api/accounts'); } catch(e) { jnlAccounts = []; }
+  return jnlAccounts;
+}
+
+function accountOptions(selectedId) {
+  return jnlAccounts.map(a =>
+    `<option value="${a.id}" ${String(a.id)===String(selectedId)?'selected':''}>${escapeHtml(a.code)} — ${escapeHtml(a.name)}</option>`
+  ).join('');
+}
+
+async function addJournalLine() {
+  await loadJournalAccounts();
+  jnlLineCount++;
+  const id = jnlLineCount;
+  const row = document.createElement('div');
+  row.className = 'row g-2 align-items-end mb-2 jnl-line';
+  row.dataset.lineId = id;
+  row.innerHTML = `
+    <div class="col-4"><label class="form-label" style="font-size:11px">Debit Account</label>
+      <select class="form-select form-select-sm jnl-debit">${accountOptions()}</select></div>
+    <div class="col-4"><label class="form-label" style="font-size:11px">Credit Account</label>
+      <select class="form-select form-select-sm jnl-credit">${accountOptions()}</select></div>
+    <div class="col-3"><label class="form-label" style="font-size:11px">Amount (Ksh)</label>
+      <input type="number" class="form-control form-control-sm jnl-amount" step="0.01" placeholder="0.00" /></div>
+    <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeJournalLine(${id})"><i class="bi bi-trash"></i></button></div>`;
+  document.getElementById('jnlLines').appendChild(row);
+}
+
+function removeJournalLine(id) {
+  const row = document.querySelector(`.jnl-line[data-line-id="${id}"]`);
+  if (row) row.remove();
+}
+
+function resetJournalForm() {
+  document.getElementById('jnlDesc').value = '';
+  document.getElementById('jnlRef').value = '';
+  document.getElementById('jnlLines').innerHTML = '';
+  jnlLineCount = 0;
+  addJournalLine();
+}
+
+async function saveJournalEntry() {
+  const btn = document.getElementById('jnlBtn');
+  const lines = Array.from(document.querySelectorAll('#jnlLines .jnl-line')).map(row => ({
+    debit_account_id: row.querySelector('.jnl-debit').value,
+    credit_account_id: row.querySelector('.jnl-credit').value,
+    amount: row.querySelector('.jnl-amount').value
+  }));
+  setLoading(btn, true);
+  try {
+    await API.post('/accounting/api/journal', {
+      description: document.getElementById('jnlDesc').value,
+      entry_date: document.getElementById('jnlDate').value,
+      reference: document.getElementById('jnlRef').value,
+      lines
+    });
+    Toast.success('Journal entry created!');
+    bootstrap.Modal.getInstance(document.getElementById('journalModal')).hide();
+    resetJournalForm();
+    loadJournal();
+    loadTrialBalance();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+document.getElementById('journalModal').addEventListener('show.bs.modal', resetJournalForm);
+
+async function loadTrialBalance() {
+  const tbody = document.getElementById('trialTable');
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data = await API.get('/accounting/api/trial-balance');
+    tbody.innerHTML = data.accounts.map(a=>`<tr>
+      <td style="font-size:12px;font-weight:600">${escapeHtml(a.code)}</td>
+      <td style="font-size:13px">${escapeHtml(a.name)}</td>
+      <td><span class="badge" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted);font-size:10px">${escapeHtml(a.type)}</span></td>
+      <td style="font-weight:600;color:var(--brand-mid)">${a.debit > 0 ? fmtCurrency(a.debit) : '—'}</td>
+      <td style="font-weight:600;color:var(--danger)">${a.credit > 0 ? fmtCurrency(a.credit) : '—'}</td>
+    </tr>`).join('');
+    document.getElementById('trialFoot').innerHTML = `<tr style="background:var(--surface-2);font-weight:700">
+      <td colspan="3">TOTALS</td>
+      <td style="color:var(--brand-mid)">${fmtCurrency(data.total_debit)}</td>
+      <td style="color:var(--danger)">${fmtCurrency(data.total_credit)}</td>
+    </tr>`;
+  } catch(e) {}
+}
+
+async function saveIncome() {
+  const btn = document.getElementById('incBtn');
+  setLoading(btn, true);
+  try {
+    await API.post('/accounting/api/income', {
+      description: document.getElementById('incDesc').value,
+      category: document.getElementById('incCat').value,
+      amount: document.getElementById('incAmt').value,
+      income_date: document.getElementById('incDate').value,
+      payment_method: document.getElementById('incMethod').value
+    });
+    Toast.success('Income recorded!');
+    bootstrap.Modal.getInstance(document.getElementById('incomeModal')).hide();
+    loadPL();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function saveExpense() {
+  const btn = document.getElementById('expBtn');
+  setLoading(btn, true);
+  try {
+    await API.post('/accounting/api/expenses', {
+      description: document.getElementById('expDesc').value,
+      category: document.getElementById('expCat').value,
+      amount: document.getElementById('expAmt').value,
+      expense_date: document.getElementById('expDate').value,
+      vendor: document.getElementById('expVendor').value,
+      payment_method: document.getElementById('expMethod').value,
+      receipt_ref: document.getElementById('expReceipt').value
+    });
+    Toast.success('Expense recorded!');
+    bootstrap.Modal.getInstance(document.getElementById('expenseModal')).hide();
+    loadPL();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+loadPL();
+</script>{% endblock %}

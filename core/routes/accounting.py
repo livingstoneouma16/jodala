@@ -6,7 +6,8 @@ from core.auth import login_required, get_current_user
 from core.serializers import income_public, expense_public, journal_entry_public, account_public, member_full_name
 from core.utils import (generate_journal_number, generate_income_reference,
                         generate_expense_reference, log_audit, paginate,
-                        adjust_main_account_balance, adjust_account_balance)
+                        adjust_main_account_balance, adjust_account_balance,
+                        post_journal_line)
 
 accounting_bp = Blueprint('accounting', __name__)
 
@@ -138,37 +139,92 @@ def record_expense():
 @login_required
 def list_journal():
     entries = get_db().execute("SELECT * FROM journal_entries ORDER BY entry_date DESC LIMIT 50").fetchall()
-    return jsonify([journal_entry_public(e) for e in entries])
+    result = []
+    for e in entries:
+        lines = get_db().execute(
+            """SELECT journal_entry_lines.amount,
+                      journal_entry_lines.description AS line_description,
+                      da.code AS debit_code, da.name AS debit_name,
+                      ca.code AS credit_code, ca.name AS credit_name
+               FROM journal_entry_lines
+               LEFT JOIN accounts da ON da.id = journal_entry_lines.debit_account_id
+               LEFT JOIN accounts ca ON ca.id = journal_entry_lines.credit_account_id
+               WHERE journal_entry_lines.entry_id = %s""",
+            (e['id'],)
+        ).fetchall()
+        result.append(journal_entry_public(e, lines))
+    return jsonify(result)
 
 
 @accounting_bp.route('/api/journal', methods=['POST'])
 @login_required
 def create_journal_entry():
-    data = request.get_json()
+    data = request.get_json() or {}
     user = get_current_user()
 
-    lines = data.get('lines', [])
-    total_debit = sum(l.get('debit', 0) for l in lines)
-    total_credit = sum(l.get('credit', 0) for l in lines)
+    description = (data.get('description') or '').strip()
+    if not description:
+        return jsonify({'error': 'Description is required'}), 400
 
-    if abs(total_debit - total_credit) > 0.01:
-        return jsonify({'error': 'Journal entry must balance (debits = credits)'}), 400
+    lines = data.get('lines', [])
+    if not lines:
+        return jsonify({'error': 'At least one journal line is required'}), 400
+
+    # Each line is a self-contained debit/credit pair (one amount, debited to
+    # one account and credited to another), not separate debit-column /
+    # credit-column rows -- so every line balances by construction. What
+    # still needs checking is that each line is actually well-formed: a
+    # positive amount and two *different* real accounts, or a typo/removed
+    # account or a zero amount would silently post nothing (or, worse, post
+    # a one-sided change) once it reaches post_journal_line.
+    db = get_db()
+    parsed_lines = []
+    for line in lines:
+        try:
+            amount = round(float(line.get('amount', 0)), 2)
+        except (TypeError, ValueError):
+            amount = 0
+        debit_account_id = line.get('debit_account_id')
+        credit_account_id = line.get('credit_account_id')
+
+        if amount <= 0:
+            return jsonify({'error': 'Every journal line needs an amount greater than zero'}), 400
+        if not debit_account_id or not credit_account_id:
+            return jsonify({'error': 'Every journal line needs both a debit and a credit account'}), 400
+        if debit_account_id == credit_account_id:
+            return jsonify({'error': 'A journal line cannot debit and credit the same account'}), 400
+        if not db.execute("SELECT id FROM accounts WHERE id = %s", (debit_account_id,)).fetchone():
+            return jsonify({'error': f'Debit account {debit_account_id} not found'}), 400
+        if not db.execute("SELECT id FROM accounts WHERE id = %s", (credit_account_id,)).fetchone():
+            return jsonify({'error': f'Credit account {credit_account_id} not found'}), 400
+
+        parsed_lines.append({
+            'debit_account_id': debit_account_id, 'credit_account_id': credit_account_id,
+            'amount': amount, 'description': line.get('description', '')
+        })
 
     cur = execute(
-        """INSERT INTO journal_entries (entry_number, description, entry_date, reference, created_by, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s)""",
-        (generate_journal_number(), data.get('description', ''), data.get('entry_date', date.today().isoformat()),
+        """INSERT INTO journal_entries (entry_number, description, entry_date, reference, entry_type, created_by, created_at)
+           VALUES (%s, %s, %s, %s, 'manual', %s, %s)""",
+        (generate_journal_number(), description, data.get('entry_date', date.today().isoformat()),
          data.get('reference'), user['id'], utcnow())
     )
     entry_id = cur.lastrowid
 
-    for line in lines:
+    for line in parsed_lines:
         execute(
             """INSERT INTO journal_entry_lines (entry_id, debit_account_id, credit_account_id, amount, description)
                VALUES (%s, %s, %s, %s, %s)""",
-            (entry_id, line.get('debit_account_id'), line.get('credit_account_id'),
-             float(line.get('amount', 0)), line.get('description', ''))
+            (entry_id, line['debit_account_id'], line['credit_account_id'], line['amount'], line['description'])
         )
+        # This is the step the old version of this endpoint was missing
+        # entirely -- it wrote the journal_entries/journal_entry_lines rows
+        # (so the Journal tab looked fine) but never touched accounts.balance,
+        # so a manual entry had zero effect on the Chart of Accounts / Trial
+        # Balance no matter what it said.
+        post_journal_line(line['debit_account_id'], line['credit_account_id'], line['amount'])
+
+    log_audit('CREATE_JOURNAL_ENTRY', 'journal_entry', entry_id, new_values={'lines': parsed_lines})
 
     entry = get_db().execute("SELECT * FROM journal_entries WHERE id = %s", (entry_id,)).fetchone()
     return jsonify({'message': 'Journal entry created', 'entry': journal_entry_public(entry)}), 201
