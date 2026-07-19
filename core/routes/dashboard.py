@@ -106,35 +106,46 @@ def stats():
     })
 
 
+def _month_window(n_months):
+    """Returns (window_start_date, [first-of-month date, oldest..newest]) for
+    the trailing n_months window ending this month -- shared by the trend
+    endpoints below so they can each fetch their whole window in one or two
+    GROUP BY queries instead of looping month-by-month with a fresh query
+    (or three) per iteration."""
+    today = date.today()
+    months = [add_months(today.replace(day=1), -i) for i in range(n_months - 1, -1, -1)]
+    return months[0], months
+
+
 @dashboard_bp.route('/loan-trend')
 @login_required
 def loan_trend():
-    """Monthly loan disbursement trend - last 12 months"""
+    """Monthly loan disbursement trend - last 12 months.
+
+    Date columns are stored as 'YYYY-MM-DD' text (see database.py), so
+    SUBSTRING(col, 1, 7) directly gives the 'YYYY-MM' bucket to GROUP BY --
+    no date cast needed, and NULL dates (e.g. a loan that's never been
+    disbursed) drop out on their own since they can't satisfy `>= %s`
+    against an actual date string."""
     db = get_db()
-    today = date.today()
-    data = []
+    window_start, months = _month_window(12)
 
-    for i in range(11, -1, -1):
-        month_start = add_months(today.replace(day=1), -i)
-        if month_start.month == 12:
-            next_month = date(month_start.year + 1, 1, 1)
-        else:
-            next_month = date(month_start.year, month_start.month + 1, 1)
+    disbursed_by_month = {r[0]: r[1] for r in db.execute(
+        """SELECT SUBSTRING(disbursement_date, 1, 7) AS ym, COALESCE(SUM(amount_disbursed), 0)
+           FROM loans WHERE disbursement_date >= %s GROUP BY ym""",
+        (window_start.isoformat(),)
+    ).fetchall()}
+    collected_by_month = {r[0]: r[1] for r in db.execute(
+        """SELECT SUBSTRING(payment_date, 1, 7) AS ym, COALESCE(SUM(amount), 0)
+           FROM repayments WHERE payment_date >= %s GROUP BY ym""",
+        (window_start.isoformat(),)
+    ).fetchall()}
 
-        disbursed = db.execute(
-            "SELECT COALESCE(SUM(amount_disbursed), 0) FROM loans WHERE disbursement_date >= %s AND disbursement_date < %s",
-            (month_start.isoformat(), next_month.isoformat())
-        ).fetchone()[0]
-        collected = db.execute(
-            "SELECT COALESCE(SUM(amount), 0) FROM repayments WHERE payment_date >= %s AND payment_date < %s",
-            (month_start.isoformat(), next_month.isoformat())
-        ).fetchone()[0]
-
-        data.append({
-            'month': month_start.strftime('%b %Y'),
-            'disbursed': round(disbursed, 2),
-            'collected': round(collected, 2)
-        })
+    data = [{
+        'month': m.strftime('%b %Y'),
+        'disbursed': round(disbursed_by_month.get(m.strftime('%Y-%m'), 0), 2),
+        'collected': round(collected_by_month.get(m.strftime('%Y-%m'), 0), 2),
+    } for m in months]
 
     return jsonify(data)
 
@@ -149,37 +160,33 @@ def loan_status_distribution():
 @dashboard_bp.route('/income-expense-trend')
 @login_required
 def income_expense_trend():
-    """Monthly income vs expenses - last 6 months"""
+    """Monthly income vs expenses - last 6 months (see loan_trend's docstring
+    for why SUBSTRING-on-text is used for the month bucketing here)."""
     db = get_db()
-    today = date.today()
-    data = []
+    window_start, months = _month_window(6)
 
-    for i in range(5, -1, -1):
-        month_start = add_months(today.replace(day=1), -i)
-        if month_start.month == 12:
-            next_month = date(month_start.year + 1, 1, 1)
-        else:
-            next_month = date(month_start.year, month_start.month + 1, 1)
+    manual_income_by_month = {r[0]: r[1] for r in db.execute(
+        """SELECT SUBSTRING(income_date, 1, 7) AS ym, COALESCE(SUM(amount), 0)
+           FROM income WHERE income_date >= %s GROUP BY ym""",
+        (window_start.isoformat(),)
+    ).fetchall()}
+    repayment_income_by_month = {r[0]: r[1] for r in db.execute(
+        """SELECT SUBSTRING(payment_date, 1, 7) AS ym, COALESCE(SUM(interest_portion + penalty_portion), 0)
+           FROM repayments WHERE payment_date >= %s GROUP BY ym""",
+        (window_start.isoformat(),)
+    ).fetchall()}
+    expenses_by_month = {r[0]: r[1] for r in db.execute(
+        """SELECT SUBSTRING(expense_date, 1, 7) AS ym, COALESCE(SUM(amount), 0)
+           FROM expenses WHERE expense_date >= %s GROUP BY ym""",
+        (window_start.isoformat(),)
+    ).fetchall()}
 
-        manual_income = db.execute(
-            "SELECT COALESCE(SUM(amount), 0) FROM income WHERE income_date >= %s AND income_date < %s",
-            (month_start.isoformat(), next_month.isoformat())
-        ).fetchone()[0]
-        repayment_income = db.execute(
-            """SELECT COALESCE(SUM(interest_portion + penalty_portion), 0)
-               FROM repayments WHERE payment_date >= %s AND payment_date < %s""",
-            (month_start.isoformat(), next_month.isoformat())
-        ).fetchone()[0]
-        expenses = db.execute(
-            "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date >= %s AND expense_date < %s",
-            (month_start.isoformat(), next_month.isoformat())
-        ).fetchone()[0]
-
-        data.append({
-            'month': month_start.strftime('%b %Y'),
-            'income': round(manual_income + repayment_income, 2),
-            'expenses': round(expenses, 2)
-        })
+    data = [{
+        'month': m.strftime('%b %Y'),
+        'income': round(manual_income_by_month.get(m.strftime('%Y-%m'), 0)
+                         + repayment_income_by_month.get(m.strftime('%Y-%m'), 0), 2),
+        'expenses': round(expenses_by_month.get(m.strftime('%Y-%m'), 0), 2),
+    } for m in months]
 
     return jsonify(data)
 
@@ -187,32 +194,27 @@ def income_expense_trend():
 @dashboard_bp.route('/member-growth')
 @login_required
 def member_growth():
-    """New members registered per month - last 6 months"""
+    """New members registered per month - last 6 months (see loan_trend's
+    docstring for why SUBSTRING-on-text is used for the month bucketing)."""
     db = get_db()
-    today = date.today()
-    data = []
+    window_start, months = _month_window(6)
 
-    for i in range(5, -1, -1):
-        month_start = add_months(today.replace(day=1), -i)
-        if month_start.month == 12:
-            next_month = date(month_start.year + 1, 1, 1)
-        else:
-            next_month = date(month_start.year, month_start.month + 1, 1)
+    members_by_month = {r[0]: r[1] for r in db.execute(
+        """SELECT SUBSTRING(created_at, 1, 7) AS ym, COUNT(*)
+           FROM members WHERE created_at >= %s GROUP BY ym""",
+        (window_start.isoformat(),)
+    ).fetchall()}
+    clients_by_month = {r[0]: r[1] for r in db.execute(
+        """SELECT SUBSTRING(created_at, 1, 7) AS ym, COUNT(*)
+           FROM clients WHERE created_at >= %s GROUP BY ym""",
+        (window_start.isoformat(),)
+    ).fetchall()}
 
-        members = db.execute(
-            "SELECT COUNT(*) FROM members WHERE created_at >= %s AND created_at < %s",
-            (month_start.isoformat(), next_month.isoformat())
-        ).fetchone()[0]
-        clients = db.execute(
-            "SELECT COUNT(*) FROM clients WHERE created_at >= %s AND created_at < %s",
-            (month_start.isoformat(), next_month.isoformat())
-        ).fetchone()[0]
-
-        data.append({
-            'month': month_start.strftime('%b %Y'),
-            'members': members,
-            'clients': clients
-        })
+    data = [{
+        'month': m.strftime('%b %Y'),
+        'members': members_by_month.get(m.strftime('%Y-%m'), 0),
+        'clients': clients_by_month.get(m.strftime('%Y-%m'), 0),
+    } for m in months]
 
     return jsonify(data)
 
@@ -228,6 +230,30 @@ def recent_activities():
     return jsonify([audit_log_public(l) for l in logs])
 
 
+def _borrower_names(db, member_ids, client_ids):
+    """Batch-resolves borrower display names for a page of loans/schedules --
+    one IN(...) query against members and one against clients, instead of a
+    query per row. Returns (members_by_id, clients_by_id) dicts of id ->
+    full name, so callers can just do
+    member_names.get(member_id) or client_names.get(client_id) or 'N/A'."""
+    member_ids = [i for i in set(member_ids) if i]
+    client_ids = [i for i in set(client_ids) if i]
+
+    members_by_id = {}
+    if member_ids:
+        placeholders = ','.join(['%s'] * len(member_ids))
+        for m in db.execute(f"SELECT * FROM members WHERE id IN ({placeholders})", member_ids).fetchall():
+            members_by_id[m['id']] = member_full_name(m)
+
+    clients_by_id = {}
+    if client_ids:
+        placeholders = ','.join(['%s'] * len(client_ids))
+        for c in db.execute(f"SELECT * FROM clients WHERE id IN ({placeholders})", client_ids).fetchall():
+            clients_by_id[c['id']] = client_full_name(c)
+
+    return members_by_id, clients_by_id
+
+
 @dashboard_bp.route('/due-today')
 @login_required
 def due_today():
@@ -240,17 +266,12 @@ def due_today():
            LIMIT 10""", (today,)
     ).fetchall()
 
+    member_names, client_names = _borrower_names(
+        db, [s['member_id'] for s in schedules], [s['client_id'] for s in schedules])
+
     result = []
     for s in schedules:
-        borrower = 'N/A'
-        if s['member_id']:
-            m = db.execute("SELECT * FROM members WHERE id = %s", (s['member_id'],)).fetchone()
-            if m:
-                borrower = member_full_name(m)
-        elif s['client_id']:
-            c = db.execute("SELECT * FROM clients WHERE id = %s", (s['client_id'],)).fetchone()
-            if c:
-                borrower = client_full_name(c)
+        borrower = member_names.get(s['member_id']) or client_names.get(s['client_id']) or 'N/A'
         result.append({
             'loan_number': s['loan_number'],
             'borrower': borrower,
@@ -277,21 +298,26 @@ def overdue_loans():
         loans = db.execute(
             f"SELECT * FROM loans WHERE id IN ({placeholders}) AND status = 'active' LIMIT 10", loan_ids
         ).fetchall()
+
+        member_names, client_names = _borrower_names(
+            db, [l['member_id'] for l in loans], [l['client_id'] for l in loans])
+
+        # One grouped query for every displayed loan's earliest overdue date,
+        # instead of a separate MIN(due_date) round trip per loan.
+        earliest_by_loan = {}
+        if loans:
+            loan_placeholders = ','.join(['%s'] * len(loans))
+            rows = db.execute(
+                f"""SELECT loan_id, MIN(due_date) FROM loan_schedules
+                    WHERE loan_id IN ({loan_placeholders}) AND due_date < %s AND status IN ('pending', 'partial')
+                    GROUP BY loan_id""",
+                [l['id'] for l in loans] + [today.isoformat()]
+            ).fetchall()
+            earliest_by_loan = {r[0]: r[1] for r in rows}
+
         for loan in loans:
-            borrower = 'N/A'
-            if loan['member_id']:
-                m = db.execute("SELECT * FROM members WHERE id = %s", (loan['member_id'],)).fetchone()
-                if m:
-                    borrower = member_full_name(m)
-            elif loan['client_id']:
-                c = db.execute("SELECT * FROM clients WHERE id = %s", (loan['client_id'],)).fetchone()
-                if c:
-                    borrower = client_full_name(c)
-            earliest_overdue = db.execute(
-                """SELECT MIN(due_date) FROM loan_schedules
-                   WHERE loan_id = %s AND due_date < %s AND status IN ('pending', 'partial')""",
-                (loan['id'], today.isoformat())
-            ).fetchone()[0]
+            borrower = member_names.get(loan['member_id']) or client_names.get(loan['client_id']) or 'N/A'
+            earliest_overdue = earliest_by_loan.get(loan['id'])
             overdue_days = (today - date.fromisoformat(earliest_overdue)).days if earliest_overdue else 0
             result.append({
                 'loan_number': loan['loan_number'],
