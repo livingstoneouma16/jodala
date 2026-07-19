@@ -241,6 +241,56 @@ def get_db():
     return g.db_conn
 
 
+# ---------------------------------------------------------------------------
+# Company branding cache
+# ---------------------------------------------------------------------------
+#
+# inject_company_branding() (core/__init__.py) runs on every template render
+# -- i.e. almost every request -- so a naive implementation means a
+# `SELECT ... FROM company_settings` on every single page load, for two
+# values (company_name, logo_image) that change maybe a few times a year.
+#
+# Cached per worker process with a short TTL rather than cached forever:
+# invalidate_branding_cache() (called right after Settings > Company saves
+# company_name/logo_image, see core/routes/other_routes.py:update_company)
+# clears it instantly in whichever worker handles that request, so the
+# admin who just changed it sees the update immediately. The TTL below is
+# just a safety net for every *other* worker process -- each holds its own
+# copy of this module global, not a shared cache, so they wouldn't otherwise
+# see that invalidation -- so they fall back to picking up the change within
+# BRANDING_CACHE_TTL seconds regardless.
+_branding_cache = {'data': None, 'expires_at': 0.0}
+BRANDING_CACHE_TTL = int(os.getenv('BRANDING_CACHE_TTL', '60'))
+
+
+def get_company_branding():
+    import time
+    now = time.monotonic()
+    if _branding_cache['data'] is not None and now < _branding_cache['expires_at']:
+        return _branding_cache['data']
+
+    try:
+        rows = get_db().execute(
+            "SELECT key, value FROM company_settings WHERE key IN ('company_name', 'logo_image')"
+        ).fetchall()
+        branding = {r['key']: r['value'] for r in rows}
+    except Exception:
+        branding = {}
+
+    data = {
+        'company_name': branding.get('company_name') or 'Jodala Microfinance',
+        'company_logo': branding.get('logo_image') or ''
+    }
+    _branding_cache['data'] = data
+    _branding_cache['expires_at'] = now + BRANDING_CACHE_TTL
+    return data
+
+
+def invalidate_branding_cache():
+    _branding_cache['data'] = None
+    _branding_cache['expires_at'] = 0.0
+
+
 def close_db(e=None):
     conn = g.pop('db_conn', None)
     if conn is not None:
