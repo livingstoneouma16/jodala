@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 from flask import Flask
 from flask_cors import CORS
+from flask_compress import Compress
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -115,18 +116,33 @@ def create_app():
     # so uploading a logo in Settings actually shows up across the app.
     @app.context_processor
     def inject_company_branding():
-        from core.database import get_db
-        try:
-            rows = get_db().execute(
-                "SELECT key, value FROM company_settings WHERE key IN ('company_name', 'logo_image')"
-            ).fetchall()
-            branding = {r['key']: r['value'] for r in rows}
-        except Exception:
-            branding = {}
-        return {
-            'company_name': branding.get('company_name') or 'Jodala Microfinance',
-            'company_logo': branding.get('logo_image') or ''
-        }
+        # Cached (core/database.py:get_company_branding, TTL + explicit
+        # invalidation on Settings > Company save) instead of querying
+        # company_settings on every single template render -- this runs on
+        # nearly every request.
+        from core.database import get_company_branding
+        return get_company_branding()
+
+    # Static assets are served straight from this app with no reverse proxy
+    # in front on any of the supported deploy targets (docker-compose.yml
+    # says so explicitly; Render/Railway/Fly point straight at this
+    # container) -- so without the two settings below, every page load ships
+    # ~600KB of vendor CSS/JS (bootstrap, bootstrap-icons, chart.js) fully
+    # uncompressed, and the browser re-validates every static file with the
+    # server (a full round trip, even if it ends in a 304) on every visit
+    # instead of using its disk cache.
+    #
+    # SEND_FILE_MAX_AGE_DEFAULT lets the browser skip that round trip for
+    # STATIC_CACHE_MAX_AGE seconds (default 1 week) instead of re-checking
+    # every time. This is safe for the vendor libraries (versioned by
+    # directory name, e.g. vendor/bootstrap/, so a version bump changes the
+    # path) but does mean a same-path edit to static/css/main.css or
+    # static/js/app.js can take up to that long to reach a browser that
+    # already cached it -- bump the version query string on those
+    # `url_for('static', ...)` calls (or lower STATIC_CACHE_MAX_AGE) if a
+    # hotfix to either file needs to land immediately.
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = int(os.getenv('STATIC_CACHE_MAX_AGE', str(7 * 24 * 60 * 60)))
+    Compress(app)
 
     # Initialize extensions
     # CORS: only allow-list origins explicitly configured via CORS_ALLOWED_ORIGINS
