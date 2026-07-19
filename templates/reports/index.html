@@ -184,7 +184,7 @@
   </div>
 </div>
 {% endblock %}
-{% block extra_js %}<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+{% block extra_js %}<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
 <script>
 const today = new Date().toISOString().split('T')[0];
 const firstDay = new Date(new Date().setDate(1)).toISOString().split('T')[0];
