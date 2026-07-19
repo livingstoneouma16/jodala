@@ -6,14 +6,14 @@ Gunicorn config for production. Usage:
 All values can be overridden via environment variables so the same config
 file works unchanged across dev/staging/prod containers.
 
-IMPORTANT (SQLite): this app's default database is SQLite, which handles
-concurrent *writes* poorly -- multiple worker processes hammering the same
-.db file under real write concurrency will occasionally hit "database is
-locked" errors. WEB_CONCURRENCY defaults to 2, which is fine for small-to-
-medium SACCO/chama traffic (a handful of staff using the app at once). If
-you outgrow that, migrate to PostgreSQL rather than just adding more
-workers -- more SQLite workers doesn't actually buy you more write
-throughput, only more contention.
+This app's database is PostgreSQL (core/database.py, via DATABASE_URL) --
+unlike the SQLite setup this project started from, Postgres has no
+single-writer lock, so it's fine to raise WEB_CONCURRENCY as real traffic
+demands it. It defaults to 2 here anyway, since that's plenty for
+small-to-medium SACCO/chama traffic (a handful of staff using the app at
+once) and keeps the connection-pool footprint against jodala-db small by
+default -- see core/database.py's ThreadedConnectionPool maxconn, which
+should be raised alongside WEB_CONCURRENCY if you do scale workers up.
 """
 import multiprocessing
 import os
@@ -21,10 +21,11 @@ import os
 bind = f"0.0.0.0:{os.getenv('PORT', '8000')}"
 
 # Deliberately NOT defaulting to (2 * cpu_count) + 1 the way gunicorn docs
-# usually suggest -- that formula assumes a CPU-bound app with no shared
-# single-writer datastore. For this app, more workers just means more
-# processes contending for the same SQLite file lock. Keep this low unless
-# you've migrated to Postgres.
+# usually suggest -- that formula assumes CPU-bound work, and this app is
+# mostly waiting on Postgres/network I/O per request. 2 workers x 4 threads
+# comfortably covers small-to-medium SACCO/chama traffic; raise
+# WEB_CONCURRENCY (and the connection pool's maxconn in core/database.py)
+# if you outgrow it.
 workers = int(os.getenv('WEB_CONCURRENCY', '2'))
 threads = int(os.getenv('GUNICORN_THREADS', '4'))
 worker_class = 'gthread'
