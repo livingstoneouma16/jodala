@@ -72,6 +72,15 @@ def update_company():
             execute("UPDATE company_settings SET value = %s, updated_at = %s WHERE key = %s", (str(value), now, key))
         else:
             execute("INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)", (key, str(value), now))
+
+    # inject_company_branding() (core/__init__.py) caches company_name/
+    # logo_image for BRANDING_CACHE_TTL seconds (core/database.py) -- clear
+    # it here so this change shows up immediately for whoever just saved it,
+    # instead of waiting out the TTL.
+    if 'company_name' in data or 'logo_image' in data:
+        from core.database import invalidate_branding_cache
+        invalidate_branding_cache()
+
     return jsonify({'message': 'Company settings updated'})
 
 
