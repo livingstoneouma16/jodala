@@ -140,3 +140,76 @@ class TestWriteOff:
         resp = client.post(f"/loans/api/{created['id']}/write-off", json={'reason': 'test'},
                             headers=auth_header(admin_token))
         assert resp.status_code == 400
+
+
+class TestRestructure:
+    def test_restructure_requires_reason(self, client, admin_token, approved_loan):
+        resp = client.post(f"/loans/api/{approved_loan['id']}/restructure",
+                            json={'new_term': 12}, headers=auth_header(admin_token))
+        assert resp.status_code == 400
+
+    def test_cannot_restructure_pending_loan(self, client, admin_token, member, loan_product):
+        created = client.post('/loans/api', json={
+            'member_id': member['id'], 'borrower_type': 'member',
+            'product_id': loan_product['id'], 'principal_amount': 10000, 'term': 6,
+        }, headers=auth_header(admin_token)).get_json()['loan']
+
+        resp = client.post(f"/loans/api/{created['id']}/restructure",
+                            json={'reason': 'Lost job', 'new_term': 12},
+                            headers=auth_header(admin_token))
+        assert resp.status_code == 400
+
+    def test_restructure_changes_term_rate_and_frequency(self, client, admin_token, approved_loan):
+        original_term = approved_loan['term']
+        original_rate = approved_loan['interest_rate']
+
+        resp = client.post(f"/loans/api/{approved_loan['id']}/restructure", json={
+            'reason': 'Borrower lost their job, requested lower repayments over a longer term',
+            'new_term': 12,
+            'new_interest_rate': 8,
+            'new_repayment_frequency': 'monthly',
+        }, headers=auth_header(admin_token))
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+
+        loan = resp.get_json()['loan']
+        assert loan['term'] == 12
+        assert loan['term'] != original_term
+        assert loan['interest_rate'] == 8
+        assert loan['interest_rate'] != original_rate
+        assert loan['status'] == 'active'  # restructuring doesn't change status
+
+        # New schedule matches the new term
+        schedule_resp = client.get(f"/loans/api/{approved_loan['id']}", headers=auth_header(admin_token))
+        assert len(schedule_resp.get_json()['schedule']) == 12
+
+    def test_restructure_preserves_history(self, client, admin_token, approved_loan):
+        resp = client.post(f"/loans/api/{approved_loan['id']}/restructure", json={
+            'reason': 'Seasonal income shortfall, needs smaller installments',
+            'new_term': 10,
+        }, headers=auth_header(admin_token))
+        assert resp.status_code == 200
+
+        history = client.get(f"/loans/api/{approved_loan['id']}/restructures",
+                              headers=auth_header(admin_token))
+        assert history.status_code == 200
+        records = history.get_json()['restructures']
+        assert len(records) == 1
+        record = records[0]
+        assert record['reason'] == 'Seasonal income shortfall, needs smaller installments'
+        assert record['old_term'] == approved_loan['term']
+        assert record['new_term'] == 10
+        # The old schedule rows that got replaced are preserved verbatim
+        assert len(record['old_schedule_snapshot']) == approved_loan['term']
+
+    def test_restructure_rejects_invalid_interest_type(self, client, admin_token, approved_loan):
+        resp = client.post(f"/loans/api/{approved_loan['id']}/restructure", json={
+            'reason': 'Distress restructure',
+            'new_interest_type': 'compound',
+        }, headers=auth_header(admin_token))
+        assert resp.status_code == 400
+
+    def test_restructure_nonexistent_loan_404s(self, client, admin_token):
+        resp = client.post('/loans/api/999999/restructure', json={'reason': 'test'},
+                            headers=auth_header(admin_token))
+        assert resp.status_code == 404
+

@@ -915,6 +915,46 @@ def _migration_0013_resend_email_settings(conn):
             )
 
 
+def _migration_0014_loan_restructuring(conn):
+    """Formal loan restructuring for members/clients in genuine distress --
+    distinct from top-up (more cash out) and extend (term only, rate/history
+    untouched). A restructure can change term, interest rate, interest type
+    and repayment frequency together and re-amortizes the *remaining
+    principal* over the new terms, while keeping a full before/after audit
+    trail in loan_restructures (including a snapshot of the schedule rows
+    that get replaced) -- unlike top-up/extend, which only log a one-line
+    audit_logs entry with no durable record of what the loan looked like
+    before the change.
+
+    is_restructured/restructure_count on loans let reports flag distressed
+    loans without joining loan_restructures for the common case."""
+    columns = _table_columns(conn, 'loans')
+    if 'is_restructured' not in columns:
+        conn.execute("ALTER TABLE loans ADD COLUMN is_restructured INTEGER DEFAULT 0")
+    if 'restructure_count' not in columns:
+        conn.execute("ALTER TABLE loans ADD COLUMN restructure_count INTEGER DEFAULT 0")
+
+    conn.execute("""CREATE TABLE IF NOT EXISTS loan_restructures (
+        id SERIAL PRIMARY KEY,
+        loan_id INTEGER NOT NULL REFERENCES loans(id),
+        reason TEXT NOT NULL,
+        old_principal_outstanding REAL NOT NULL,
+        old_term INTEGER NOT NULL,
+        old_interest_rate REAL NOT NULL,
+        old_interest_type TEXT NOT NULL,
+        old_repayment_frequency TEXT NOT NULL,
+        old_expected_end_date TEXT,
+        old_schedule_snapshot TEXT,
+        new_term INTEGER NOT NULL,
+        new_interest_rate REAL NOT NULL,
+        new_interest_type TEXT NOT NULL,
+        new_repayment_frequency TEXT NOT NULL,
+        new_expected_end_date TEXT,
+        restructured_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL
+    )""")
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
     (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
@@ -929,6 +969,7 @@ MIGRATIONS = [
     (11, 'force password change for admin accounts still on the seeded default', _migration_0011_force_default_admin_password_change),
     (12, 'permanently remove processing fee from loan products and loans', _migration_0012_remove_processing_fee),
     (13, 'switch email delivery from Gmail SMTP to Resend HTTP API', _migration_0013_resend_email_settings),
+    (14, 'add formal loan restructuring (term/rate re-negotiation with history)', _migration_0014_loan_restructuring),
 ]
 
 

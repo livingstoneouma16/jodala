@@ -1,3 +1,5 @@
+import json
+
 from flask import Blueprint, request, jsonify, render_template
 from datetime import date, timedelta
 
@@ -549,6 +551,169 @@ def topup_loan(loan_id):
 
     updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
     return jsonify({'message': 'Loan topped up', 'loan': loan_public(updated)}), 200
+
+
+@loans_bp.route('/api/<int:loan_id>/restructure', methods=['POST'])
+@login_required
+@role_required('admin', 'loan_officer')
+def restructure_loan(loan_id):
+    """Formal restructuring for a borrower in genuine distress: term, interest
+    rate, interest type and repayment frequency can all change together, and
+    the remaining principal is re-amortized over the new terms -- unlike
+    top-up (adds fresh cash) or extend (term only, nothing else changes).
+
+    Unlike top-up/extend, a `reason` is mandatory and a full before/after
+    snapshot (old terms + the schedule rows being replaced) is written to
+    loan_restructures so there's a durable record of what the loan looked
+    like pre-restructure, not just a one-line audit_logs entry.
+
+    No cash moves and no accounting entries are posted -- restructuring
+    re-negotiates terms on money already disbursed, it doesn't disburse
+    anything new."""
+    loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
+    if not loan:
+        return jsonify({'error': 'Loan not found'}), 404
+    if loan['status'] != 'active':
+        return jsonify({'error': 'Can only restructure active loans'}), 400
+
+    data = request.get_json() or {}
+    user = get_current_user()
+
+    reason = (data.get('reason') or '').strip()
+    if not reason:
+        return jsonify({'error': 'A reason is required to restructure a loan'}), 400
+
+    new_term = int(data.get('new_term') or loan['term'])
+    new_interest_rate = float(data.get('new_interest_rate') or loan['interest_rate'])
+    new_interest_type = data.get('new_interest_type') or loan['interest_type']
+    new_repayment_frequency = data.get('new_repayment_frequency') or loan['repayment_frequency']
+
+    if new_term <= 0:
+        return jsonify({'error': 'New term must be greater than zero'}), 400
+    if new_interest_rate < 0:
+        return jsonify({'error': 'New interest rate cannot be negative'}), 400
+    if new_interest_type not in ('flat', 'reducing'):
+        return jsonify({'error': "New interest type must be 'flat' or 'reducing'"}), 400
+    if new_repayment_frequency not in ('daily', 'weekly', 'monthly'):
+        return jsonify({'error': "New repayment frequency must be 'daily', 'weekly' or 'monthly'"}), 400
+
+    # Same "true remaining principal" logic top-up uses: outstanding_balance
+    # still includes unpaid interest, so it overstates what's actually owed
+    # in principal. Sum each schedule row's unpaid principal instead.
+    remaining_principal_row = get_db().execute(
+        "SELECT COALESCE(SUM(principal_due - principal_paid), 0) AS remaining "
+        "FROM loan_schedules WHERE loan_id = %s", (loan_id,)
+    ).fetchone()
+    remaining_principal = remaining_principal_row['remaining']
+    if remaining_principal <= 0:
+        return jsonify({'error': 'Loan has no remaining principal to restructure'}), 400
+
+    # Snapshot the schedule rows about to be replaced (pending/partial only --
+    # fully-paid rows are left untouched in loan_schedules, same as top-up)
+    # so the exact pre-restructure schedule is recoverable later.
+    old_schedule_rows = get_db().execute(
+        "SELECT * FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial') "
+        "ORDER BY installment_number", (loan_id,)
+    ).fetchall()
+    old_schedule_snapshot = json.dumps([dict(r) for r in old_schedule_rows], default=str)
+
+    already_paid_principal = get_db().execute(
+        "SELECT COALESCE(SUM(principal_paid), 0) AS p FROM loan_schedules WHERE loan_id = %s", (loan_id,)
+    ).fetchone()['p']
+    already_paid_interest = get_db().execute(
+        "SELECT COALESCE(SUM(interest_paid), 0) AS i FROM loan_schedules WHERE loan_id = %s", (loan_id,)
+    ).fetchone()['i']
+
+    now = utcnow()
+    today = date.today()
+
+    execute("DELETE FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')", (loan_id,))
+
+    schedule_data = build_loan_schedule(
+        remaining_principal, new_interest_rate, new_term, new_interest_type, new_repayment_frequency,
+        _one_period_before(today, new_repayment_frequency)
+    )
+    for s in schedule_data:
+        execute(
+            """INSERT INTO loan_schedules (loan_id, installment_number, due_date, principal_due,
+                   interest_due, total_due, balance_after, status)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')""",
+            (loan_id, s['installment_number'], s['due_date'].isoformat(),
+             s['principal_due'], s['interest_due'], s['total_due'], s['balance_after'])
+        )
+    new_expected_end_date = schedule_data[-1]['due_date'].isoformat() if schedule_data else loan['expected_end_date']
+
+    # Insurance fee isn't re-charged -- no new money is being disbursed, only
+    # the remaining principal is being re-amortized -- so it carries over
+    # unchanged rather than being recalculated off the new principal.
+    new_total_interest = round(sum(s['interest_due'] for s in schedule_data), 2)
+    new_total_repayable = round(remaining_principal + new_total_interest + (loan['insurance_fee'] or 0), 2)
+    new_total_paid = round(already_paid_principal + already_paid_interest, 2)
+    new_outstanding = round(max(0, new_total_repayable - new_total_paid), 2)
+
+    new_notes = (loan['notes'] or '') + f"\nRestructured: {reason}"
+
+    execute(
+        """UPDATE loans SET term = %s, interest_rate = %s, interest_type = %s,
+               repayment_frequency = %s, total_interest = %s, total_repayable = %s,
+               outstanding_balance = %s, total_paid = %s, expected_end_date = %s,
+               is_restructured = 1, restructure_count = COALESCE(restructure_count, 0) + 1,
+               notes = %s, updated_at = %s
+           WHERE id = %s""",
+        (new_term, new_interest_rate, new_interest_type, new_repayment_frequency,
+         new_total_interest, new_total_repayable, new_outstanding, new_total_paid,
+         new_expected_end_date, new_notes, now, loan_id)
+    )
+
+    execute(
+        """INSERT INTO loan_restructures (loan_id, reason, old_principal_outstanding, old_term,
+               old_interest_rate, old_interest_type, old_repayment_frequency, old_expected_end_date,
+               old_schedule_snapshot, new_term, new_interest_rate, new_interest_type,
+               new_repayment_frequency, new_expected_end_date, restructured_by, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+        (loan_id, reason, remaining_principal, loan['term'], loan['interest_rate'],
+         loan['interest_type'], loan['repayment_frequency'], loan['expected_end_date'],
+         old_schedule_snapshot, new_term, new_interest_rate, new_interest_type,
+         new_repayment_frequency, new_expected_end_date, user['id'], now)
+    )
+
+    log_audit(
+        'LOAN_RESTRUCTURED', 'loan', loan_id,
+        old_values={'term': loan['term'], 'interest_rate': loan['interest_rate'],
+                    'interest_type': loan['interest_type'],
+                    'repayment_frequency': loan['repayment_frequency']},
+        new_values={'term': new_term, 'interest_rate': new_interest_rate,
+                    'interest_type': new_interest_type,
+                    'repayment_frequency': new_repayment_frequency, 'reason': reason}
+    )
+
+    updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
+    return jsonify({'message': 'Loan restructured', 'loan': loan_public(updated)}), 200
+
+
+@loans_bp.route('/api/<int:loan_id>/restructures', methods=['GET'])
+@login_required
+def loan_restructure_history(loan_id):
+    """History of past restructures for one loan, most recent first --
+    what changed, why, and who approved it."""
+    loan = get_db().execute("SELECT id FROM loans WHERE id = %s", (loan_id,)).fetchone()
+    if not loan:
+        return jsonify({'error': 'Loan not found'}), 404
+
+    rows = get_db().execute(
+        """SELECT loan_restructures.*, users.full_name AS restructured_by_name
+           FROM loan_restructures
+           LEFT JOIN users ON users.id = loan_restructures.restructured_by
+           WHERE loan_id = %s ORDER BY created_at DESC""", (loan_id,)
+    ).fetchall()
+
+    history = []
+    for r in rows:
+        d = dict(r)
+        d['old_schedule_snapshot'] = json.loads(d['old_schedule_snapshot']) if d.get('old_schedule_snapshot') else []
+        history.append(d)
+
+    return jsonify({'restructures': history})
 
 
 @loans_bp.route('/api/<int:loan_id>/extend', methods=['POST'])
