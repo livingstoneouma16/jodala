@@ -18,6 +18,16 @@
 #
 # Because the database is now PostgreSQL (not a local SQLite file), this
 # web service has no disk and can be scaled to multiple instances if needed.
+#
+# Region: this app is used from Kenya (M-Pesa integration, Africa/Nairobi
+# scheduler timezone elsewhere in the config) -- Render's regions are
+# Oregon, Ohio, Virginia (all US), Frankfurt, and Singapore, no Africa
+# region yet. Frankfurt is the closest of those to Nairobi by a wide margin
+# (roughly a one-hop, same-continent-adjacent route vs. transatlantic +
+# cross-US for Oregon), so every service below is pinned to `frankfurt`
+# rather than the US regions Render defaults to. All three must stay in the
+# same region -- Render's private networking (which DATABASE_URL and
+# RATELIMIT_STORAGE_URI below rely on) doesn't span regions.
 
 services:
   - type: web
@@ -25,7 +35,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: starter
-    region: oregon
+    region: frankfurt
     healthCheckPath: /health
     envVars:
       - key: APP_ENV
@@ -62,7 +72,7 @@ services:
   - type: keyvalue
     name: jodala-redis
     plan: starter
-    region: oregon
+    region: frankfurt
     maxmemoryPolicy: noeviction
     # Render requires this field on every Key Value service. Empty list =
     # no external/public access -- only other services in this Blueprint
@@ -72,6 +82,6 @@ services:
 databases:
   - name: jodala-db
     plan: starter
-    region: oregon
+    region: frankfurt
     databaseName: jodala
     user: jodala
