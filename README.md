@@ -175,6 +175,8 @@ jodala/
 | POST   | `/loans/api/<id>/disburse`        | Disburse loan          |
 | POST   | `/loans/api/<id>/topup`           | Create top-up loan     |
 | POST   | `/loans/api/<id>/extend`          | Extend loan term       |
+| POST   | `/loans/api/<id>/restructure`     | Restructure (term/rate/frequency, distress) |
+| GET    | `/loans/api/<id>/restructures`    | Restructure history     |
 | POST   | `/loans/api/<id>/write-off`       | Write off loan         |
 
 ### Repayments & Savings
