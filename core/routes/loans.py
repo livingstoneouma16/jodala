@@ -760,12 +760,39 @@ def write_off_loan(loan_id):
         return jsonify({'error': 'Can only write off active loans'}), 400
 
     data = request.get_json()
+
+    # Loans Receivable (1100) only ever accumulates *principal* -- interest is
+    # recognised as income when it's actually collected (see repayments.py),
+    # never booked as a receivable up front -- so the amount still sitting in
+    # 1100 for this loan is the unpaid principal, not the full
+    # outstanding_balance (which also includes uncollected interest). That's
+    # the figure that has to come off the books here, matching how top-up
+    # and restructure already compute "true remaining principal".
+    remaining_principal_row = get_db().execute(
+        "SELECT COALESCE(SUM(principal_due - principal_paid), 0) AS remaining "
+        "FROM loan_schedules WHERE loan_id = %s", (loan_id,)
+    ).fetchone()
+    remaining_principal = round(remaining_principal_row['remaining'], 2)
+
     new_notes = (loan['notes'] or '') + f"\nWritten off: {data.get('reason', '')}"
     execute(
-        "UPDATE loans SET status = 'written_off', notes = %s, actual_end_date = %s, updated_at = %s WHERE id = %s",
+        """UPDATE loans SET status = 'written_off', outstanding_balance = 0, notes = %s,
+               actual_end_date = %s, updated_at = %s WHERE id = %s""",
         (new_notes, date.today().isoformat(), utcnow(), loan_id)
     )
-    log_audit('LOAN_WRITTEN_OFF', 'loan', loan_id)
+    log_audit('LOAN_WRITTEN_OFF', 'loan', loan_id,
+              old_values={'outstanding_balance': loan['outstanding_balance']},
+              new_values={'reason': data.get('reason', ''), 'principal_written_off': remaining_principal})
+
+    # No cash moves on a write-off -- it's a paper loss, not a payment -- so
+    # unlike disbursement/repayment this never touches the main cash account.
+    # It's booked as Debit Loan Write-offs (5100) / Credit Loans Receivable
+    # (1100) so the bad debt hits the P&L and the receivable stops being
+    # overstated by money that's no longer considered collectible.
+    if remaining_principal > 0:
+        adjust_account_balance('1100', -remaining_principal)
+        adjust_account_balance('5100', remaining_principal)
+
     return jsonify({'message': 'Loan written off'})
 
 
@@ -776,7 +803,7 @@ def delete_loan(loan_id):
     loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
         return jsonify({'error': 'Loan not found'}), 404
-    if loan['status'] in ('active', 'completed'):
+    if loan['status'] in ('active', 'completed', 'written_off'):
         return jsonify({'error': 'Cannot delete a disbursed loan. Write it off instead.'}), 400
 
     execute("DELETE FROM loan_schedules WHERE loan_id = %s", (loan_id,))

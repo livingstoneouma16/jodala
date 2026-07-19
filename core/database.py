@@ -623,6 +623,7 @@ def _migration_0002_seed_defaults(conn):
         ('4000', 'Interest Income', 'income'),
         ('4100', 'Fee Income', 'income'),
         ('5000', 'Operating Expenses', 'expense'),
+        ('5100', 'Loan Write-offs', 'expense'),
     ]
     for code, name, acc_type in default_accounts:
         row = conn.execute("SELECT id FROM accounts WHERE code = %s", (code,)).fetchone()
@@ -955,6 +956,24 @@ def _migration_0014_loan_restructuring(conn):
     )""")
 
 
+def _migration_0015_loan_writeoff_account(conn):
+    """Adds a 'Loan Write-offs' (5100) expense account to the chart of
+    accounts. Writing off a loan was previously a status-only change on the
+    loans table -- it never touched the ledger, so Loans Receivable (1100)
+    stayed permanently overstated by every written-off balance and no bad
+    debt expense was ever recognized. core/routes/loans.py:write_off_loan
+    now posts Debit 5100 / Credit 1100 for the loan's remaining booked
+    principal; this migration makes sure 5100 exists on every install,
+    including ones that ran migration 2 (seed defaults) long before this
+    account was added."""
+    row = conn.execute("SELECT id FROM accounts WHERE code = '5100'").fetchone()
+    if not row:
+        conn.execute(
+            "INSERT INTO accounts (code, name, account_type, balance, is_active) VALUES (%s, %s, %s, 0, 1)",
+            ('5100', 'Loan Write-offs', 'expense')
+        )
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
     (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
@@ -970,6 +989,7 @@ MIGRATIONS = [
     (12, 'permanently remove processing fee from loan products and loans', _migration_0012_remove_processing_fee),
     (13, 'switch email delivery from Gmail SMTP to Resend HTTP API', _migration_0013_resend_email_settings),
     (14, 'add formal loan restructuring (term/rate re-negotiation with history)', _migration_0014_loan_restructuring),
+    (15, "add 'Loan Write-offs' (5100) expense account so write-offs post to the ledger", _migration_0015_loan_writeoff_account),
 ]
 
 
