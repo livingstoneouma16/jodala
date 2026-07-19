@@ -600,11 +600,17 @@ INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_loans_member ON loans(member_id)",
     "CREATE INDEX IF NOT EXISTS idx_loans_client ON loans(client_id)",
     "CREATE INDEX IF NOT EXISTS idx_loans_status ON loans(status)",
+    "CREATE INDEX IF NOT EXISTS idx_loans_disbursement_date ON loans(disbursement_date)",
     "CREATE INDEX IF NOT EXISTS idx_schedule_loan ON loan_schedules(loan_id)",
     "CREATE INDEX IF NOT EXISTS idx_schedule_due ON loan_schedules(due_date, status)",
     "CREATE INDEX IF NOT EXISTS idx_repayments_loan ON repayments(loan_id)",
+    "CREATE INDEX IF NOT EXISTS idx_repayments_payment_date ON repayments(payment_date)",
     "CREATE INDEX IF NOT EXISTS idx_savings_member ON savings_accounts(member_id)",
     "CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_income_date ON income(income_date)",
+    "CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date)",
+    "CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries(entry_date)",
+    "CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read)",
 ]
 
 

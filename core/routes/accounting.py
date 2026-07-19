@@ -139,20 +139,26 @@ def record_expense():
 @login_required
 def list_journal():
     entries = get_db().execute("SELECT * FROM journal_entries ORDER BY entry_date DESC LIMIT 50").fetchall()
-    result = []
-    for e in entries:
-        lines = get_db().execute(
-            """SELECT journal_entry_lines.amount,
-                      journal_entry_lines.description AS line_description,
-                      da.code AS debit_code, da.name AS debit_name,
-                      ca.code AS credit_code, ca.name AS credit_name
-               FROM journal_entry_lines
-               LEFT JOIN accounts da ON da.id = journal_entry_lines.debit_account_id
-               LEFT JOIN accounts ca ON ca.id = journal_entry_lines.credit_account_id
-               WHERE journal_entry_lines.entry_id = %s""",
-            (e['id'],)
+
+    lines_by_entry = {}
+    if entries:
+        entry_ids = [e['id'] for e in entries]
+        placeholders = ','.join(['%s'] * len(entry_ids))
+        all_lines = get_db().execute(
+            f"""SELECT journal_entry_lines.entry_id, journal_entry_lines.amount,
+                       journal_entry_lines.description AS line_description,
+                       da.code AS debit_code, da.name AS debit_name,
+                       ca.code AS credit_code, ca.name AS credit_name
+                FROM journal_entry_lines
+                LEFT JOIN accounts da ON da.id = journal_entry_lines.debit_account_id
+                LEFT JOIN accounts ca ON ca.id = journal_entry_lines.credit_account_id
+                WHERE journal_entry_lines.entry_id IN ({placeholders})""",
+            tuple(entry_ids)
         ).fetchall()
-        result.append(journal_entry_public(e, lines))
+        for line in all_lines:
+            lines_by_entry.setdefault(line['entry_id'], []).append(line)
+
+    result = [journal_entry_public(e, lines_by_entry.get(e['id'], [])) for e in entries]
     return jsonify(result)
 
 
@@ -319,13 +325,20 @@ def cashbook_data():
         (date_from, date_to)
     ).fetchall()
 
+    member_ids = {r['member_id'] for r in repayments if r['member_id']}
+    members_by_id = {}
+    if member_ids:
+        placeholders = ','.join(['%s'] * len(member_ids))
+        for m in db.execute(f"SELECT * FROM members WHERE id IN ({placeholders})", tuple(member_ids)).fetchall():
+            members_by_id[m['id']] = member_full_name(m)
+
     entries = []
     for r in repayments:
         borrower = 'Client'
         if r['member_id']:
-            member = db.execute("SELECT * FROM members WHERE id = %s", (r['member_id'],)).fetchone()
-            if member:
-                borrower = member_full_name(member)
+            name = members_by_id.get(r['member_id'])
+            if name:
+                borrower = name
         entries.append({
             'date': r['payment_date'],
             'description': f"Loan repayment - {r['loan_number'] or ''} ({borrower})",

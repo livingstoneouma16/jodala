@@ -81,20 +81,27 @@ def arrears_report():
         (today.isoformat(),)
     ).fetchall()
 
+    active_overdue = [s for s in overdue if s['loan_status'] == 'active']
+
+    member_ids = {s['member_id'] for s in active_overdue if s['member_id']}
+    client_ids = {s['client_id'] for s in active_overdue if s['client_id']}
+
+    members_by_id = {}
+    if member_ids:
+        placeholders = ','.join(['%s'] * len(member_ids))
+        for m in get_db().execute(f"SELECT * FROM members WHERE id IN ({placeholders})", tuple(member_ids)).fetchall():
+            members_by_id[m['id']] = member_full_name(m)
+
+    clients_by_id = {}
+    if client_ids:
+        placeholders = ','.join(['%s'] * len(client_ids))
+        for c in get_db().execute(f"SELECT * FROM clients WHERE id IN ({placeholders})", tuple(client_ids)).fetchall():
+            clients_by_id[c['id']] = client_full_name(c)
+
     result = []
-    for s in overdue:
-        if s['loan_status'] != 'active':
-            continue
+    for s in active_overdue:
         days_overdue = (today - date.fromisoformat(s['due_date'])).days
-        borrower = 'N/A'
-        if s['member_id']:
-            m = get_db().execute("SELECT * FROM members WHERE id = %s", (s['member_id'],)).fetchone()
-            if m:
-                borrower = member_full_name(m)
-        elif s['client_id']:
-            c = get_db().execute("SELECT * FROM clients WHERE id = %s", (s['client_id'],)).fetchone()
-            if c:
-                borrower = client_full_name(c)
+        borrower = members_by_id.get(s['member_id']) or clients_by_id.get(s['client_id']) or 'N/A'
 
         result.append({
             'loan_number': s['loan_number'],

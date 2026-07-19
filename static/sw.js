@@ -9,7 +9,7 @@
    navigation fails with no connection at all.
    ========================================================= */
 
-const CACHE_VERSION = 'jodala-static-v1';
+const CACHE_VERSION = 'jodala-static-v2';
 const OFFLINE_URL = '/static/offline.html';
 
 const PRECACHE_URLS = [
@@ -18,6 +18,11 @@ const PRECACHE_URLS = [
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
+  '/static/vendor/bootstrap/css/bootstrap.min.css',
+  '/static/vendor/bootstrap/js/bootstrap.bundle.min.js',
+  '/static/vendor/bootstrap-icons/font/bootstrap-icons.min.css',
+  '/static/vendor/bootstrap-icons/font/fonts/bootstrap-icons.woff2',
+  '/static/vendor/chartjs/chart.umd.min.js',
   OFFLINE_URL,
 ];
 
