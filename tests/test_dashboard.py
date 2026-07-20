@@ -62,6 +62,31 @@ class TestTrendEndpointsAggregateCorrectly:
         assert this_month['expenses'] >= 200
 
 
+class TestSummaryEndpoint:
+    """/dashboard/summary bundles all 7 dashboard requests into one, to cut
+    round trips for users far from the hosting region. It should return
+    exactly what the individual endpoints return, just nested."""
+
+    def test_summary_matches_individual_endpoints(self, client, admin_token, approved_loan, member):
+        individual = {
+            'stats': client.get('/dashboard/stats', headers=auth_header(admin_token)).get_json(),
+            'loan_trend': client.get('/dashboard/loan-trend', headers=auth_header(admin_token)).get_json(),
+            'loan_status_distribution': client.get('/dashboard/loan-status-distribution', headers=auth_header(admin_token)).get_json(),
+            'income_expense_trend': client.get('/dashboard/income-expense-trend', headers=auth_header(admin_token)).get_json(),
+            'member_growth': client.get('/dashboard/member-growth', headers=auth_header(admin_token)).get_json(),
+            'due_today': client.get('/dashboard/due-today', headers=auth_header(admin_token)).get_json(),
+            'overdue_loans': client.get('/dashboard/overdue-loans', headers=auth_header(admin_token)).get_json(),
+        }
+
+        resp = client.get('/dashboard/summary', headers=auth_header(admin_token))
+        assert resp.status_code == 200
+        assert resp.get_json() == individual
+
+    def test_summary_requires_login(self, client):
+        resp = client.get('/dashboard/summary')
+        assert resp.status_code in (302, 401)
+
+
 class TestDueTodayAndOverdueBorrowerNames:
     """Regression coverage for the N+1 -> batched IN(...) rewrite in
     _borrower_names -- a member's name must still resolve correctly when

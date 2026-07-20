@@ -106,6 +106,42 @@ def stats():
     })
 
 
+@dashboard_bp.route('/summary')
+@login_required
+def summary():
+    """Bundles everything the dashboard's initial paint needs (stats, both
+    trend charts, status distribution, member growth, due-today and
+    overdue-loans) into a single response.
+
+    The dashboard used to fire 7 separate requests for these (see git
+    history / the individual routes below, kept for backward compatibility
+    and any other callers) -- each one cheap on the DB side, but each also
+    paying the full client<->server network round trip independently.
+    That round trip is the expensive part for users far from the Render
+    region (e.g. Nairobi hitting a Frankfurt-hosted instance, ~150-300ms
+    each way): 7 parallel requests still means 7x that latency competing
+    for the browser's limited concurrent-connections-per-host, on top of
+    the vendor JS/CSS the page is also fetching on first load. Collapsing
+    them into one request pays that round trip once."""
+    stats_resp = stats()
+    trend_resp = loan_trend()
+    status_resp = loan_status_distribution()
+    income_expense_resp = income_expense_trend()
+    growth_resp = member_growth()
+    due_resp = due_today()
+    overdue_resp = overdue_loans()
+
+    return jsonify({
+        'stats': stats_resp.get_json(),
+        'loan_trend': trend_resp.get_json(),
+        'loan_status_distribution': status_resp.get_json(),
+        'income_expense_trend': income_expense_resp.get_json(),
+        'member_growth': growth_resp.get_json(),
+        'due_today': due_resp.get_json(),
+        'overdue_loans': overdue_resp.get_json(),
+    })
+
+
 def _month_window(n_months):
     """Returns (window_start_date, [first-of-month date, oldest..newest]) for
     the trailing n_months window ending this month -- shared by the trend

@@ -242,9 +242,9 @@ Chart.defaults.font.family = 'Inter';
 
 let trendChart, statusChart;
 
-async function loadStats() {
+async function loadStats(s) {
   try {
-    const s = await API.get('/dashboard/stats');
+    s = s || await API.get('/dashboard/stats');
     document.getElementById('statMainAccount').textContent  = fmtCurrency(s.main_account_balance);
     document.getElementById('statMembers').textContent    = fmt(s.total_members, 0);
     document.getElementById('statClients').textContent    = fmt(s.total_clients, 0);
@@ -263,9 +263,9 @@ async function loadStats() {
   } catch (e) { Toast.error('Could not load stats'); }
 }
 
-async function loadTrendChart() {
+async function loadTrendChart(data) {
   try {
-    const data = await API.get('/dashboard/loan-trend');
+    data = data || await API.get('/dashboard/loan-trend');
     const labels = data.map(d => d.month);
     const disbursed = data.map(d => d.disbursed);
     const collected = data.map(d => d.collected);
@@ -292,9 +292,9 @@ async function loadTrendChart() {
   } catch(e) {}
 }
 
-async function loadStatusChart() {
+async function loadStatusChart(data) {
   try {
-    const data = await API.get('/dashboard/loan-status-distribution');
+    data = data || await API.get('/dashboard/loan-status-distribution');
     const colors = { active:'#52B788', pending:'#E9C46A', approved:'#4895EF', completed:'#0F766E',
                      rejected:'#E63946', disbursed:'#7C3AED', written_off:'#9CA3AF' };
     const labels = data.map(d => d.status);
@@ -321,9 +321,9 @@ async function loadStatusChart() {
   } catch(e) {}
 }
 
-async function loadIncomeExpenseChart() {
+async function loadIncomeExpenseChart(data) {
   try {
-    const data = await API.get('/dashboard/income-expense-trend');
+    data = data || await API.get('/dashboard/income-expense-trend');
     const labels = data.map(d => d.month);
     const income = data.map(d => d.income);
     const expenses = data.map(d => d.expenses);
@@ -350,9 +350,9 @@ async function loadIncomeExpenseChart() {
   } catch(e) {}
 }
 
-async function loadMemberGrowthChart() {
+async function loadMemberGrowthChart(data) {
   try {
-    const data = await API.get('/dashboard/member-growth');
+    data = data || await API.get('/dashboard/member-growth');
     const labels = data.map(d => d.month);
     const members = data.map(d => d.members);
     const clients = data.map(d => d.clients);
@@ -379,9 +379,9 @@ async function loadMemberGrowthChart() {
   } catch(e) {}
 }
 
-async function loadDueToday() {
+async function loadDueToday(data) {
   try {
-    const data = await API.get('/dashboard/due-today');
+    data = data || await API.get('/dashboard/due-today');
     const el = document.getElementById('dueTodayList');
     if (!data.length) {
       el.innerHTML = '<div class="empty-state"><i class="bi bi-calendar-check"></i><p>No payments due today</p></div>';
@@ -397,9 +397,9 @@ async function loadDueToday() {
   } catch(e) {}
 }
 
-async function loadOverdue() {
+async function loadOverdue(data) {
   try {
-    const data = await API.get('/dashboard/overdue-loans');
+    data = data || await API.get('/dashboard/overdue-loans');
     const el = document.getElementById('overdueList');
     if (!data.length) {
       el.innerHTML = '<div class="empty-state"><i class="bi bi-check-circle text-success"></i><p>No overdue loans — great work!</p></div>';
@@ -414,13 +414,33 @@ async function loadOverdue() {
       </tr>`).join('') + '</tbody></table></div>';
   } catch(e) {}
 }
-// Load everything
-loadStats();
-loadTrendChart();
-loadStatusChart();
-loadIncomeExpenseChart();
-loadMemberGrowthChart();
-loadDueToday();
-loadOverdue();
+
+// Load everything in one round trip instead of 7 parallel ones -- see
+// core/routes/dashboard.py:summary() for why this matters more than it
+// looks like it should (client<->server network latency, not DB time).
+// Falls back to the old per-widget requests if /dashboard/summary itself
+// fails for any reason, so a bug in one bundling endpoint doesn't blank
+// the whole dashboard.
+(async function loadDashboard() {
+  try {
+    const all = await API.get('/dashboard/summary');
+    loadStats(all.stats);
+    loadTrendChart(all.loan_trend);
+    loadStatusChart(all.loan_status_distribution);
+    loadIncomeExpenseChart(all.income_expense_trend);
+    loadMemberGrowthChart(all.member_growth);
+    loadDueToday(all.due_today);
+    loadOverdue(all.overdue_loans);
+  } catch (e) {
+    loadStats();
+    loadTrendChart();
+    loadStatusChart();
+    loadIncomeExpenseChart();
+    loadMemberGrowthChart();
+    loadDueToday();
+    loadOverdue();
+  }
+})();
 </script>
+
 {% endblock %}
