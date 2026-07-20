@@ -629,9 +629,16 @@ def restructure_loan(loan_id):
 
     execute("DELETE FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')", (loan_id,))
 
+    # Mirror _disburse_loan's convention: the first installment falls due one
+    # full repayment period after the date the money effectively "starts"
+    # (there, disbursement_date; here, the restructure date) -- not on that
+    # same day. build_loan_schedule expects the period *before* the first
+    # due date, so pass `today` itself as that anchor rather than stepping
+    # back an extra period from it (which was collapsing the first due date
+    # back onto today instead of one period later).
     schedule_data = build_loan_schedule(
         remaining_principal, new_interest_rate, new_term, new_interest_type, new_repayment_frequency,
-        _one_period_before(today, new_repayment_frequency)
+        today
     )
     for s in schedule_data:
         execute(
