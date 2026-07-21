@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, render_template
 from datetime import date, timedelta
 
 from core.database import get_db, execute, utcnow
-from core.auth import login_required, role_required, get_current_user
+from core.auth import login_required, permission_required, get_current_user
 from core.calculator import loan_summary, build_loan_schedule, add_months
 from core.serializers import loan_public, loan_schedule_public, repayment_public, member_full_name, client_full_name
 from core.utils import (generate_loan_number, log_audit, adjust_main_account_balance,
@@ -221,7 +221,7 @@ def get_loan(loan_id):
 
 @loans_bp.route('/api/<int:loan_id>/approve', methods=['POST'])
 @login_required
-@role_required('admin', 'loan_officer')
+@permission_required('loans.approve')
 def approve_loan(loan_id):
     loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
@@ -446,7 +446,7 @@ def send_overdue_reminders():
 
 @loans_bp.route('/api/send-overdue-reminders', methods=['POST'])
 @login_required
-@role_required('admin')
+@permission_required('loans.send_overdue_reminders')
 def trigger_overdue_reminders():
     """Manually trigger overdue-reminder emails (also runnable via
     `python send_overdue_reminders.py` / cron -- see that script)."""
@@ -555,7 +555,7 @@ def topup_loan(loan_id):
 
 @loans_bp.route('/api/<int:loan_id>/restructure', methods=['POST'])
 @login_required
-@role_required('admin', 'loan_officer')
+@permission_required('loans.restructure')
 def restructure_loan(loan_id):
     """Formal restructuring for a borrower in genuine distress: term, interest
     rate, interest type and repayment frequency can all change together, and
@@ -758,7 +758,7 @@ def extend_loan(loan_id):
 
 @loans_bp.route('/api/<int:loan_id>/write-off', methods=['POST'])
 @login_required
-@role_required('admin')
+@permission_required('loans.write_off')
 def write_off_loan(loan_id):
     loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
@@ -805,7 +805,7 @@ def write_off_loan(loan_id):
 
 @loans_bp.route('/api/<int:loan_id>', methods=['DELETE'])
 @login_required
-@role_required('admin')
+@permission_required('loans.delete')
 def delete_loan(loan_id):
     loan = get_db().execute("SELECT * FROM loans WHERE id = %s", (loan_id,)).fetchone()
     if not loan:
