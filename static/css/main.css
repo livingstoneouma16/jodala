@@ -1,47 +1,54 @@
 /* =========================================================
    Jodala Microfinance — Main Stylesheet
-   Design: Navy blue (#12395E) with warm gold accents
-   Typography: Space Grotesk (display) + Inter (body)
+   Design: field-office ledger book, not a navy SaaS dashboard —
+   matches the /v3 React app's identity (frontend/src/styles/global.css)
+   so both frontends read as one product mid-migration: forest green,
+   paper background, warm rule lines, ink-stamp status badges.
+   Typography: Source Serif 4 (display) + Inter (body) + IBM Plex Mono
+   (data/labels — the ledger's own hand for figures and captions).
    ========================================================= */
 
 :root {
-  --brand-dark:    #12395E;
-  --brand-mid:     #1D5A96;
-  --brand-light:   #4C9FE8;
-  --brand-pale:    #DCEEFC;
-  --gold:          #E9C46A;
-  --gold-dark:     #C49A1A;
-  --danger:        #E63946;
-  --warning:       #F4A261;
-  --info:          #4895EF;
+  --brand-dark:    #123C31;
+  --brand-mid:     #1B4332;
+  --brand-light:   #52B788;
+  --brand-pale:    #D8F3DC;
+  --gold:          #D9A441;
+  --gold-dark:     #A9761F;
+  --danger:        #8A2F2F;
+  --warning:       #A9761F;
+  --info:          #2D6A4F;
 
   --sidebar-w:     165px;
   --sidebar-collapsed: 44px;
   --navbar-h:      40px;
 
-  --bg:            #F4F6F4;
+  --bg:            #FAF7EE;
   --surface:       #FFFFFF;
-  --surface-2:     #F0F4F1;
-  --border:        #E2E8E4;
-  --text:          #1A2721;
-  --text-muted:    #6B8070;
-  --shadow-sm:     0 1px 4px rgba(18,57,94,.08);
-  --shadow-md:     0 4px 16px rgba(18,57,94,.12);
-  --shadow-lg:     0 8px 32px rgba(18,57,94,.16);
+  --surface-2:     #EEF8EE;
+  --border:        #DED4B8;
+  --text:          #16241D;
+  --text-muted:    #6B6152;
+  --shadow-sm:     0 1px 4px rgba(22,36,29,.08);
+  --shadow-md:     0 4px 16px rgba(22,36,29,.12);
+  --shadow-lg:     0 8px 32px rgba(22,36,29,.16);
 
   --radius-sm:     4px;
   --radius-md:     7px;
   --radius-lg:     10px;
   --transition:    all .2s ease;
+
+  --font-display: 'Source Serif 4', Georgia, serif;
+  --font-mono:    'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
 }
 
 [data-bs-theme="dark"] {
-  --bg:         #0B1622;
-  --surface:    #16273B;
-  --surface-2:  #1E3348;
-  --border:     #2A425C;
-  --text:       #E7EFFA;
-  --text-muted: #7C93AD;
+  --bg:         #10201A;
+  --surface:    #16302B;
+  --surface-2:  #1C3A2E;
+  --border:     #2E4A3B;
+  --text:       #E9F3EC;
+  --text-muted: #8FAB9B;
   --shadow-sm:  0 1px 4px rgba(0,0,0,.3);
   --shadow-md:  0 4px 16px rgba(0,0,0,.4);
 }
@@ -81,10 +88,11 @@ body {
 
 .brand-icon {
   width: 28px; height: 28px;
-  background: linear-gradient(135deg, var(--brand-light), var(--gold));
-  border-radius: var(--radius-sm);
+  background: var(--brand-dark);
+  border: 1.5px solid var(--gold);
+  border-radius: 50%;
   display: grid; place-items: center;
-  font-size: 14px; color: var(--brand-dark);
+  font-size: 13px; color: var(--gold);
   flex-shrink: 0;
 }
 
@@ -107,7 +115,7 @@ body {
 .brand-text { overflow: hidden; }
 .brand-name {
   display: block;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 12.5px;
   color: #fff;
@@ -157,7 +165,7 @@ body {
 .nav-link-item i { font-size: 13px; flex-shrink: 0; width: 16px; text-align: center; }
 .nav-link-item:hover { background: rgba(255,255,255,.1); color: #fff; }
 .nav-link-item.active {
-  background: rgba(76,159,232,.2);
+  background: rgba(82,183,136,.22);
   color: var(--brand-light);
   font-weight: 600;
 }
@@ -282,7 +290,7 @@ body {
   flex-shrink: 0;
 }
 .breadcrumb-page {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 13px;
   color: var(--text);
@@ -458,8 +466,8 @@ body {
   background: linear-gradient(90deg, var(--brand-mid), var(--brand-light));
 }
 .stat-card.gold::before { background: linear-gradient(90deg, var(--gold-dark), var(--gold)); }
-.stat-card.danger::before { background: linear-gradient(90deg, #c0392b, var(--danger)); }
-.stat-card.info::before { background: linear-gradient(90deg, #2563eb, var(--info)); }
+.stat-card.danger::before { background: linear-gradient(90deg, var(--danger), #B5544F); }
+.stat-card.info::before { background: linear-gradient(90deg, var(--brand-dark), var(--info)); }
 
 .stat-icon {
   width: 29px; height: 29px;
@@ -469,16 +477,17 @@ body {
   flex-shrink: 0;
 }
 .stat-icon.green  { background: var(--brand-pale); color: var(--brand-mid); }
-.stat-icon.gold   { background: #FFF3CD; color: var(--gold-dark); }
-.stat-icon.red    { background: #FCE4E4; color: var(--danger); }
-.stat-icon.blue   { background: #DBEAFE; color: var(--info); }
-.stat-icon.purple { background: #EDE9FE; color: #7C3AED; }
-.stat-icon.teal   { background: #CCFBF1; color: #0F766E; }
+.stat-icon.gold   { background: #F6ECD8; color: var(--gold-dark); }
+.stat-icon.red    { background: #F6E0DF; color: var(--danger); }
+.stat-icon.blue   { background: var(--surface-2); color: var(--info); }
+.stat-icon.purple { background: #EEF8EE; color: var(--brand-dark); }
+.stat-icon.teal   { background: var(--brand-pale); color: var(--brand-mid); }
 
 .stat-body { flex: 1; }
 .stat-label { font-size: 9.5px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
 .stat-value {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
   font-size: 15px;
   font-weight: 700;
   color: var(--text);
@@ -502,12 +511,12 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 11px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px dashed var(--border);
   gap: 10px;
   flex-wrap: wrap;
 }
 .data-table-title {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 13px;
   color: var(--text);
@@ -517,6 +526,7 @@ body {
 .table > :not(caption) > * > * { padding: .38rem .55rem; }
 .table thead th {
   background: var(--surface-2);
+  font-family: var(--font-mono);
   font-size: 9.5px;
   font-weight: 600;
   text-transform: uppercase;
@@ -528,33 +538,40 @@ body {
 .table tbody tr { transition: background .15s; }
 .table tbody tr:hover { background: var(--surface-2); }
 .table td { vertical-align: middle; color: var(--text); font-size: 11.5px; }
+.table td.num, .table td.text-end { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 [data-bs-theme="dark"] .table > :not(caption) > * > * { border-color: var(--border); }
 
-/* ── BADGES / STATUS PILLS ────────────────────────────── */
+/* ── BADGES / STATUS "STAMPS" ─────────────────────────────
+   Signature element shared with the /v3 React app's .stamp: an
+   ink-stamp mark rather than a soft SaaS pill — bordered in its own
+   color, a slight rotation like a hand stamp landed a touch crooked. */
 .status-pill {
   display: inline-block;
+  font-family: var(--font-mono);
   padding: 2px 8px;
-  border-radius: 20px;
+  border-radius: 3px;
+  border: 1.5px solid currentColor;
+  transform: rotate(-1.5deg);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: .04em;
+  letter-spacing: .06em;
 }
-.status-active    { background: #D1FAE5; color: #065F46; }
-.status-pending   { background: #FEF9C3; color: #854D0E; }
-.status-approved  { background: #DBEAFE; color: #1E40AF; }
-.status-disbursed { background: #EDE9FE; color: #5B21B6; }
-.status-completed { background: #E0F2FE; color: #0369A1; }
-.status-rejected  { background: #FFE4E6; color: #BE123C; }
-.status-suspended { background: #FEF3C7; color: #92400E; }
-.status-overdue   { background: #FCE4E4; color: #991B1B; }
-.status-written_off { background: #F3F4F6; color: #4B5563; }
+.status-active, .status-approved, .status-completed
+  { background: var(--brand-pale); color: var(--brand-mid); }
+.status-pending, .status-suspended
+  { background: #F6ECD8; color: var(--gold-dark); }
+.status-disbursed { background: var(--surface-2); color: var(--brand-mid); }
+.status-rejected, .status-overdue, .status-written_off
+  { background: #F6E0DF; color: var(--danger); }
 
-[data-bs-theme="dark"] .status-active    { background: #064E3B; color: #6EE7B7; }
-[data-bs-theme="dark"] .status-pending   { background: #713F12; color: #FDE68A; }
-[data-bs-theme="dark"] .status-approved  { background: #1E3A5F; color: #93C5FD; }
-[data-bs-theme="dark"] .status-completed { background: #0C4A6E; color: #7DD3FC; }
-[data-bs-theme="dark"] .status-rejected  { background: #881337; color: #FCA5A5; }
+[data-bs-theme="dark"] .status-active,
+[data-bs-theme="dark"] .status-approved,
+[data-bs-theme="dark"] .status-completed { background: rgba(82,183,136,.12); color: var(--brand-light); }
+[data-bs-theme="dark"] .status-pending,
+[data-bs-theme="dark"] .status-suspended { background: rgba(169,118,31,.16); color: #E9C46A; }
+[data-bs-theme="dark"] .status-rejected,
+[data-bs-theme="dark"] .status-overdue { background: rgba(138,47,47,.2); color: #E8A9A4; }
 
 /* ── CARDS ────────────────────────────────────────────── */
 .jd-card {
@@ -565,7 +582,7 @@ body {
 }
 .jd-card-header {
   padding: 8px 11px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px dashed var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -573,7 +590,7 @@ body {
   gap: 7px;
 }
 .jd-card-title {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 11.5px;
   color: var(--text);
@@ -596,7 +613,7 @@ body {
 }
 .form-control:focus, .form-select:focus {
   border-color: var(--brand-light);
-  box-shadow: 0 0 0 3px rgba(76,159,232,.15);
+  box-shadow: 0 0 0 3px rgba(82,183,136,.18);
   background: var(--surface);
   color: var(--text);
 }
@@ -629,7 +646,7 @@ body {
 }
 .btn-brand-outline:hover { background: var(--brand-pale); }
 [data-bs-theme="dark"] .btn-brand-outline { color: var(--brand-light); border-color: var(--brand-light); }
-[data-bs-theme="dark"] .btn-brand-outline:hover { background: rgba(76,159,232,.1); }
+[data-bs-theme="dark"] .btn-brand-outline:hover { background: rgba(82,183,136,.12); }
 
 /* ── CHART CONTAINERS ─────────────────────────────────── */
 .chart-wrapper { position: relative; height: 210px; }
@@ -694,7 +711,7 @@ body {
   border-bottom: 1px solid var(--border);
   padding: 9px 12px;
 }
-.modal-title { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px; color: var(--text); }
+.modal-title { font-family: var(--font-display); font-weight: 600; font-size: 12px; color: var(--text); }
 .modal-body { color: var(--text); padding: 12px; }
 .modal-footer { border-top: 1px solid var(--border); padding: 7px 12px; }
 
@@ -748,7 +765,7 @@ body {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-mid) 60%, #4C9FE8 100%);
+  background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-mid) 55%, #2D6A4F 100%);
 }
 .login-card {
   background: var(--surface);
@@ -767,9 +784,10 @@ body {
 .login-logo-icon {
   width: 42px; height: 42px;
   background: var(--brand-dark);
-  border-radius: var(--radius-md);
+  border-radius: 50%;
   display: grid; place-items: center;
-  font-size: 21px; color: var(--brand-light);
+  font-size: 21px; color: var(--brand-pale);
+  border: 2px solid var(--brand-light);
 }
 
 /* ── TIMELINE ─────────────────────────────────────────── */
@@ -816,7 +834,7 @@ body.sidebar-locked { overflow: hidden; }
   z-index: 950;
   background: var(--surface);
   border-top: 1px solid var(--border);
-  box-shadow: 0 -2px 12px rgba(18,57,94,.08);
+  box-shadow: 0 -2px 12px rgba(22,36,29,.08);
   padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
 }
 .tab-item {

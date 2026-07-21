@@ -9,23 +9,6 @@
 # or the `postgres` service in docker-compose.yml. There's no local volume
 # to manage; every deploy is stateless as far as this container is concerned.
 
-# ---------------------------------------------------------------------------
-# Stage 1: build the /v3 React frontend (frontend/ -> frontend/dist).
-# core/routes/v3.py serves frontend/dist directly and 404s ("Frontend not
-# built yet") if it's missing -- this stage is what makes sure it isn't.
-# Kept separate from the final image so the ~200MB+ node_modules tree and
-# the Node runtime itself never end up in the image that actually ships.
-# ---------------------------------------------------------------------------
-FROM node:22-slim AS frontend-build
-
-WORKDIR /frontend
-
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-
-COPY frontend/ .
-RUN npm run build
-
 FROM python:3.12-slim AS base
 
 # Keep image layers small and predictable; don't write .pyc files into the
@@ -54,7 +37,6 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY . .
-COPY --from=frontend-build /frontend/dist ./frontend/dist
 RUN chmod +x entrypoint.sh
 
 # Create the unprivileged user the app actually runs as. Deliberately NOT

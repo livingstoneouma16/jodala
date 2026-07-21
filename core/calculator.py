@@ -3,7 +3,7 @@ calculator.py
 -------------
 All loan-math lives here: schedule generation, repayable/interest summaries,
 and penalty calculation. Pure functions only -- no db, no Flask -- so they're
-easy to unit test and reuse from both routes and any React /v3 API layer.
+easy to unit test and reuse from any route or future API layer.
 """
 from datetime import date, timedelta
 

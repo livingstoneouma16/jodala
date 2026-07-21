@@ -153,7 +153,7 @@ def create_app():
     # only ever call the API same-origin, so the safe default with nothing
     # configured is to allow NO cross-origin access at all; set
     # CORS_ALLOWED_ORIGINS if a separate frontend (e.g. a mobile app dev
-    # server or the /v3 React build served from another host) needs it.
+    # server) needs it.
     _cors_origins = [o.strip() for o in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
     CORS(app, origins=_cors_origins, supports_credentials=True)
     limiter.init_app(app)
@@ -175,7 +175,7 @@ def create_app():
     from core.routes.notifications import notifications_bp
     from core.routes.documents import documents_bp
     from core.routes.users import users_bp
-    from core.routes.v3 import v3_bp
+
     from core.routes.mpesa import mpesa_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
@@ -191,7 +191,6 @@ def create_app():
     app.register_blueprint(notifications_bp, url_prefix='/notifications')
     app.register_blueprint(documents_bp, url_prefix='/documents')
     app.register_blueprint(users_bp, url_prefix='/users')
-    app.register_blueprint(v3_bp, url_prefix='/v3')
     app.register_blueprint(mpesa_bp, url_prefix='/mpesa')
 
     # Root redirect
