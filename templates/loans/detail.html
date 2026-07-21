@@ -5,7 +5,7 @@
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
   <div>
-    <h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">Loan {{ loan.loan_number }}</h4>
+    <h4 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0">Loan {{ loan.loan_number }}</h4>
     <div class="d-flex align-items-center gap-2 mt-1">
       <span class="status-pill status-{{ loan.status }}">{{ loan.status.replace('_',' ') }}</span>
       {% if loan.is_topup %}<span class="badge bg-info">Top-up</span>{% endif %}

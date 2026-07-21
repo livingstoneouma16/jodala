@@ -9,7 +9,7 @@
       {{ member.first_name[0] if member.first_name else '' }}{{ member.last_name[0] if member.last_name else '' }}
     </div>
     <div>
-      <h4 style="font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0">{{ member.first_name }} {{ member.last_name }}</h4>
+      <h4 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0">{{ member.first_name }} {{ member.last_name }}</h4>
       <div class="d-flex align-items-center gap-2">
         <span style="font-size:12px;color:var(--text-muted)">{{ member.member_number }}</span>
         <span class="status-pill status-{{ member.status }}">{{ member.status }}</span>
