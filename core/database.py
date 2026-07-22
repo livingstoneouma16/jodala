@@ -1077,35 +1077,6 @@ def _migration_0015_loan_writeoff_account(conn):
         )
 
 
-def _migration_0016_role_permissions(conn):
-    """Adds a role_permissions table backing the new Settings > Permissions
-    page, letting an admin toggle which actions each non-admin role can
-    perform instead of it being hardcoded in @role_required(...) decorators.
-    Seeded from core.permissions.DEFAULT_ROLE_PERMISSIONS so existing
-    installs keep exactly the same access they had before this migration --
-    nothing changes until an admin explicitly edits it."""
-    from core.permissions import PERMISSIONS, CONFIGURABLE_ROLES, DEFAULT_ROLE_PERMISSIONS
-
-    conn.execute("""CREATE TABLE IF NOT EXISTS role_permissions (
-        id SERIAL PRIMARY KEY,
-        role TEXT NOT NULL,
-        permission_key TEXT NOT NULL,
-        granted BOOLEAN NOT NULL DEFAULT FALSE,
-        updated_at TEXT,
-        UNIQUE(role, permission_key)
-    )""")
-
-    now = utcnow()
-    for role in CONFIGURABLE_ROLES:
-        granted_keys = DEFAULT_ROLE_PERMISSIONS.get(role, set())
-        for key in PERMISSIONS:
-            conn.execute(
-                "INSERT INTO role_permissions (role, permission_key, granted, updated_at) "
-                "VALUES (%s, %s, %s, %s) ON CONFLICT (role, permission_key) DO NOTHING",
-                (role, key, key in granted_keys, now)
-            )
-
-
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
     (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
@@ -1122,7 +1093,6 @@ MIGRATIONS = [
     (13, 'switch email delivery from Gmail SMTP to Resend HTTP API', _migration_0013_resend_email_settings),
     (14, 'add formal loan restructuring (term/rate re-negotiation with history)', _migration_0014_loan_restructuring),
     (15, "add 'Loan Write-offs' (5100) expense account so write-offs post to the ledger", _migration_0015_loan_writeoff_account),
-    (16, "add role_permissions table for configurable per-role action permissions", _migration_0016_role_permissions),
 ]
 
 

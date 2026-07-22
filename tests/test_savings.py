@@ -12,7 +12,7 @@ def _open_savings_product(db_conn, min_balance=0):
     cur = db_conn.execute(
         """INSERT INTO savings_products (name, code, interest_rate, min_balance, is_active, created_at)
            VALUES (%s, %s, %s, %s, %s, now()::text)""",
-        ('Ordinary Savings', f'ORD-{min_balance}', 5.0, min_balance, True)
+        ('Ordinary Savings', f'ORD-{min_balance}', 5.0, min_balance, 1)
     )
     db_conn.commit()
     return db_conn.execute(

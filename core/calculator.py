@@ -99,6 +99,7 @@ def build_loan_schedule(principal, interest_rate, term, interest_type,
         else:
             period_payment = principal * (period_rate * (1 + period_rate) ** term) / ((1 + period_rate) ** term - 1)
 
+    cumulative_principal = 0.0
     for i in range(1, term + 1):
         due_date = next_due_date(start_date, i, repayment_frequency)
 
@@ -111,14 +112,29 @@ def build_loan_schedule(principal, interest_rate, term, interest_type,
             if inst_principal > balance:
                 inst_principal = balance
 
+        # Equal-installment schedules rarely divide the principal evenly
+        # (e.g. 10000/6 = 1666.666...), so rounding each installment to 2dp
+        # independently can leave the schedule's principal_due summing to a
+        # few cents more or less than the actual principal -- which then
+        # throws off downstream accounting that relies on that sum (e.g.
+        # write-off books "remaining principal" as
+        # SUM(principal_due - principal_paid), see core/routes/loans.py).
+        # The last installment absorbs whatever rounding remainder is left
+        # so the schedule always reconciles exactly to `principal`.
+        if i == term:
+            rounded_principal = round(principal - cumulative_principal, 2)
+        else:
+            rounded_principal = round(inst_principal, 2)
+        cumulative_principal += rounded_principal
+
         balance_after = max(0, balance - inst_principal)
 
         schedule.append({
             'installment_number': i,
             'due_date': due_date,
-            'principal_due': round(inst_principal, 2),
+            'principal_due': rounded_principal,
             'interest_due': round(inst_interest, 2),
-            'total_due': round(inst_principal + inst_interest, 2),
+            'total_due': round(rounded_principal + inst_interest, 2),
             'balance_after': round(balance_after, 2),
         })
         balance = balance_after

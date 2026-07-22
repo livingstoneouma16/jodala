@@ -26,7 +26,8 @@ Run with:
 """
 import os
 import sys
-from datetime import date, timedelta
+import uuid
+from datetime import date
 
 import pytest
 from pytest_postgresql import factories
@@ -37,6 +38,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 os.environ.setdefault('JWT_SECRET_KEY', 'test-secret-do-not-use-in-prod')
 os.environ.setdefault('SECRET_KEY', 'test-secret-do-not-use-in-prod')
 os.environ.setdefault('ENABLE_OVERDUE_SCHEDULER', 'false')
+# Must be set before create_app() runs (see core/__init__.py) so
+# flask-limiter's RATELIMIT_ENABLED is picked up as False at init_app time --
+# setting app.config['TESTING'] afterwards is too late for flask-limiter to
+# see it.
+os.environ.setdefault('TESTING', '1')
 
 postgresql_proc = factories.postgresql_proc()
 postgresql = factories.postgresql('postgresql_proc')
@@ -76,6 +82,41 @@ def app(database_url):
     return application
 
 
+from core.database import ConnectionWrapper
+
+
+class _SavepointConnectionWrapper(ConnectionWrapper):
+    """Same as ConnectionWrapper, but commit()/rollback() operate on a
+    SAVEPOINT nested inside the outer per-test transaction instead of
+    actually ending it. Plain ConnectionWrapper.commit() calls the real
+    psycopg2 connection.commit() -- fine in production where every request
+    gets its own connection, but fatal to this suite's isolation model:
+    with one connection reused for a whole test (so route code and
+    assertions see the same uncommitted state), a real commit() from
+    execute()/executemany() ends the outer transaction there and then, so
+    db_conn's teardown `raw.rollback()` only undoes whatever ran *after*
+    that commit -- everything before it (e.g. a route changing the seeded
+    admin's password) is permanently written to the database and leaks
+    into every later test in the session. Routing commit()/rollback()
+    through a savepoint instead keeps all of that nested inside the outer
+    transaction, so the single real rollback at teardown is the only thing
+    that ever decides what persists.
+    """
+
+    def __init__(self, raw_conn):
+        super().__init__(raw_conn)
+        self._conn.cursor().execute("SAVEPOINT test_txn")
+
+    def commit(self):
+        cur = self._conn.cursor()
+        cur.execute("RELEASE SAVEPOINT test_txn")
+        cur.execute("SAVEPOINT test_txn")
+
+    def rollback(self):
+        cur = self._conn.cursor()
+        cur.execute("ROLLBACK TO SAVEPOINT test_txn")
+
+
 @pytest.fixture
 def db_conn(app):
     """One raw connection per test, wrapped in a transaction that's rolled
@@ -84,11 +125,10 @@ def db_conn(app):
     `client` fixture) instead of opening their own, so route-side commits
     are actually nested savepoints that vanish on rollback."""
     import psycopg2
-    from core.database import ConnectionWrapper
 
     raw = psycopg2.connect(app.config['DATABASE_URL'])
     raw.autocommit = False
-    conn = ConnectionWrapper(raw)
+    conn = _SavepointConnectionWrapper(raw)
     yield conn
     raw.rollback()
     raw.close()
@@ -184,10 +224,10 @@ def auth_header(token):
 @pytest.fixture
 def loan_product(db_conn):
     cur = db_conn.execute(
-        """INSERT INTO loan_products (name, min_amount, max_amount, min_term, max_term,
-               interest_rate, interest_type, repayment_frequency, insurance_fee, is_active)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-        ('Standard Loan', 1000, 500000, 1, 24, 12.0, 'flat', 'monthly', 0, True)
+        """INSERT INTO loan_products (name, code, min_amount, max_amount, min_term, max_term,
+               interest_rate, interest_type, repayment_frequency, insurance_fee, is_active, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now()::text)""",
+        ('Standard Loan', f'STD-{uuid.uuid4().hex[:8]}', 1000, 500000, 1, 24, 12.0, 'flat', 'monthly', 0, 1)
     )
     db_conn.commit()
     return db_conn.execute(

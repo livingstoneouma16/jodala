@@ -15,7 +15,6 @@ once) and keeps the connection-pool footprint against jodala-db small by
 default -- see core/database.py's ThreadedConnectionPool maxconn, which
 should be raised alongside WEB_CONCURRENCY if you do scale workers up.
 """
-import multiprocessing
 import os
 
 bind = f"0.0.0.0:{os.getenv('PORT', '8000')}"

@@ -12,9 +12,6 @@
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('regions',this)">Regions</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('notifications',this)">Notifications</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('mpesa',this)">M-Pesa</button></li>
-  {% if user and user.role == 'admin' %}
-  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('permissions',this)">Permissions</button></li>
-  {% endif %}
 </ul>
 
 <!-- Company Settings -->
@@ -179,19 +176,6 @@
   </div></div></div>
 </div>
 
-{% if user and user.role == 'admin' %}
-<!-- Permissions -->
-<div id="permissionsSet" class="d-none">
-  <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-shield-lock" style="color:var(--brand-light)"></i>Role Permissions</div>
-    <div class="text-muted" style="font-size:12px;margin-top:2px">Choose which actions each role can perform. Admin always has full access.</div></div>
-  <div class="jd-card-body">
-    <div id="permsMatrix"><div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div></div>
-    <hr class="my-4" />
-    <div class="d-flex justify-content-end"><button class="btn btn-brand" id="savePermsBtn" onclick="savePermissions()"><i class="bi bi-save me-1"></i>Save Permissions</button></div>
-  </div></div>
-</div>
-{% endif %}
-
 <!-- Region Modal -->
 <div class="modal fade" id="regionModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -261,13 +245,12 @@ let editingRegion = null;
 function showSet(tab, el) {
   document.querySelectorAll('.nav-link').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['company','loanProducts','savingsProducts','regions','notifications','mpesa','permissions'].forEach(t=>{ const el=document.getElementById(t+'Set'); if (el) el.classList.toggle('d-none',t!==tab); });
+  ['company','loanProducts','savingsProducts','regions','notifications','mpesa'].forEach(t=>document.getElementById(t+'Set').classList.toggle('d-none',t!==tab));
   if (tab==='loanProducts') loadLoanProducts();
   else if (tab==='savingsProducts') loadSavingsProducts();
   else if (tab==='regions') loadRegions();
   else if (tab==='notifications') { loadNotificationSettings(); loadEmailLog(); }
   else if (tab==='mpesa') { loadMpesaSettings(); loadMpesaLog(); }
-  else if (tab==='permissions') loadPermissions();
 }
 
 let pendingLogo = undefined; // undefined = unchanged, '' = removed, dataURL = new logo
@@ -574,61 +557,6 @@ async function toggleRegionActive(id, makeActive) {
     Toast.success(makeActive ? 'Region activated' : 'Region deactivated');
     loadRegions();
   } catch(e) { Toast.error(e.message); }
-}
-
-// ---- Permissions ----
-let permsData = null; // { roles, modules, granted } from the API
-const ROLE_LABELS = { loan_officer: 'Loan Officer', accountant: 'Accountant', cashier: 'Cashier' };
-
-async function loadPermissions() {
-  const el = document.getElementById('permsMatrix');
-  el.innerHTML = '<div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>';
-  try {
-    permsData = await API.get('/settings/api/permissions');
-    renderPermissionsMatrix();
-  } catch(e) { Toast.error(e.message); }
-}
-
-function renderPermissionsMatrix() {
-  const { roles, modules, granted } = permsData;
-  const el = document.getElementById('permsMatrix');
-  el.innerHTML = modules.map(mod => `
-    <div class="mb-4">
-      <div style="font-family:'Source Serif 4',serif;font-weight:600;font-size:14px;margin-bottom:8px">${escapeHtml(mod.module)}</div>
-      <div class="table-responsive"><table class="table table-sm mb-0">
-        <thead><tr>
-          <th style="font-size:12px;color:var(--text-muted);font-weight:500">Action</th>
-          ${roles.map(r => `<th class="text-center" style="font-size:12px;color:var(--text-muted);font-weight:500">${escapeHtml(ROLE_LABELS[r] || r)}</th>`).join('')}
-        </tr></thead>
-        <tbody>
-          ${mod.permissions.map(p => `
-            <tr>
-              <td style="font-size:13px">${escapeHtml(p.label)}</td>
-              ${roles.map(r => `
-                <td class="text-center">
-                  <input type="checkbox" class="form-check-input perm-toggle" data-role="${r}" data-key="${p.key}"
-                    ${(granted[r] && granted[r][p.key]) ? 'checked' : ''} />
-                </td>`).join('')}
-            </tr>`).join('')}
-        </tbody>
-      </table></div>
-    </div>`).join('');
-}
-
-async function savePermissions() {
-  const btn = document.getElementById('savePermsBtn');
-  setLoading(btn, true);
-  const grants = {};
-  document.querySelectorAll('#permsMatrix .perm-toggle').forEach(cb => {
-    const role = cb.dataset.role, key = cb.dataset.key;
-    grants[role] = grants[role] || {};
-    grants[role][key] = cb.checked;
-  });
-  try {
-    await API.put('/settings/api/permissions', { grants });
-    Toast.success('Permissions updated!');
-  } catch(e) { Toast.error(e.message); }
-  finally { setLoading(btn, false); }
 }
 
 async function deleteRegion(id, name) {

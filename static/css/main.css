@@ -1,7 +1,9 @@
 /* =========================================================
    Jodala Microfinance — Main Stylesheet
    Design: field-office ledger book, not a navy SaaS dashboard —
-   forest green, paper background, warm rule lines, ink-stamp status badges.
+   matches the /v3 React app's identity (frontend/src/styles/global.css)
+   so both frontends read as one product mid-migration: forest green,
+   paper background, warm rule lines, ink-stamp status badges.
    Typography: Source Serif 4 (display) + Inter (body) + IBM Plex Mono
    (data/labels — the ledger's own hand for figures and captions).
    ========================================================= */
@@ -540,7 +542,8 @@ body {
 [data-bs-theme="dark"] .table > :not(caption) > * > * { border-color: var(--border); }
 
 /* ── BADGES / STATUS "STAMPS" ─────────────────────────────
-   An ink-stamp mark rather than a soft SaaS pill — bordered in its own
+   Signature element shared with the /v3 React app's .stamp: an
+   ink-stamp mark rather than a soft SaaS pill — bordered in its own
    color, a slight rotation like a hand stamp landed a touch crooked. */
 .status-pill {
   display: inline-block;

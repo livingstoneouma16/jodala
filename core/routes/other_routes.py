@@ -4,9 +4,7 @@ import io
 import os
 
 from core.database import get_db, execute, utcnow
-from core.auth import (login_required, permission_required, role_required, get_current_user,
-                       hash_password, invalidate_role_permissions_cache)
-from core.permissions import PERMISSIONS, CONFIGURABLE_ROLES, module_groups
+from core.auth import login_required, role_required, get_current_user, hash_password
 from core.serializers import (loan_product_public, user_public, notification_public,
                               audit_log_public, member_full_name, client_full_name)
 from core.utils import paginate, log_audit, adjust_main_account_balance, adjust_account_balance, notify
@@ -41,7 +39,7 @@ def get_company():
 
 @settings_bp.route('/api/company', methods=['PUT'])
 @login_required
-@permission_required('settings.company.update')
+@role_required('admin')
 def update_company():
     data = request.get_json()
     now = utcnow()
@@ -88,7 +86,7 @@ def update_company():
 
 @settings_bp.route('/api/notifications', methods=['GET'])
 @login_required
-@permission_required('settings.notifications.view')
+@role_required('admin')
 def get_notification_settings():
     from core.mailer import get_mail_config
     cfg = get_mail_config()
@@ -105,7 +103,7 @@ def get_notification_settings():
 
 @settings_bp.route('/api/notifications', methods=['PUT'])
 @login_required
-@permission_required('settings.notifications.update')
+@role_required('admin')
 def update_notification_settings():
     data = request.get_json() or {}
     now = utcnow()
@@ -134,7 +132,7 @@ def update_notification_settings():
 
 @settings_bp.route('/api/notifications/log', methods=['GET'])
 @login_required
-@permission_required('settings.notifications.log')
+@role_required('admin')
 def get_email_log():
     from core.mailer import get_recent_email_log
     return jsonify(get_recent_email_log(25))
@@ -142,7 +140,7 @@ def get_email_log():
 
 @settings_bp.route('/api/notifications/test', methods=['POST'])
 @login_required
-@permission_required('settings.notifications.test')
+@role_required('admin')
 def send_test_notification_email():
     from core.mailer import send_email, is_configured
     user = get_current_user()
@@ -162,7 +160,7 @@ def send_test_notification_email():
 
 @settings_bp.route('/api/mpesa', methods=['GET'])
 @login_required
-@permission_required('settings.mpesa.view')
+@role_required('admin')
 def get_mpesa_settings():
     from core.mpesa import get_b2c_config, is_b2c_configured, _setting
     cfg = get_b2c_config()
@@ -192,7 +190,7 @@ def get_mpesa_settings():
 
 @settings_bp.route('/api/mpesa', methods=['PUT'])
 @login_required
-@permission_required('settings.mpesa.update')
+@role_required('admin')
 def update_mpesa_settings():
     data = request.get_json() or {}
     now = utcnow()
@@ -250,7 +248,7 @@ def update_mpesa_settings():
 
 @settings_bp.route('/api/mpesa/log', methods=['GET'])
 @login_required
-@permission_required('settings.mpesa.log')
+@role_required('admin')
 def get_mpesa_log():
     from core.mpesa import get_recent_mpesa_log
     return jsonify(get_recent_mpesa_log(25))
@@ -258,7 +256,7 @@ def get_mpesa_log():
 
 @settings_bp.route('/api/mpesa/test', methods=['POST'])
 @login_required
-@permission_required('settings.mpesa.test')
+@role_required('admin')
 def send_test_mpesa_push():
     from core.mpesa import initiate_stk_push, MpesaError, normalize_phone
     from core.routes.mpesa import _callback_url
@@ -282,7 +280,7 @@ def send_test_mpesa_push():
 
 @settings_bp.route('/api/mpesa/test-b2c', methods=['POST'])
 @login_required
-@permission_required('settings.mpesa.test_b2c')
+@role_required('admin')
 def send_test_mpesa_b2c():
     from core.mpesa import initiate_b2c_payment, MpesaError, normalize_phone
     from core.routes.mpesa import _b2c_result_url, _b2c_timeout_url
@@ -306,7 +304,7 @@ def send_test_mpesa_b2c():
 
 @settings_bp.route('/api/company/main-account', methods=['POST'])
 @login_required
-@permission_required('settings.company.main_account')
+@role_required('admin')
 def add_to_main_account():
     data = request.get_json()
     try:
@@ -337,7 +335,7 @@ def list_loan_products():
 
 @settings_bp.route('/api/loan-products', methods=['POST'])
 @login_required
-@permission_required('settings.loan_products.create')
+@role_required('admin')
 def create_loan_product():
     data = request.get_json()
     cur = execute(
@@ -360,7 +358,7 @@ def create_loan_product():
 
 @settings_bp.route('/api/loan-products/<int:product_id>', methods=['PUT'])
 @login_required
-@permission_required('settings.loan_products.update')
+@role_required('admin')
 def update_loan_product(product_id):
     product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (product_id,)).fetchone()
     if not product:
@@ -383,7 +381,7 @@ def update_loan_product(product_id):
 
 @settings_bp.route('/api/loan-products/<int:product_id>', methods=['DELETE'])
 @login_required
-@permission_required('settings.loan_products.delete')
+@role_required('admin')
 def delete_loan_product(product_id):
     product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (product_id,)).fetchone()
     if not product:
@@ -415,7 +413,7 @@ def list_savings_products():
 
 @settings_bp.route('/api/savings-products', methods=['POST'])
 @login_required
-@permission_required('settings.savings_products.create')
+@role_required('admin')
 def create_savings_product():
     data = request.get_json()
     execute(
@@ -429,7 +427,7 @@ def create_savings_product():
 
 @settings_bp.route('/api/savings-products/<int:product_id>', methods=['PUT'])
 @login_required
-@permission_required('settings.savings_products.update')
+@role_required('admin')
 def update_savings_product(product_id):
     product = get_db().execute("SELECT * FROM savings_products WHERE id = %s", (product_id,)).fetchone()
     if not product:
@@ -454,7 +452,7 @@ def update_savings_product(product_id):
 
 @settings_bp.route('/api/savings-products/<int:product_id>', methods=['DELETE'])
 @login_required
-@permission_required('settings.savings_products.delete')
+@role_required('admin')
 def delete_savings_product(product_id):
     product = get_db().execute("SELECT * FROM savings_products WHERE id = %s", (product_id,)).fetchone()
     if not product:
@@ -486,7 +484,7 @@ def list_regions():
 
 @settings_bp.route('/api/regions', methods=['POST'])
 @login_required
-@permission_required('settings.regions.create')
+@role_required('admin')
 def create_region():
     data = request.get_json()
     name = (data.get('name') or '').strip()
@@ -508,7 +506,7 @@ def create_region():
 
 @settings_bp.route('/api/regions/<int:region_id>', methods=['PUT'])
 @login_required
-@permission_required('settings.regions.update')
+@role_required('admin')
 def update_region(region_id):
     region = get_db().execute("SELECT * FROM regions WHERE id = %s", (region_id,)).fetchone()
     if not region:
@@ -542,7 +540,7 @@ def update_region(region_id):
 
 @settings_bp.route('/api/regions/<int:region_id>', methods=['DELETE'])
 @login_required
-@permission_required('settings.regions.delete')
+@role_required('admin')
 def delete_region(region_id):
     region = get_db().execute("SELECT * FROM regions WHERE id = %s", (region_id,)).fetchone()
     if not region:
@@ -558,67 +556,6 @@ def delete_region(region_id):
     execute("DELETE FROM regions WHERE id = %s", (region_id,))
     log_audit('DELETE_REGION', 'region', region_id, old_values={'name': region['name']})
     return jsonify({'message': 'Region deleted successfully'})
-
-
-# ==================== PERMISSIONS ====================
-# Lets an admin choose which actions each non-admin role (loan_officer,
-# accountant, cashier) can perform, instead of that being hardcoded. Backed
-# by the role_permissions table (see core.permissions and database.py
-# migration 0016) and enforced by core.auth.permission_required on
-# individual routes.
-
-@settings_bp.route('/api/permissions', methods=['GET'])
-@login_required
-@role_required('admin')
-def get_permissions():
-    rows = get_db().execute(
-        "SELECT role, permission_key, granted FROM role_permissions"
-    ).fetchall()
-    granted = {}
-    for r in rows:
-        d = dict(zip(('role', 'permission_key', 'granted'), r))
-        granted.setdefault(d['role'], {})[d['permission_key']] = bool(d['granted'])
-
-    modules = [
-        {'module': module, 'permissions': [{'key': k, 'label': label} for k, label in perms]}
-        for module, perms in module_groups()
-    ]
-
-    return jsonify({
-        'roles': list(CONFIGURABLE_ROLES),
-        'modules': modules,
-        'granted': granted,
-    })
-
-
-@settings_bp.route('/api/permissions', methods=['PUT'])
-@login_required
-@role_required('admin')
-def update_permissions():
-    """Body: { "grants": { "<role>": { "<permission_key>": true|false, ... }, ... } }
-    Only known roles/permission_keys are accepted; anything else is ignored
-    so a malformed payload can't create stray rows."""
-    data = request.get_json(force=True) or {}
-    grants = data.get('grants', {})
-    now = utcnow()
-
-    for role, perms in grants.items():
-        if role not in CONFIGURABLE_ROLES:
-            continue
-        for key, value in perms.items():
-            if key not in PERMISSIONS:
-                continue
-            execute(
-                "INSERT INTO role_permissions (role, permission_key, granted, updated_at) "
-                "VALUES (%s, %s, %s, %s) "
-                "ON CONFLICT (role, permission_key) DO UPDATE SET granted = EXCLUDED.granted, "
-                "updated_at = EXCLUDED.updated_at",
-                (role, key, bool(value), now)
-            )
-
-    invalidate_role_permissions_cache()
-    log_audit('UPDATE_ROLE_PERMISSIONS', 'role_permissions', None, new_values={'grants': grants})
-    return jsonify({'message': 'Permissions updated successfully'})
 
 
 # ==================== NOTIFICATIONS ====================
@@ -896,14 +833,14 @@ def repayment_receipt_pdf(repayment_id):
 
 @users_bp.route('/')
 @login_required
-@permission_required('users.view')
+@role_required('admin')
 def index():
     return render_template('settings/users.html', user=get_current_user())
 
 
 @users_bp.route('/api', methods=['GET'])
 @login_required
-@permission_required('users.view')
+@role_required('admin')
 def list_users():
     users = get_db().execute("SELECT * FROM users").fetchall()
     return jsonify([user_public(u) for u in users])
@@ -911,7 +848,7 @@ def list_users():
 
 @users_bp.route('/api', methods=['POST'])
 @login_required
-@permission_required('users.create')
+@role_required('admin')
 def create_user():
     data = request.get_json()
     db = get_db()
@@ -1000,7 +937,7 @@ def update_user(user_id):
 
 @users_bp.route('/api/<int:user_id>', methods=['DELETE'])
 @login_required
-@permission_required('users.delete')
+@role_required('admin')
 def delete_user(user_id):
     current = get_current_user()
     if current['id'] == user_id:
@@ -1040,7 +977,7 @@ def delete_user(user_id):
 
 @users_bp.route('/api/audit-logs', methods=['GET'])
 @login_required
-@permission_required('users.audit_logs')
+@role_required('admin')
 def audit_logs():
     page = request.args.get('page', 1, type=int)
     rows, total, pages = paginate(

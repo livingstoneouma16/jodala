@@ -156,6 +156,20 @@ def create_app():
     # server) needs it.
     _cors_origins = [o.strip() for o in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
     CORS(app, origins=_cors_origins, supports_credentials=True)
+    # Disable rate limiting entirely under TESTING -- flask-limiter reads
+    # RATELIMIT_ENABLED once, at init_app() time below, so it must be set
+    # via the environment *before* create_app() runs rather than via
+    # app.config afterwards (tests/conftest.py's `app` fixture only sets
+    # config.update(TESTING=True, ...) on the object create_app() returns,
+    # which is too late for flask-limiter to see it). Its in-memory storage
+    # is also process-wide, not per-test, so with the app fixture
+    # session-scoped, every test's requests share one counter -- dozens of
+    # tests hitting /auth/login (10/min) from the same test client would
+    # otherwise start 429-ing each other well before the login-specific
+    # tests even run, unrelated to anything those tests are actually
+    # checking. tests/conftest.py sets TESTING=1 in the environment before
+    # calling create_app for exactly this reason.
+    app.config['RATELIMIT_ENABLED'] = os.getenv('TESTING', '').strip().lower() not in ('1', 'true', 'yes')
     limiter.init_app(app)
 
     # Schema + migrations + first-run bootstrap

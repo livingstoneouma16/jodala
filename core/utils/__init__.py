@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from flask import request, g
 import json
 
@@ -9,9 +9,9 @@ def _next_number(table, prefix, width, year_in_number=False, dashed=False):
     row = query_one(f"SELECT id FROM {table} ORDER BY id DESC LIMIT 1")
     num = (row['id'] + 1) if row else 1
     if dashed:
-        return f"{prefix}-{datetime.utcnow().year}-{num:0{width}d}"
+        return f"{prefix}-{datetime.now(timezone.utc).year}-{num:0{width}d}"
     if year_in_number:
-        return f"{prefix}{datetime.utcnow().year}{num:0{width}d}"
+        return f"{prefix}{datetime.now(timezone.utc).year}{num:0{width}d}"
     return f"{prefix}{num:0{width}d}"
 
 
@@ -28,7 +28,7 @@ def generate_loan_number():
     prefix = row['value'] if row else 'LN'
     last = query_one("SELECT id FROM loans ORDER BY id DESC LIMIT 1")
     num = (last['id'] + 1) if last else 1
-    return f"{prefix}{datetime.utcnow().year}{num:02d}"
+    return f"{prefix}{datetime.now(timezone.utc).year}{num:02d}"
 
 
 def generate_receipt_number():

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template
 
 from core.database import get_db, execute, utcnow
-from core.auth import login_required, permission_required, get_current_user
+from core.auth import login_required, role_required, get_current_user
 from core.serializers import member_public
 from core.utils import generate_member_number, log_audit, paginate, notify
 
@@ -120,7 +120,7 @@ def create_member():
 
 @members_bp.route('/api/<int:member_id>', methods=['DELETE'])
 @login_required
-@permission_required('members.delete')
+@role_required('admin')
 def delete_member(member_id):
     member = get_db().execute("SELECT * FROM members WHERE id = %s", (member_id,)).fetchone()
     if not member:

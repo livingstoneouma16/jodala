@@ -24,7 +24,7 @@ from core.database import get_db, execute, utcnow
 from core.auth import login_required, get_current_user
 from core.serializers import mpesa_transaction_public
 from core.utils import log_audit
-from core.mpesa import initiate_stk_push, initiate_b2c_payment, MpesaError, get_mpesa_config, normalize_phone
+from core.mpesa import initiate_stk_push, initiate_b2c_payment, MpesaError, normalize_phone
 from core import limiter
 
 mpesa_bp = Blueprint('mpesa', __name__)
@@ -349,7 +349,7 @@ def _handle_b2c_result(body):
     try:
         from core.routes.loans import _disburse_loan, _DisbursementError
         try:
-            updated_loan = _disburse_loan(
+            _disburse_loan(
                 loan_id=txn['target_id'], user_id=txn['initiated_by'], disbursement_method='mpesa',
                 mpesa_receipt=transaction_id,
             )

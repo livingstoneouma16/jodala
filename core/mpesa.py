@@ -28,7 +28,7 @@ from datetime import datetime
 
 import requests
 
-from core.database import get_db, execute, utcnow
+from core.database import get_db
 
 logger = logging.getLogger('jodala.mpesa')
 
