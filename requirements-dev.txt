@@ -1,3 +1,6 @@
 -r requirements.txt
 pytest==9.1.1
 pytest-postgresql==6.1.1
+# pytest-postgresql imports psycopg (v3), whose binary distribution bundles
+# libpq on Windows and avoids requiring a separately installed PostgreSQL SDK.
+psycopg[binary]==3.3.4
