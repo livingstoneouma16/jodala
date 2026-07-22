@@ -17,12 +17,19 @@ def member_full_name(row):
 def user_public(row):
     if row is None:
         return None
+    d = dict(row)
     return {
         'id': row['id'],
         'username': row['username'],
         'email': row['email'],
         'full_name': row['full_name'],
         'role': row['role'],
+        # Extra roles granted on top of the primary role (see
+        # core/auth.py:role_required and Settings > Users). Only present
+        # when the row was already dict-shaped with this key attached
+        # (e.g. by login_required); plain DB rows won't have it, so we
+        # look it up separately where needed (core/routes/other_routes.py).
+        'additional_roles': d.get('additional_roles', []),
         'phone': row['phone'],
         'is_active': bool(row['is_active']),
         'must_change_password': bool(row['must_change_password']),

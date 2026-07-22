@@ -5,14 +5,18 @@ Token issuance/verification (PyJWT) and role-based permission decorators.
 Password hashing uses bcrypt directly (no flask-bcrypt wrapper needed).
 """
 import bcrypt
+import hashlib
+import secrets
 import jwt as pyjwt
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import request, g, jsonify, current_app, redirect, url_for
 
-from core.database import get_db, row_to_dict
+from core.database import get_db, row_to_dict, execute, utcnow
 
 ROLES = ('admin', 'loan_officer', 'accountant', 'cashier')
+
+PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)
 
 # Endpoints a user with must_change_password=1 can still reach -- just
 # enough to actually change their password and to log out. Everything else
@@ -34,6 +38,59 @@ def verify_password(plain_password, password_hash):
         return bcrypt.checkpw(plain_password.encode('utf-8'), password_hash.encode('utf-8'))
     except (ValueError, AttributeError):
         return False
+
+
+# ---------------------------------------------------------------------------
+# Password reset tokens ("Forgot password?" on the login page)
+# ---------------------------------------------------------------------------
+def _hash_reset_token(raw_token):
+    # A plain sha256 digest (not bcrypt) is fine and fast here -- the raw
+    # token is already a high-entropy random value (256 bits), not a
+    # human-memorable password, so it doesn't need bcrypt's deliberate
+    # slowness/salting to resist guessing.
+    return hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+
+
+def create_password_reset_token(user_id):
+    """Generates a random reset token, stores only its hash, and returns the
+    raw token (this is the only place the raw value ever exists outside the
+    email it gets sent in)."""
+    raw_token = secrets.token_urlsafe(32)
+    expires_at = (datetime.now(timezone.utc) + PASSWORD_RESET_TOKEN_TTL).isoformat()
+    execute(
+        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, created_at) "
+        "VALUES (%s, %s, %s, %s)",
+        (user_id, _hash_reset_token(raw_token), expires_at, utcnow())
+    )
+    return raw_token
+
+
+def verify_password_reset_token(raw_token):
+    """Returns the matching password_reset_tokens row if `raw_token` is
+    valid, unused, and unexpired -- otherwise None. Does not consume it;
+    call consume_password_reset_token() once the new password is actually set."""
+    if not raw_token:
+        return None
+    row = get_db().execute(
+        "SELECT * FROM password_reset_tokens WHERE token_hash = %s", (_hash_reset_token(raw_token),)
+    ).fetchone()
+    if not row:
+        return None
+    if row['used_at']:
+        return None
+    try:
+        expires_at = datetime.fromisoformat(row['expires_at'])
+    except (TypeError, ValueError):
+        return None
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        return None
+    return row
+
+
+def consume_password_reset_token(token_id):
+    execute("UPDATE password_reset_tokens SET used_at = %s WHERE id = %s", (utcnow(), token_id))
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +169,14 @@ def login_required(fn):
         if not user['is_active']:
             return _unauthenticated_response('Account is deactivated', status=403)
 
+        # Extra roles an admin has granted on top of the primary `role`
+        # column (see core/database.py migration 17 / Settings > Users) --
+        # role_required() below checks the union of the two.
+        extra_roles = get_db().execute(
+            "SELECT role FROM user_roles WHERE user_id = %s", (user['id'],)
+        ).fetchall()
+        user['additional_roles'] = [r['role'] for r in extra_roles]
+
         g.current_user = user
         g.current_user_id = user['id']
 
@@ -139,7 +204,8 @@ def role_required(*allowed_roles):
             user = getattr(g, 'current_user', None)
             if user is None:
                 return jsonify({'error': 'Authentication required'}), 401
-            if user['role'] not in allowed_roles:
+            user_roles = {user['role'], *user.get('additional_roles', [])}
+            if not user_roles & set(allowed_roles):
                 return jsonify({'error': 'Insufficient permissions for this action'}), 403
             return fn(*args, **kwargs)
         return wrapper

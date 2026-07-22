@@ -271,15 +271,22 @@ def get_company_branding():
 
     try:
         rows = get_db().execute(
-            "SELECT key, value FROM company_settings WHERE key IN ('company_name', 'logo_image')"
+            "SELECT key, value FROM company_settings WHERE key IN "
+            "('company_name', 'logo_image', 'session_idle_timeout_minutes')"
         ).fetchall()
         branding = {r['key']: r['value'] for r in rows}
     except Exception:
         branding = {}
 
+    try:
+        idle_timeout_minutes = int(branding.get('session_idle_timeout_minutes') or 15)
+    except (TypeError, ValueError):
+        idle_timeout_minutes = 15
+
     data = {
         'company_name': branding.get('company_name') or 'Jodala Microfinance',
-        'company_logo': branding.get('logo_image') or ''
+        'company_logo': branding.get('logo_image') or '',
+        'idle_timeout_minutes': idle_timeout_minutes,
     }
     _branding_cache['data'] = data
     _branding_cache['expires_at'] = now + BRANDING_CACHE_TTL
@@ -1077,6 +1084,67 @@ def _migration_0015_loan_writeoff_account(conn):
         )
 
 
+def _migration_0016_password_reset_tokens(conn):
+    """Self-service 'Forgot password?' flow on the login page. Tokens are
+    stored hashed (sha256), never in plaintext -- the raw token only ever
+    exists in the emailed link and in the requester's browser, matching how
+    JWT/password secrets are handled elsewhere in this app. `used_at` marks
+    a token consumed instead of deleting the row, so there's an audit trail
+    of resets even after the token itself is no longer valid."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        token_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT NOT NULL
+    )""")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_password_reset_token_hash ON password_reset_tokens(token_hash)"
+    )
+
+
+def _migration_0017_user_additional_roles(conn):
+    """Lets an admin grant a user more than one role (e.g. a loan officer who
+    also covers cashier duties) without giving up the existing single
+    `users.role` column, which stays the user's primary role and keeps every
+    existing `role_required('admin')`-style check working unchanged.
+    `user_roles` holds only the *extra* roles on top of that; `role_required`
+    (core/auth.py) checks the union of the two."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS user_roles (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        role TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(user_id, role)
+    )""")
+
+
+def _migration_0018_notification_recipients_and_idle_timeout(conn):
+    """Two independent admin-configurable settings added together since both
+    are simple company_settings rows seeded for existing installs:
+
+    - notification_recipient_ids: comma-separated users.id list controlling
+      who gets emailed for system-wide events (previously hardcoded to
+      every admin in core/utils/notify_admins -- see that function for the
+      fallback-to-all-admins behaviour when this is left blank).
+    - session_idle_timeout_minutes: minutes of inactivity before the
+      frontend auto-logs a user out (static/js/app.js). Blank/0 disables it.
+    """
+    now = utcnow()
+    defaults = {
+        'notification_recipient_ids': '',
+        'session_idle_timeout_minutes': '15',
+    }
+    for key, value in defaults.items():
+        row = conn.execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)",
+                (key, value, now)
+            )
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
     (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
@@ -1093,6 +1161,9 @@ MIGRATIONS = [
     (13, 'switch email delivery from Gmail SMTP to Resend HTTP API', _migration_0013_resend_email_settings),
     (14, 'add formal loan restructuring (term/rate re-negotiation with history)', _migration_0014_loan_restructuring),
     (15, "add 'Loan Write-offs' (5100) expense account so write-offs post to the ledger", _migration_0015_loan_writeoff_account),
+    (16, 'add password_reset_tokens table for self-service login-page password reset', _migration_0016_password_reset_tokens),
+    (17, 'add user_roles table so admins can grant a user more than one role', _migration_0017_user_additional_roles),
+    (18, 'add notification recipient selection and session idle timeout settings', _migration_0018_notification_recipients_and_idle_timeout),
 ]
 
 
