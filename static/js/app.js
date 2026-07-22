@@ -502,12 +502,99 @@ document.addEventListener('input', e => {
   }
 });
 
+// ── Idle Timeout Auto-Logout ──────────────────────────────
+// Reads the admin-configured timeout (Settings > Notifications) off
+// <body data-idle-timeout-minutes>, set by templates/base.html from
+// core/database.py:get_company_branding(). A value of 0 disables it.
+function initIdleTimer() {
+  const minutes = parseInt(document.body.dataset.idleTimeoutMinutes || '0', 10);
+  if (!minutes || minutes <= 0) return;
+
+  const IDLE_MS = minutes * 60 * 1000;
+  const WARNING_MS = Math.min(60000, Math.floor(IDLE_MS / 4)); // warn up to 60s before logout
+  let idleTimer, warningTimer, countdownInterval;
+  let warningModalEl, warningModal, countdownEl;
+
+  function ensureWarningModal() {
+    if (warningModalEl) return;
+    warningModalEl = document.createElement('div');
+    warningModalEl.className = 'modal fade';
+    warningModalEl.id = 'idleWarningModal';
+    warningModalEl.tabIndex = -1;
+    warningModalEl.setAttribute('data-bs-backdrop', 'static');
+    warningModalEl.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+          <div class="modal-body text-center p-4">
+            <i class="bi bi-clock-history" style="font-size:28px;color:var(--brand-light)"></i>
+            <p class="mt-2 mb-1" style="font-size:13px;font-weight:600">You've been inactive</p>
+            <p class="text-muted mb-3" style="font-size:12px">
+              You'll be signed out in <span id="idleCountdown">60</span>s for your security.
+            </p>
+            <button class="btn btn-brand btn-sm w-100" id="stayLoggedInBtn">
+              <i class="bi bi-check2 me-1"></i>Stay Signed In
+            </button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(warningModalEl);
+    countdownEl = warningModalEl.querySelector('#idleCountdown');
+    warningModal = new bootstrap.Modal(warningModalEl);
+    warningModalEl.querySelector('#stayLoggedInBtn').addEventListener('click', () => {
+      warningModal.hide();
+      resetIdleTimer();
+    });
+  }
+
+  function doLogout() {
+    window.location.href = '/auth/logout';
+  }
+
+  function showWarning() {
+    ensureWarningModal();
+    let secondsLeft = Math.floor(WARNING_MS / 1000);
+    countdownEl.textContent = secondsLeft;
+    warningModal.show();
+    countdownInterval = setInterval(() => {
+      secondsLeft -= 1;
+      if (countdownEl) countdownEl.textContent = Math.max(secondsLeft, 0);
+      if (secondsLeft <= 0) {
+        clearInterval(countdownInterval);
+        doLogout();
+      }
+    }, 1000);
+  }
+
+  function clearAllTimers() {
+    clearTimeout(idleTimer);
+    clearTimeout(warningTimer);
+    clearInterval(countdownInterval);
+  }
+
+  function resetIdleTimer() {
+    clearAllTimers();
+    if (warningModal) warningModal.hide();
+    warningTimer = setTimeout(showWarning, IDLE_MS - WARNING_MS);
+    idleTimer = setTimeout(doLogout, IDLE_MS);
+  }
+
+  // Any of these count as "active" -- reset the clock, throttled so a
+  // continuous mousemove/scroll doesn't fire this on every event.
+  const resetThrottled = debounce(resetIdleTimer, 1000);
+  ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(evt => {
+    document.addEventListener(evt, resetThrottled, { passive: true });
+  });
+
+  resetIdleTimer();
+}
+
 // ── Init ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initSidebar();
   initTheme();
   initGlobalSearch();
   loadNotifications();
+  initIdleTimer();
 
   // Refresh notifications every 2 minutes
   setInterval(loadNotifications, 120000);

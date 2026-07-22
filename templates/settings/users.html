@@ -33,6 +33,16 @@
         <div class="col-md-6"><label class="form-label">Role *</label>
           <select class="form-select" id="uRole"><option value="loan_officer">Loan Officer</option><option value="cashier">Cashier</option><option value="accountant">Accountant</option><option value="admin">Admin</option></select></div>
         <div class="col-md-6"><label class="form-label">Password</label><input type="password" class="form-control" id="uPass" placeholder="Leave blank to keep current" /></div>
+        <div class="col-12">
+          <label class="form-label">Additional Roles</label>
+          <div class="text-muted mb-1" style="font-size:11px">Grants access to other roles' pages/permissions on top of the primary role above.</div>
+          <div class="d-flex flex-wrap gap-3" id="uAdditionalRoles">
+            <div class="form-check"><input class="form-check-input additional-role-check" type="checkbox" value="loan_officer" id="arLoanOfficer" /><label class="form-check-label" for="arLoanOfficer" style="font-size:12.5px">Loan Officer</label></div>
+            <div class="form-check"><input class="form-check-input additional-role-check" type="checkbox" value="cashier" id="arCashier" /><label class="form-check-label" for="arCashier" style="font-size:12.5px">Cashier</label></div>
+            <div class="form-check"><input class="form-check-input additional-role-check" type="checkbox" value="accountant" id="arAccountant" /><label class="form-check-label" for="arAccountant" style="font-size:12.5px">Accountant</label></div>
+            <div class="form-check"><input class="form-check-input additional-role-check" type="checkbox" value="admin" id="arAdmin" /><label class="form-check-label" for="arAdmin" style="font-size:12.5px">Admin</label></div>
+          </div>
+        </div>
         <input type="hidden" id="editUserId" value="" />
       </div></div>
       <div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -51,6 +61,10 @@ function openUserModal(user=null) {
   document.getElementById('uPhone').value = user?.phone || '';
   document.getElementById('uRole').value = user?.role || 'loan_officer';
   document.getElementById('uPass').value = '';
+  const additionalRoles = new Set(user?.additional_roles || []);
+  document.querySelectorAll('.additional-role-check').forEach(el => {
+    el.checked = additionalRoles.has(el.value);
+  });
 }
 
 async function loadUsers() {
@@ -62,7 +76,9 @@ async function loadUsers() {
       <td style="font-weight:600;font-size:13px">${escapeHtml(u.full_name)}</td>
       <td style="font-size:12px;color:var(--text-muted)">@${escapeHtml(u.username)}</td>
       <td style="font-size:12px">${escapeHtml(u.email)}</td>
-      <td><span style="font-size:11px;font-weight:600;color:${roleColor[u.role]||'var(--text-muted)'};text-transform:capitalize">${escapeHtml(u.role.replace('_',' '))}</span></td>
+      <td><span style="font-size:11px;font-weight:600;color:${roleColor[u.role]||'var(--text-muted)'};text-transform:capitalize">${escapeHtml(u.role.replace('_',' '))}</span>
+        ${(u.additional_roles||[]).map(r=>`<span class="badge ms-1" style="background:var(--surface-2);color:var(--text-muted);font-size:9.5px;text-transform:capitalize" title="Additional role">${escapeHtml(r.replace('_',' '))}</span>`).join('')}
+      </td>
       <td style="font-size:12px;color:var(--text-muted)">${u.last_login ? timeAgo(u.last_login) : 'Never'}</td>
       <td>${statusPill(u.is_active?'active':'suspended')}${u.must_change_password ? ' <span class="badge" style="background:#FEF3C7;color:#92400E;font-weight:600;font-size:9.5px" title="Must change password on next login">pending change</span>' : ''}</td>
       <td><div class="d-flex gap-1">
@@ -92,9 +108,11 @@ async function saveUser() {
   const btn = document.getElementById('saveUserBtn');
   setLoading(btn, true);
   const id = document.getElementById('editUserId').value;
+  const additionalRoles = Array.from(document.querySelectorAll('.additional-role-check:checked')).map(el => el.value);
   const body = { full_name:document.getElementById('uName').value, username:document.getElementById('uUser').value,
     email:document.getElementById('uEmail').value, phone:document.getElementById('uPhone').value,
-    role:document.getElementById('uRole').value, password:document.getElementById('uPass').value };
+    role:document.getElementById('uRole').value, password:document.getElementById('uPass').value,
+    additional_roles: additionalRoles };
   try {
     if (id) await API.put(`/users/api/${id}`, body);
     else await API.post('/users/api', body);

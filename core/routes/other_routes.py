@@ -4,10 +4,11 @@ import io
 import os
 
 from core.database import get_db, execute, utcnow
-from core.auth import login_required, role_required, get_current_user, hash_password
+from core.auth import login_required, role_required, get_current_user, hash_password, ROLES
 from core.serializers import (loan_product_public, user_public, notification_public,
                               audit_log_public, member_full_name, client_full_name)
-from core.utils import paginate, log_audit, adjust_main_account_balance, adjust_account_balance, notify
+from core.utils import (paginate, log_audit, adjust_main_account_balance, adjust_account_balance, notify,
+                        get_notification_recipient_ids)
 
 settings_bp = Blueprint('settings', __name__)
 notifications_bp = Blueprint('notifications', __name__)
@@ -90,6 +91,9 @@ def update_company():
 def get_notification_settings():
     from core.mailer import get_mail_config
     cfg = get_mail_config()
+    idle_row = get_db().execute(
+        "SELECT value FROM company_settings WHERE key = 'session_idle_timeout_minutes'"
+    ).fetchone()
     return jsonify({
         'gmail_address': cfg['address'],
         # Never echo the real app password back to the browser -- just tell
@@ -98,6 +102,8 @@ def get_notification_settings():
         'gmail_app_password_set': bool(cfg['app_password']),
         'gmail_sender_name': cfg['sender_name'],
         'email_notifications_enabled': cfg['enabled'],
+        'notification_recipient_ids': get_notification_recipient_ids(),
+        'session_idle_timeout_minutes': int(idle_row['value']) if idle_row and idle_row['value'] else 15,
     })
 
 
@@ -125,6 +131,25 @@ def update_notification_settings():
     # in -- an empty string here means "leave it unchanged", not "clear it".
     if data.get('gmail_app_password'):
         _set('gmail_app_password', data['gmail_app_password'].strip())
+
+    if 'notification_recipient_ids' in data:
+        ids = data.get('notification_recipient_ids') or []
+        try:
+            ids = [int(i) for i in ids]
+        except (TypeError, ValueError):
+            return jsonify({'error': 'notification_recipient_ids must be a list of user ids'}), 400
+        _set('notification_recipient_ids', ','.join(str(i) for i in ids))
+
+    if 'session_idle_timeout_minutes' in data:
+        try:
+            minutes = int(data.get('session_idle_timeout_minutes') or 0)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'session_idle_timeout_minutes must be a number'}), 400
+        if minutes < 0:
+            return jsonify({'error': 'session_idle_timeout_minutes cannot be negative'}), 400
+        _set('session_idle_timeout_minutes', str(minutes))
+        from core.database import invalidate_branding_cache
+        invalidate_branding_cache()
 
     log_audit('UPDATE_NOTIFICATION_SETTINGS', 'company_settings', None)
     return jsonify({'message': 'Notification settings updated'})
@@ -838,12 +863,46 @@ def index():
     return render_template('settings/users.html', user=get_current_user())
 
 
+@users_bp.route('/api/roles', methods=['GET'])
+@login_required
+@role_required('admin')
+def list_roles():
+    """The fixed set of roles a user (or an additional role grant) can hold.
+    Kept as a simple constant (core/auth.py:ROLES) rather than a DB table
+    since every protected route in the app checks against these exact
+    strings (@role_required('admin', ...)) -- a freeform custom role would
+    have no permissions wired up anywhere."""
+    return jsonify(list(ROLES))
+
+
+def _additional_roles_for(user_id):
+    rows = get_db().execute("SELECT role FROM user_roles WHERE user_id = %s", (user_id,)).fetchall()
+    return [r['role'] for r in rows]
+
+
+def _set_additional_roles(user_id, roles):
+    roles = sorted({r for r in (roles or []) if r in ROLES})
+    execute("DELETE FROM user_roles WHERE user_id = %s", (user_id,))
+    now = utcnow()
+    for role in roles:
+        execute(
+            "INSERT INTO user_roles (user_id, role, created_at) VALUES (%s, %s, %s)",
+            (user_id, role, now)
+        )
+    return roles
+
+
 @users_bp.route('/api', methods=['GET'])
 @login_required
 @role_required('admin')
 def list_users():
     users = get_db().execute("SELECT * FROM users").fetchall()
-    return jsonify([user_public(u) for u in users])
+    result = []
+    for u in users:
+        pub = user_public(u)
+        pub['additional_roles'] = _additional_roles_for(u['id'])
+        result.append(pub)
+    return jsonify(result)
 
 
 @users_bp.route('/api', methods=['POST'])
@@ -868,6 +927,7 @@ def create_user():
          data.get('full_name'), data.get('role', 'loan_officer'), data.get('phone'), now, now)
     )
     new_user = db.execute("SELECT * FROM users WHERE id = %s", (cur.lastrowid,)).fetchone()
+    additional_roles = _set_additional_roles(new_user['id'], data.get('additional_roles'))
 
     temp_password = data.get('password', 'Jodala@2024')
     notify(
@@ -888,7 +948,10 @@ def create_user():
         )
     )
 
-    return jsonify({'message': 'User created', 'user': user_public(new_user)}), 201
+    return jsonify({
+        'message': 'User created',
+        'user': {**user_public(new_user), 'additional_roles': additional_roles}
+    }), 201
 
 
 @users_bp.route('/api/<int:user_id>', methods=['PUT'])
@@ -912,6 +975,8 @@ def update_user(user_id):
     if current['role'] == 'admin':
         role = data.get('role', role)
         is_active = 1 if data.get('is_active', is_active) else 0
+        if 'additional_roles' in data:
+            _set_additional_roles(user_id, data.get('additional_roles'))
 
     if data.get('password'):
         password_hash = hash_password(data['password'])
@@ -932,7 +997,10 @@ def update_user(user_id):
         )
 
     updated = get_db().execute("SELECT * FROM users WHERE id = %s", (user_id,)).fetchone()
-    return jsonify({'message': 'User updated', 'user': user_public(updated)})
+    return jsonify({
+        'message': 'User updated',
+        'user': {**user_public(updated), 'additional_roles': _additional_roles_for(user_id)}
+    })
 
 
 @users_bp.route('/api/<int:user_id>', methods=['DELETE'])
@@ -969,6 +1037,8 @@ def delete_user(user_id):
 
     old_data = user_public(target)
     execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
+    execute("DELETE FROM user_roles WHERE user_id = %s", (user_id,))
+    execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
     execute("DELETE FROM users WHERE id = %s", (user_id,))
     log_audit('DELETE_USER', 'user', user_id, old_values=old_data)
 

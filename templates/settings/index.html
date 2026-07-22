@@ -87,6 +87,34 @@
     </div>
   </div></div>
 
+  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-people" style="color:var(--brand-light)"></i>Email Notification Recipients</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">Choose which staff members receive system-wide email notifications (new registrations, overdue reminders, etc). Defaults to all admins if none are selected.</div></div>
+    <div class="jd-card-body">
+      <div class="row g-2" id="notifRecipients">
+        <div class="text-center p-3"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+      </div>
+      <div class="d-flex justify-content-end mt-3">
+        <button class="btn btn-brand" id="saveRecipientsBtn" onclick="saveNotificationRecipients()"><i class="bi bi-save me-1"></i>Save Recipients</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-hourglass-split" style="color:var(--brand-light)"></i>Session Auto-Logout</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">Automatically sign users out after a period of inactivity, for security on shared devices</div></div>
+    <div class="jd-card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:12.5px">Idle timeout (minutes)</label>
+          <input type="number" min="0" step="1" class="form-control" id="nIdleTimeout" placeholder="e.g. 15" />
+          <div class="text-muted mt-1" style="font-size:11.5px">Set to 0 to disable auto-logout.</div>
+        </div>
+        <div class="col-md-8 text-md-end">
+          <button class="btn btn-brand" id="saveIdleTimeoutBtn" onclick="saveIdleTimeout()"><i class="bi bi-save me-1"></i>Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="jd-card mt-3"><div class="jd-card-header d-flex justify-content-between align-items-center">
     <div>
       <div class="jd-card-title"><i class="bi bi-clock-history" style="color:var(--brand-light)"></i>Recent Email Activity</div>
@@ -586,7 +614,55 @@ async function loadNotificationSettings() {
           <label class="form-check-label" for="nEnabled" style="font-size:12.5px">Email notifications enabled</label>
         </div>
       </div>`;
+    document.getElementById('nIdleTimeout').value = data.session_idle_timeout_minutes ?? 15;
+    await loadNotificationRecipients(data.notification_recipient_ids || []);
   } catch(e) { Toast.error(e.message); }
+}
+
+async function loadNotificationRecipients(selectedIds) {
+  const container = document.getElementById('notifRecipients');
+  try {
+    const users = await API.get('/users/api');
+    const selected = new Set((selectedIds||[]).map(String));
+    if (!users.length) {
+      container.innerHTML = `<div class="text-muted" style="font-size:12.5px">No users found.</div>`;
+      return;
+    }
+    container.innerHTML = users.map(u => `
+      <div class="col-md-6 col-lg-4">
+        <div class="form-check">
+          <input class="form-check-input notif-recipient-check" type="checkbox" value="${u.id}" id="nRecip${u.id}" ${selected.has(String(u.id)) ? 'checked' : ''} ${!u.is_active ? 'disabled' : ''} />
+          <label class="form-check-label" for="nRecip${u.id}" style="font-size:12.5px">
+            ${escapeHtml(u.full_name)} <span class="text-muted" style="font-size:11px">(${escapeHtml(u.role.replace('_',' '))})</span>
+            ${!u.is_active ? '<span class="text-muted" style="font-size:10.5px"> — inactive</span>' : ''}
+          </label>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    container.innerHTML = `<div class="text-muted" style="font-size:12.5px">Could not load users.</div>`;
+  }
+}
+
+async function saveNotificationRecipients() {
+  const btn = document.getElementById('saveRecipientsBtn');
+  setLoading(btn, true);
+  try {
+    const ids = Array.from(document.querySelectorAll('.notif-recipient-check:checked')).map(el => parseInt(el.value, 10));
+    await API.put('/settings/api/notifications', { notification_recipient_ids: ids });
+    Toast.success('Notification recipients saved');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function saveIdleTimeout() {
+  const btn = document.getElementById('saveIdleTimeoutBtn');
+  setLoading(btn, true);
+  try {
+    const minutes = parseInt(document.getElementById('nIdleTimeout').value || '0', 10);
+    await API.put('/settings/api/notifications', { session_idle_timeout_minutes: minutes });
+    Toast.success('Session timeout saved');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
 }
 
 async function saveNotificationSettings() {

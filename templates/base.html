@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
   {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body data-idle-timeout-minutes="{{ idle_timeout_minutes }}">
 
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">

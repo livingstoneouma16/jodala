@@ -92,6 +92,13 @@
     <p class="login-title">Welcome back</p>
     <p class="login-sub">Sign in to your account to continue</p>
 
+    {% if reset_done %}
+    <div class="alert alert-success alert-dismissible py-1 mb-3" style="font-size:11.5px">
+      <i class="bi bi-check-circle me-1"></i>Your password has been reset. Sign in with your new password.
+      <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
     {% if error %}
     <div class="alert alert-danger alert-dismissible py-1 mb-3" style="font-size:11.5px">
       <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
@@ -118,6 +125,9 @@
           <span class="input-group-text btn-show-pwd" id="togglePwd" title="Show password">
             <i class="bi bi-eye" id="eyeIcon"></i>
           </span>
+        </div>
+        <div class="text-end mt-1">
+          <a href="{{ url_for('auth.forgot_password') }}" style="font-size:10.5px;color:var(--brand-light)">Forgot password?</a>
         </div>
       </div>
 

@@ -237,13 +237,30 @@ def notify(user_id, title, message, notification_type='info', related_type=None,
         )
 
 
-def notify_admins(title, message, notification_type='info', related_type=None, related_id=None):
-    """Write an in-app notification for every admin user (no email -- admins
-    see these in their dashboard bell; use `notify()` directly if a specific
-    admin also needs an email)."""
+def get_notification_recipient_ids():
+    """Users configured (Settings > Notifications > Email Recipients) to
+    receive email copies of system-wide notifications. Falls back to every
+    active admin if nothing has been explicitly configured yet, so existing
+    installs keep their current behaviour until an admin picks specific
+    recipients."""
+    row = get_db().execute(
+        "SELECT value FROM company_settings WHERE key = 'notification_recipient_ids'"
+    ).fetchone()
+    raw = (row['value'] if row else '') or ''
+    ids = [int(x) for x in raw.split(',') if x.strip().isdigit()]
+    if ids:
+        return ids
     admins = get_db().execute("SELECT id FROM users WHERE role = 'admin' AND is_active = 1").fetchall()
-    for a in admins:
-        notify(a['id'], title, message, notification_type, related_type, related_id)
+    return [a['id'] for a in admins]
+
+
+def notify_admins(title, message, notification_type='info', related_type=None, related_id=None):
+    """Write an in-app notification (and, via notify()'s default
+    notify_user_email=True, an email) for whichever users are configured as
+    email/system notification recipients (Settings > Notifications) -- all
+    admins by default if nothing's been configured."""
+    for user_id in get_notification_recipient_ids():
+        notify(user_id, title, message, notification_type, related_type, related_id)
 
 
 
