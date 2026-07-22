@@ -5,7 +5,8 @@ from core.database import get_db, execute, utcnow
 from core.auth import login_required, get_current_user
 from core.serializers import savings_account_public, savings_transaction_public
 from core.utils import (generate_savings_transaction_number, log_audit,
-                        paginate, adjust_main_account_balance, adjust_account_balance)
+                        paginate, adjust_main_account_balance, adjust_account_balance,
+                        notify, format_currency)
 
 savings_bp = Blueprint('savings', __name__)
 
@@ -187,6 +188,42 @@ def _create_transaction(account_id, txn_type, amount, method, user_id, reference
            LEFT JOIN savings_accounts ON savings_accounts.id = savings_transactions.account_id
            WHERE savings_transactions.id = %s""", (cur.lastrowid,)
     ).fetchone()
+
+    # Notify the member directly (email + SMS) for real money-movement
+    # events -- deposits and withdrawals. 'interest' postings are a routine
+    # backend book entry with no cash movement the member needs to react
+    # to, so they're intentionally left out here (they still show up on the
+    # account's transaction history/statement).
+    if txn_type in ('deposit', 'withdrawal') and account['member_id']:
+        member = get_db().execute(
+            "SELECT first_name, last_name, email, phone FROM members WHERE id = %s",
+            (account['member_id'],)
+        ).fetchone()
+        if member:
+            member_name = f"{member['first_name']} {member['last_name']}"
+            action_word = 'Deposit' if txn_type == 'deposit' else 'Withdrawal'
+            notify(
+                user_id,
+                f'Savings {action_word}',
+                f"{action_word} of {format_currency(amount)} recorded on savings account "
+                f"{txn['account_number']} for {member_name}.",
+                notification_type='success', related_type='savings_transaction', related_id=cur.lastrowid,
+                email=member['email'],
+                email_subject=f"Savings {action_word.lower()} - {txn['account_number']}",
+                email_body_html=(
+                    f"<p>Dear {member_name},</p>"
+                    f"<p>A <strong>{action_word.lower()}</strong> of <strong>{format_currency(amount)}</strong> "
+                    f"has been recorded on your savings account <strong>{txn['account_number']}</strong>.</p>"
+                    f"<p>New balance: <strong>{format_currency(balance_after)}</strong></p>"
+                    f"<p>Thank you for banking with us.</p>"
+                ),
+                phone=member['phone'],
+                sms_message=(
+                    f"Jodala Microfinance: {action_word} of {format_currency(amount)} on account "
+                    f"{txn['account_number']}. New balance: {format_currency(balance_after)}."
+                )
+            )
+
     return txn, balance_after
 
 

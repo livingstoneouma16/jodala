@@ -632,6 +632,14 @@ SCHEMA_STATEMENTS = [
         error TEXT,
         created_at TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS sms_log (
+        id SERIAL PRIMARY KEY,
+        recipient TEXT NOT NULL,
+        message TEXT,
+        status TEXT NOT NULL,
+        error TEXT,
+        created_at TEXT NOT NULL
+    )""",
     """CREATE TABLE IF NOT EXISTS audit_logs (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
@@ -1145,8 +1153,40 @@ def _migration_0018_notification_recipients_and_idle_timeout(conn):
             )
 
 
+def _migration_0019_sms_notifications(conn):
+    """Adds SMS delivery (via Africa's Talking, core/sms.py) alongside the
+    existing email/in-app notifications, plus the sms_log table so every
+    send attempt is auditable the same way email_log already is.
+    sms_notifications_enabled defaults to '0' (off) so nothing starts
+    texting members/clients until an admin explicitly configures and
+    enables it in Settings > Notifications."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS sms_log (
+        id SERIAL PRIMARY KEY,
+        recipient TEXT NOT NULL,
+        message TEXT,
+        status TEXT NOT NULL,
+        error TEXT,
+        created_at TEXT NOT NULL
+    )""")
+    now = utcnow()
+    defaults = {
+        'at_username': '',
+        'at_api_key': '',
+        'at_sender_id': '',
+        'sms_notifications_enabled': '0',
+    }
+    for key, value in defaults.items():
+        row = conn.execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)",
+                (key, value, now)
+            )
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
+
     (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
     (3, 'clients are individual borrowers, not businesses', _migration_0003_clients_are_borrowers_not_businesses),
     (4, 'add gender/date_of_birth to clients', _migration_0004_client_gender_dob),
@@ -1164,6 +1204,7 @@ MIGRATIONS = [
     (16, 'add password_reset_tokens table for self-service login-page password reset', _migration_0016_password_reset_tokens),
     (17, 'add user_roles table so admins can grant a user more than one role', _migration_0017_user_additional_roles),
     (18, 'add notification recipient selection and session idle timeout settings', _migration_0018_notification_recipients_and_idle_timeout),
+    (19, "add SMS notifications (Africa's Talking) and sms_log table", _migration_0019_sms_notifications),
 ]
 
 

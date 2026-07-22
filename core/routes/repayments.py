@@ -182,17 +182,17 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
     ).fetchone()
 
     db = get_db()
-    borrower_name, borrower_email = None, None
+    borrower_name, borrower_email, borrower_phone = None, None, None
     if loan['member_id']:
-        p = db.execute("SELECT first_name, last_name, email FROM members WHERE id = %s",
+        p = db.execute("SELECT first_name, last_name, email, phone FROM members WHERE id = %s",
                         (loan['member_id'],)).fetchone()
     elif loan['client_id']:
-        p = db.execute("SELECT first_name, last_name, email FROM clients WHERE id = %s",
+        p = db.execute("SELECT first_name, last_name, email, phone FROM clients WHERE id = %s",
                         (loan['client_id'],)).fetchone()
     else:
         p = None
     if p:
-        borrower_name, borrower_email = f"{p['first_name']} {p['last_name']}", p['email']
+        borrower_name, borrower_email, borrower_phone = f"{p['first_name']} {p['last_name']}", p['email'], p['phone']
 
     notify(
         user_id,
@@ -209,6 +209,12 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
             f"<p>Receipt number: <strong>{repayment['receipt_number']}</strong><br>"
             f"Remaining balance: <strong>{format_currency(new_outstanding)}</strong></p>"
             f"<p>Thank you.</p>"
+        ),
+        phone=borrower_phone,
+        sms_message=(
+            f"Jodala Microfinance: Payment of {format_currency(amount)} received for loan "
+            f"{loan['loan_number']} (receipt {repayment['receipt_number']}). "
+            f"Balance: {format_currency(new_outstanding)}. Thank you."
         )
     )
 
