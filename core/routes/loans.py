@@ -12,19 +12,19 @@ from core.utils import (generate_loan_number, log_audit, adjust_main_account_bal
 
 
 def _borrower_contact(loan_row):
-    """Resolve (name, email) for whoever this loan belongs to -- a member or a client."""
+    """Resolve (name, email, phone) for whoever this loan belongs to -- a member or a client."""
     db = get_db()
     if loan_row['member_id']:
-        p = db.execute("SELECT first_name, last_name, email FROM members WHERE id = %s",
+        p = db.execute("SELECT first_name, last_name, email, phone FROM members WHERE id = %s",
                         (loan_row['member_id'],)).fetchone()
     elif loan_row['client_id']:
-        p = db.execute("SELECT first_name, last_name, email FROM clients WHERE id = %s",
+        p = db.execute("SELECT first_name, last_name, email, phone FROM clients WHERE id = %s",
                         (loan_row['client_id'],)).fetchone()
     else:
-        return None, None
+        return None, None, None
     if not p:
-        return None, None
-    return f"{p['first_name']} {p['last_name']}", p['email']
+        return None, None, None
+    return f"{p['first_name']} {p['last_name']}", p['email'], p['phone']
 
 loans_bp = Blueprint('loans', __name__)
 
@@ -237,7 +237,7 @@ def approve_loan(loan_id):
     log_audit('LOAN_APPROVED', 'loan', loan_id)
     updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
 
-    borrower_name, borrower_email = _borrower_contact(loan)
+    borrower_name, borrower_email, borrower_phone = _borrower_contact(loan)
     notify(
         loan['loan_officer_id'],
         'Loan Approved',
@@ -251,6 +251,12 @@ def approve_loan(loan_id):
             f"for <strong>{format_currency(loan['principal_amount'])}</strong> has been "
             f"<strong>approved</strong>. It will be disbursed shortly.</p>"
             f"<p>Thank you for banking with us.</p>"
+        ),
+        phone=borrower_phone,
+        sms_message=(
+            f"Jodala Microfinance: Your loan {loan['loan_number']} for "
+            f"{format_currency(loan['principal_amount'])} has been approved. "
+            f"It will be disbursed shortly."
         )
     )
     return jsonify({'message': 'Loan approved', 'loan': loan_public(updated)})
@@ -272,7 +278,7 @@ def reject_loan(loan_id):
     )
     log_audit('LOAN_REJECTED', 'loan', loan_id)
 
-    borrower_name, borrower_email = _borrower_contact(loan)
+    borrower_name, borrower_email, borrower_phone = _borrower_contact(loan)
     reason = data.get('reason', '')
     notify(
         loan['loan_officer_id'],
@@ -288,6 +294,12 @@ def reject_loan(loan_id):
             f"<strong>{loan['loan_number']}</strong> was not approved."
             + (f"<br>Reason: {reason}</p>" if reason else "</p>")
             + "<p>Please contact us if you have any questions.</p>"
+        ),
+        phone=borrower_phone,
+        sms_message=(
+            f"Jodala Microfinance: Your loan application {loan['loan_number']} was not approved."
+            + (f" Reason: {reason}" if reason else "")
+            + " Contact us with any questions."
         )
     )
     return jsonify({'message': 'Loan rejected'})
@@ -379,7 +391,7 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
         adjust_account_balance('4100', fees)
     updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
 
-    borrower_name, borrower_email = _borrower_contact(loan)
+    borrower_name, borrower_email, borrower_phone = _borrower_contact(loan)
     receipt_note = f" (M-Pesa receipt {mpesa_receipt})" if mpesa_receipt else ""
     notify(
         loan['loan_officer_id'],
@@ -395,14 +407,21 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
             f"for loan <strong>{loan['loan_number']}</strong> on {disbursement_date.isoformat()}.</p>"
             f"<p>Your first repayment is due on <strong>{first_repayment.isoformat()}</strong>.</p>"
             f"<p>Thank you for banking with us.</p>"
+        ),
+        phone=borrower_phone,
+        sms_message=(
+            f"Jodala Microfinance: {format_currency(amount_disbursed)} has been disbursed for "
+            f"loan {loan['loan_number']}{receipt_note}. First repayment due "
+            f"{first_repayment.isoformat()}."
         )
     )
     return updated
 
 
 def send_overdue_reminders():
-    """Email every borrower with at least one overdue installment on an
-    active loan. Safe to call repeatedly (e.g. once a day via cron/scheduler)
+    """Notify every borrower with at least one overdue installment on an
+    active loan, by email and/or SMS (whichever contact details they have
+    on file). Safe to call repeatedly (e.g. once a day via cron/scheduler)
     -- it just re-sends a reminder each time it's run for loans still
     overdue, so callers should only invoke this once per day.
     Returns a summary dict.
@@ -420,8 +439,11 @@ def send_overdue_reminders():
                FROM loan_schedules WHERE loan_id = %s AND due_date < %s AND status IN ('pending', 'partial')""",
             (loan_id, date.today().isoformat())
         ).fetchone()
-        borrower_name, borrower_email = _borrower_contact(loan)
-        if not borrower_email:
+        borrower_name, borrower_email, borrower_phone = _borrower_contact(loan)
+        # A borrower with neither an email nor a phone on file can't be
+        # reached by either channel -- skip them (was previously
+        # email-only, silently dropping phone-only borrowers).
+        if not borrower_email and not borrower_phone:
             skipped += 1
             continue
         notify(
@@ -438,10 +460,16 @@ def send_overdue_reminders():
                 f"<strong>{overdue_total['cnt']}</strong> overdue installment(s) totalling "
                 f"<strong>{format_currency(overdue_total['amt'])}</strong>.</p>"
                 f"<p>Please make payment as soon as possible to avoid penalties.</p>"
+            ),
+            phone=borrower_phone,
+            sms_message=(
+                f"Jodala Microfinance: Loan {loan['loan_number']} has {overdue_total['cnt']} "
+                f"overdue installment(s) totalling {format_currency(overdue_total['amt'])}. "
+                f"Please pay as soon as possible to avoid penalties."
             )
         )
         sent += 1
-    return {'loans_checked': len(loan_ids), 'reminders_sent': sent, 'skipped_no_email': skipped}
+    return {'loans_checked': len(loan_ids), 'reminders_sent': sent, 'skipped_no_contact': skipped}
 
 
 @loans_bp.route('/api/send-overdue-reminders', methods=['POST'])

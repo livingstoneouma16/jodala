@@ -178,7 +178,7 @@ def format_currency(amount):
 
 def notify(user_id, title, message, notification_type='info', related_type=None,
            related_id=None, email=None, email_subject=None, email_body_html=None,
-           notify_user_email=True):
+           notify_user_email=True, phone=None, sms_message=None):
     """
     Central notification helper: always writes an in-app notification row.
 
@@ -196,10 +196,18 @@ def notify(user_id, title, message, notification_type='info', related_type=None,
     account emails that same person), only the customer-facing version is
     sent once -- not both.
 
+    A customer-facing SMS can be sent alongside (or instead of) the email
+    by passing `phone` -- the member/client's phone number on file. Uses
+    `sms_message` if given, otherwise falls back to `message` (kept short
+    since SMS has no HTML/formatting). Safe to pass even when SMS isn't
+    configured/enabled -- core/sms.py send_sms_async() silently logs and
+    no-ops in that case rather than failing the request. This is a
+    customer channel only (mirroring `email`) -- staff aren't texted.
+
     user_id may be None for system-wide events that aren't tied to a
-    dashboard user (e.g. a member/client's own confirmation email) -- in
-    that case only the `email` recipient is used, no notification row is
-    written and no staff email is sent.
+    dashboard user (e.g. a member/client's own confirmation email/SMS) --
+    in that case only the `email`/`phone` recipients are used, no
+    notification row is written and no staff email is sent.
     """
     staff_email = None
     if user_id is not None:
@@ -235,6 +243,10 @@ def notify(user_id, title, message, notification_type='info', related_type=None,
             message,
             email_body_html
         )
+
+    if phone:
+        from core.sms import send_sms_async
+        send_sms_async(phone, sms_message or message)
 
 
 def get_notification_recipient_ids():

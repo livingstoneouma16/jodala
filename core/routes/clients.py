@@ -115,6 +115,11 @@ def create_client():
             f"<p>Welcome! You have been successfully registered as a client of Jodala Microfinance.</p>"
             f"<p>Your client number is <strong>{client['client_number']}</strong>.</p>"
             f"<p>Thank you for choosing us.</p>"
+        ),
+        phone=client['phone'],
+        sms_message=(
+            f"Welcome to Jodala Microfinance, {first_name}! Your client number is "
+            f"{client['client_number']}. Thank you for choosing us."
         )
     )
 

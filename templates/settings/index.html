@@ -87,6 +87,44 @@
     </div>
   </div></div>
 
+  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-chat-dots" style="color:var(--brand-light)"></i>SMS Notifications (Africa's Talking)</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">Texts members and clients directly for loan approvals, disbursements, repayments, savings deposits/withdrawals, overdue reminders, and new registrations</div></div>
+  <div class="jd-card-body">
+    <div class="row g-4" id="smsNotifForm">
+      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+    </div>
+    <div class="alert alert-warning mt-3" style="font-size:12.5px">
+      <i class="bi bi-info-circle me-1"></i>
+      Create an account at <a href="https://africastalking.com" target="_blank" rel="noopener">africastalking.com</a>
+      and grab your Username and API Key from the dashboard. A free sandbox account works for testing but
+      won't actually deliver to real phones — use a live app + a purchased/registered Sender ID to send real SMS.
+    </div>
+    <hr class="my-4" />
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex gap-2 align-items-center flex-wrap" style="flex:1 1 320px">
+        <input type="tel" class="form-control form-control-sm" id="testSmsTo" placeholder="Send test to (optional, defaults to your phone)" style="flex:1 1 200px;min-width:0;max-width:280px" />
+        <button class="btn btn-outline-secondary btn-sm" onclick="sendTestSms()" id="testSmsBtn">
+          <i class="bi bi-send me-1"></i>Send Test SMS
+        </button>
+      </div>
+      <button class="btn btn-brand" id="saveSmsNotifBtn" onclick="saveSmsNotificationSettings()"><i class="bi bi-save me-1"></i>Save Settings</button>
+    </div>
+  </div></div>
+
+  <div class="jd-card mt-3"><div class="jd-card-header d-flex justify-content-between align-items-center">
+    <div>
+      <div class="jd-card-title"><i class="bi bi-clock-history" style="color:var(--brand-light)"></i>Recent SMS Activity</div>
+      <div class="text-muted" style="font-size:12px;margin-top:2px">Last 25 send attempts — check here first if an expected SMS didn't arrive</div>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" onclick="loadSmsLog()"><i class="bi bi-arrow-clockwise"></i></button>
+  </div>
+  <div class="jd-card-body p-0"><div class="table-responsive">
+    <table class="table mb-0" style="font-size:12.5px">
+      <thead><tr><th style="padding-left:16px">When</th><th>To</th><th>Message</th><th>Status</th><th style="padding-right:16px">Detail</th></tr></thead>
+      <tbody id="smsLogBody"><tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+    </table>
+  </div></div></div>
+
   <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-people" style="color:var(--brand-light)"></i>Email Notification Recipients</div>
     <div class="text-muted" style="font-size:12px;margin-top:2px">Choose which staff members receive system-wide email notifications (new registrations, overdue reminders, etc). Defaults to all admins if none are selected.</div></div>
     <div class="jd-card-body">
@@ -277,7 +315,7 @@ function showSet(tab, el) {
   if (tab==='loanProducts') loadLoanProducts();
   else if (tab==='savingsProducts') loadSavingsProducts();
   else if (tab==='regions') loadRegions();
-  else if (tab==='notifications') { loadNotificationSettings(); loadEmailLog(); }
+  else if (tab==='notifications') { loadNotificationSettings(); loadEmailLog(); loadSmsNotificationSettings(); loadSmsLog(); }
   else if (tab==='mpesa') { loadMpesaSettings(); loadMpesaLog(); }
 }
 
@@ -713,6 +751,77 @@ async function loadEmailLog() {
         <td style="padding-left:16px;white-space:nowrap">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
         <td>${escapeHtml(r.recipient)}</td>
         <td>${escapeHtml(r.subject)}</td>
+        <td>${badge(r.status)}</td>
+        <td style="padding-right:16px;color:var(--danger,#dc3545)">${escapeHtml(r.error||'')}</td>
+      </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function loadSmsNotificationSettings() {
+  try {
+    const data = await API.get('/settings/api/notifications');
+    document.getElementById('smsNotifForm').innerHTML = `
+      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Africa's Talking Username</label>
+        <input type="text" class="form-control" id="nAtUsername" placeholder="sandbox" value="${escapeHtml(data.at_username||'')}" /></div>
+      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Sender ID / Short Code (optional)</label>
+        <input type="text" class="form-control" id="nAtSenderId" value="${escapeHtml(data.at_sender_id||'')}" /></div>
+      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">API Key</label>
+        <input type="password" class="form-control" id="nAtApiKey" placeholder="${data.at_api_key_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'Paste API key'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.at_api_key_set ? 'A key is already saved. Leave blank to keep it.' : 'From the Africa\\'s Talking dashboard. Not yet configured.'}</div></div>
+      <div class="col-md-6 d-flex align-items-end">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="nSmsEnabled" ${data.sms_notifications_enabled ? 'checked' : ''} />
+          <label class="form-check-label" for="nSmsEnabled" style="font-size:12.5px">SMS notifications enabled</label>
+        </div>
+      </div>`;
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function saveSmsNotificationSettings() {
+  const btn = document.getElementById('saveSmsNotifBtn');
+  setLoading(btn, true);
+  try {
+    const body = {
+      at_username: document.getElementById('nAtUsername').value,
+      at_sender_id: document.getElementById('nAtSenderId').value,
+      sms_notifications_enabled: document.getElementById('nSmsEnabled').checked,
+    };
+    const key = document.getElementById('nAtApiKey').value;
+    if (key) body.at_api_key = key;
+    await API.put('/settings/api/notifications', body);
+    Toast.success('SMS notification settings saved');
+    loadSmsNotificationSettings();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function sendTestSms() {
+  const btn = document.getElementById('testSmsBtn');
+  const to = document.getElementById('testSmsTo').value.trim();
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/settings/api/notifications/sms-test', to ? { to } : {});
+    Toast.success(data.message || 'Test SMS sent');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); loadSmsLog(); }
+}
+
+async function loadSmsLog() {
+  try {
+    const rows = await API.get('/settings/api/notifications/sms-log');
+    const body = document.getElementById('smsLogBody');
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="5" class="text-center text-muted p-4">No SMS attempts yet</td></tr>`;
+      return;
+    }
+    const badge = s => s==='sent' ? '<span class="badge bg-success">sent</span>'
+      : s==='failed' ? '<span class="badge bg-danger">failed</span>'
+      : '<span class="badge bg-secondary">skipped</span>';
+    body.innerHTML = rows.map(r => `
+      <tr>
+        <td style="padding-left:16px;white-space:nowrap">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+        <td>${escapeHtml(r.recipient)}</td>
+        <td>${escapeHtml((r.message||'').slice(0,60))}${(r.message||'').length>60?'…':''}</td>
         <td>${badge(r.status)}</td>
         <td style="padding-right:16px;color:var(--danger,#dc3545)">${escapeHtml(r.error||'')}</td>
       </tr>`).join('');
