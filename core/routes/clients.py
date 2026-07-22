@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template
 
 from core.database import get_db, execute, utcnow
-from core.auth import login_required, role_required, get_current_user
+from core.auth import login_required, permission_required, get_current_user
 from core.serializers import client_public, loan_public, client_full_name
 from core.utils import generate_client_number, log_audit, paginate, notify
 
@@ -123,7 +123,7 @@ def create_client():
 
 @clients_bp.route('/api/<int:client_id>', methods=['DELETE'])
 @login_required
-@role_required('admin')
+@permission_required('clients.delete')
 def delete_client(client_id):
     client = get_db().execute("SELECT * FROM clients WHERE id = %s", (client_id,)).fetchone()
     if not client:

@@ -132,6 +132,11 @@ def role_required(*allowed_roles):
         @login_required
         @role_required('admin', 'loan_officer')
         def approve_loan(loan_id): ...
+
+    Kept around for any ad-hoc/one-off role checks, but most routes have
+    moved to @permission_required(...) below, which lets an admin change who
+    can do what from Settings > Permissions instead of it being baked into
+    the code.
     """
     def decorator(fn):
         @wraps(fn)
@@ -140,6 +145,70 @@ def role_required(*allowed_roles):
             if user is None:
                 return jsonify({'error': 'Authentication required'}), 401
             if user['role'] not in allowed_roles:
+                return jsonify({'error': 'Insufficient permissions for this action'}), 403
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+# ---------------------------------------------------------------------------
+# Configurable, database-backed permissions
+# ---------------------------------------------------------------------------
+# Cached per-process; invalidated (and lazily reloaded) whenever the
+# permissions are saved from Settings > Permissions. A cold cache costs one
+# extra query per request, which is fine at this app's scale and much
+# simpler than a TTL.
+_role_permissions_cache = None
+
+
+def invalidate_role_permissions_cache():
+    global _role_permissions_cache
+    _role_permissions_cache = None
+
+
+def _load_role_permissions():
+    global _role_permissions_cache
+    if _role_permissions_cache is None:
+        rows = get_db().execute(
+            "SELECT role, permission_key, granted FROM role_permissions"
+        ).fetchall()
+        cache = {}
+        for row in rows:
+            d = row_to_dict(row)
+            cache.setdefault(d['role'], {})[d['permission_key']] = bool(d['granted'])
+        _role_permissions_cache = cache
+    return _role_permissions_cache
+
+
+def role_has_permission(role, permission_key):
+    """admin is always allowed, regardless of what's stored -- this keeps an
+    admin from ever locking themselves (or every admin) out by misconfiguring
+    the permissions table."""
+    if role == 'admin':
+        return True
+    return _load_role_permissions().get(role, {}).get(permission_key, False)
+
+
+def permission_required(permission_key):
+    """Stack under @login_required:
+
+        @loans_bp.route('/api/<int:loan_id>/approve', methods=['POST'])
+        @login_required
+        @permission_required('loans.approve')
+        def approve_loan(loan_id): ...
+
+    Checks the database-backed role_permissions table (see
+    core.permissions and Settings > Permissions) rather than a hardcoded
+    role list, so an admin can grant/revoke this action per role at
+    runtime.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            user = getattr(g, 'current_user', None)
+            if user is None:
+                return jsonify({'error': 'Authentication required'}), 401
+            if not role_has_permission(user['role'], permission_key):
                 return jsonify({'error': 'Insufficient permissions for this action'}), 403
             return fn(*args, **kwargs)
         return wrapper
