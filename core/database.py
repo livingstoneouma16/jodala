@@ -1209,24 +1209,23 @@ def _migration_0020_repair_password_reset_tokens(conn):
     )
 
 
-def _migration_0021_gmail_api_email_settings(conn):
-    """Switches email delivery from Resend to the Gmail API (OAuth2), per
-    request, in place of Resend. Still avoids Gmail *SMTP* (blocked by
-    outbound-port rules on Render/most PaaS hosts) -- the Gmail *API* sends
-    over HTTPS instead, same as Resend did. Seeds the new gmail_*
-    company_settings keys; the old resend_* rows (migration 13) and the
-    pre-Resend gmail_address/gmail_app_password SMTP rows (migration 7)
-    are left in place (unused, harmless) rather than deleted, in case
-    anyone wants to roll back."""
+def _migration_0021_revert_to_gmail_smtp(conn):
+    """Switches email delivery back to Gmail SMTP with an app password, per
+    request, in place of Resend. NOTE: Gmail SMTP connects on port 465/587,
+    which Render, Fly.io, and most PaaS hosts block outbound -- this only
+    works on hosts that allow outbound SMTP (a VPS, own server, local/dev
+    use). Re-seeds the gmail_address/gmail_app_password/gmail_sender_name
+    company_settings keys (originally added in migration 7) in case an
+    install only ever ran migration 13 and never had them; the resend_*
+    rows (migration 13) are left in place (unused, harmless) rather than
+    deleted, in case anyone wants to roll back."""
     now = utcnow()
-    gmail_api_defaults = {
-        'gmail_client_id': '',
-        'gmail_client_secret': '',
-        'gmail_refresh_token': '',
-        'gmail_from_email': '',
+    gmail_defaults = {
+        'gmail_address': '',
+        'gmail_app_password': '',
         'gmail_sender_name': 'Jodala Microfinance',
     }
-    for key, value in gmail_api_defaults.items():
+    for key, value in gmail_defaults.items():
         row = conn.execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
         if not row:
             conn.execute(
@@ -1259,7 +1258,8 @@ MIGRATIONS = [
     (19, "add SMS notifications (Africa's Talking) and sms_log table", _migration_0019_sms_notifications),
     (20, 'repair password_reset_tokens if missing despite migration 16 being recorded as applied',
      _migration_0020_repair_password_reset_tokens),
-    (21, 'switch email delivery from Resend to the Gmail API (OAuth2)', _migration_0021_gmail_api_email_settings),
+    (21, 'switch email delivery from Resend back to Gmail SMTP with an app password',
+     _migration_0021_revert_to_gmail_smtp),
 ]
 
 
