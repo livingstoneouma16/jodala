@@ -59,7 +59,7 @@
   </div></div></div>
 </div>
 
-<!-- Notifications (Gmail API) Settings -->
+<!-- Notifications (Gmail SMTP) Settings -->
 <div id="notificationsSet" class="d-none">
   <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-envelope" style="color:var(--brand-light)"></i>Email Notifications (Gmail)</div>
     <div class="text-muted" style="font-size:12px;margin-top:2px">Sends emails for loan approvals, disbursements, repayment receipts, overdue reminders, and new registrations</div></div>
@@ -69,13 +69,13 @@
     </div>
     <div class="alert alert-warning mt-3" style="font-size:12.5px">
       <i class="bi bi-info-circle me-1"></i>
-      Uses the Gmail API (not SMTP), so it works on Render, Fly.io, and every other PaaS host that
-      blocks outbound SMTP ports. One-time setup: enable the Gmail API on a Google Cloud project,
-      create an OAuth Client ID (Desktop app type), then generate a Refresh Token for the sending
-      Gmail account with the <code>gmail.send</code> scope -- the easiest way is via
-      <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noopener">Google's OAuth Playground</a>
-      (use your own Client ID/Secret under the gear icon, authorize the <code>gmail.send</code> scope,
-      then exchange the code for tokens). From Email should be the Gmail address you authorized.
+      Sends via Gmail SMTP with an App Password. Turn on
+      <a href="https://myaccount.google.com/security" target="_blank" rel="noopener">2-Step Verification</a>
+      on the sending Gmail account, then generate an App Password at
+      <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">myaccount.google.com/apppasswords</a>
+      (choose "Mail" as the app) -- use that 16-character password below, not the normal account password.
+      Note: this connects over SMTP ports (465/587), which Render, Fly.io, and most PaaS hosts block
+      outbound -- this only works on hosts that allow outbound SMTP (a VPS, your own server, or local/dev use).
     </div>
     <hr class="my-4" />
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -641,18 +641,13 @@ async function loadNotificationSettings() {
   try {
     const data = await API.get('/settings/api/notifications');
     document.getElementById('notifForm').innerHTML = `
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">From Email (Gmail address)</label>
-        <input type="email" class="form-control" id="nFromEmail" placeholder="notifications@yourdomain.com" value="${escapeHtml(data.gmail_from_email||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Gmail Address</label>
+        <input type="email" class="form-control" id="nGmailAddress" placeholder="notifications@gmail.com" value="${escapeHtml(data.gmail_address||'')}" /></div>
       <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Sender Display Name</label>
         <input type="text" class="form-control" id="nSenderName" value="${escapeHtml(data.gmail_sender_name||'')}" /></div>
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">OAuth Client ID</label>
-        <input type="text" class="form-control" id="nGmailClientId" placeholder="xxxxxxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(data.gmail_client_id||'')}" /></div>
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">OAuth Client Secret</label>
-        <input type="password" class="form-control" id="nGmailClientSecret" placeholder="${data.gmail_client_secret_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'GOCSPX-xxxxxxxxxxxxxxxx'}" />
-        <div class="text-muted mt-1" style="font-size:11.5px">${data.gmail_client_secret_set ? 'Already saved. Leave blank to keep it.' : 'From Google Cloud Console > Credentials.'}</div></div>
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Refresh Token</label>
-        <input type="password" class="form-control" id="nGmailRefreshToken" placeholder="${data.gmail_refresh_token_set ? '•••••••••••••••• (saved — leave blank to keep)' : '1//0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}" />
-        <div class="text-muted mt-1" style="font-size:11.5px">${data.gmail_refresh_token_set ? 'Already saved. Leave blank to keep it.' : 'Generated once via OAuth Playground for the gmail.send scope. Not yet configured.'}</div></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">App Password</label>
+        <input type="password" class="form-control" id="nGmailAppPassword" placeholder="${data.gmail_app_password_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'xxxx xxxx xxxx xxxx'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.gmail_app_password_set ? 'Already saved. Leave blank to keep it.' : 'Generate at myaccount.google.com/apppasswords. Not yet configured.'}</div></div>
       <div class="col-md-6 d-flex align-items-end">
         <div class="form-check form-switch">
           <input class="form-check-input" type="checkbox" id="nEnabled" ${data.email_notifications_enabled ? 'checked' : ''} />
@@ -715,15 +710,12 @@ async function saveNotificationSettings() {
   setLoading(btn, true);
   try {
     const body = {
-      gmail_from_email: document.getElementById('nFromEmail').value,
+      gmail_address: document.getElementById('nGmailAddress').value,
       gmail_sender_name: document.getElementById('nSenderName').value,
-      gmail_client_id: document.getElementById('nGmailClientId').value,
       email_notifications_enabled: document.getElementById('nEnabled').checked,
     };
-    const clientSecret = document.getElementById('nGmailClientSecret').value;
-    if (clientSecret) body.gmail_client_secret = clientSecret;
-    const refreshToken = document.getElementById('nGmailRefreshToken').value;
-    if (refreshToken) body.gmail_refresh_token = refreshToken;
+    const appPassword = document.getElementById('nGmailAppPassword').value;
+    if (appPassword) body.gmail_app_password = appPassword;
     await API.put('/settings/api/notifications', body);
     Toast.success('Notification settings saved');
     loadNotificationSettings();
