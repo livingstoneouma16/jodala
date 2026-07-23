@@ -97,12 +97,12 @@ def get_notification_settings():
         "SELECT value FROM company_settings WHERE key = 'session_idle_timeout_minutes'"
     ).fetchone()
     return jsonify({
-        'gmail_address': cfg['address'],
-        # Never echo the real app password back to the browser -- just tell
-        # the UI whether one is already set, so the field can show a
+        'resend_from_email': cfg['from_email'],
+        # Never echo the real API key back to the browser -- just tell the
+        # UI whether one is already set, so the field can show a
         # placeholder instead of leaking the secret.
-        'gmail_app_password_set': bool(cfg['app_password']),
-        'gmail_sender_name': cfg['sender_name'],
+        'resend_api_key_set': bool(cfg['api_key']),
+        'resend_sender_name': cfg['sender_name'],
         'email_notifications_enabled': cfg['enabled'],
         'notification_recipient_ids': get_notification_recipient_ids(),
         'session_idle_timeout_minutes': int(idle_row['value']) if idle_row and idle_row['value'] else 15,
@@ -129,16 +129,16 @@ def update_notification_settings():
         else:
             execute("INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)", (key, str(value), now))
 
-    if 'gmail_address' in data:
-        _set('gmail_address', (data.get('gmail_address') or '').strip())
-    if 'gmail_sender_name' in data:
-        _set('gmail_sender_name', (data.get('gmail_sender_name') or '').strip())
+    if 'resend_from_email' in data:
+        _set('resend_from_email', (data.get('resend_from_email') or '').strip())
+    if 'resend_sender_name' in data:
+        _set('resend_sender_name', (data.get('resend_sender_name') or '').strip())
     if 'email_notifications_enabled' in data:
         _set('email_notifications_enabled', '1' if data.get('email_notifications_enabled') else '0')
-    # Only overwrite the stored app password if a new one was actually typed
-    # in -- an empty string here means "leave it unchanged", not "clear it".
-    if data.get('gmail_app_password'):
-        _set('gmail_app_password', data['gmail_app_password'].strip())
+    # Only overwrite the stored API key if a new one was actually typed in --
+    # an empty string here means "leave it unchanged", not "clear it".
+    if data.get('resend_api_key'):
+        _set('resend_api_key', data['resend_api_key'].strip())
 
     if 'at_username' in data:
         _set('at_username', (data.get('at_username') or '').strip())
@@ -189,7 +189,7 @@ def send_test_notification_email():
     from core.mailer import send_email, is_configured
     user = get_current_user()
     if not is_configured():
-        return jsonify({'error': 'Gmail address and App Password must be set first'}), 400
+        return jsonify({'error': 'Resend API key and From Email must be set first'}), 400
     to = (request.get_json() or {}).get('to') or user['email']
     ok, error = send_email(
         to,

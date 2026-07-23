@@ -152,6 +152,9 @@ def client(app, db_conn, monkeypatch):
     import core.database as db_module
     import core.auth as auth_module
     import core.utils as utils_module
+    import core.sms as sms_module
+    import core.mailer as mailer_module
+    import core.mpesa as mpesa_module
     import core.routes.auth as auth_routes
     import core.routes.members as members_routes
     import core.routes.loans as loans_routes
@@ -169,6 +172,7 @@ def client(app, db_conn, monkeypatch):
 
     modules_with_get_db = (
         db_module, auth_module, utils_module,
+        sms_module, mailer_module, mpesa_module,
         auth_routes, members_routes, loans_routes, repayments_routes,
         savings_routes, clients_routes, accounting_routes, other_routes,
         dashboard_routes, reports_routes, mpesa_routes,
@@ -184,8 +188,26 @@ def client(app, db_conn, monkeypatch):
 
     monkeypatch.setattr('core.mailer.send_email_async', _fake_send_email_async)
 
+    # core.sms.send_sms_async fires a real background thread in production
+    # (core/sms.py) so each async send gets its own connection from the
+    # pool -- safe there. In this suite, get_db() is monkeypatched to always
+    # hand back the single per-test db_conn (see modules_with_get_db above),
+    # so a real background thread racing the main test thread over that one
+    # non-thread-safe connection corrupts the outer transaction (savepoint
+    # errors surfacing in unrelated, later tests). Faked the same way
+    # send_email_async already is above, rather than actually spawning a
+    # thread, for the same reason: no test asserts on SMS delivery, only on
+    # the DB/route behavior that happens to trigger it.
+    sent_sms = []
+
+    def _fake_send_sms_async(to_phone, message):
+        sent_sms.append({'to': to_phone, 'message': message})
+
+    monkeypatch.setattr('core.sms.send_sms_async', _fake_send_sms_async)
+
     test_client = app.test_client()
     test_client.sent_emails = sent_emails
+    test_client.sent_sms = sent_sms
     return test_client
 
 
