@@ -59,9 +59,9 @@
   </div></div></div>
 </div>
 
-<!-- Notifications (Resend) Settings -->
+<!-- Notifications (Gmail API) Settings -->
 <div id="notificationsSet" class="d-none">
-  <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-envelope" style="color:var(--brand-light)"></i>Email Notifications (Resend)</div>
+  <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-envelope" style="color:var(--brand-light)"></i>Email Notifications (Gmail)</div>
     <div class="text-muted" style="font-size:12px;margin-top:2px">Sends emails for loan approvals, disbursements, repayment receipts, overdue reminders, and new registrations</div></div>
   <div class="jd-card-body">
     <div class="row g-4" id="notifForm">
@@ -69,11 +69,13 @@
     </div>
     <div class="alert alert-warning mt-3" style="font-size:12.5px">
       <i class="bi bi-info-circle me-1"></i>
-      Get an API key at
-      <a href="https://resend.com/api-keys" target="_blank" rel="noopener">resend.com/api-keys</a>,
-      and make sure the From Email is on a domain you've verified with Resend (or use their
-      onboarding@resend.dev address for quick testing -- it only delivers to your own inbox).
-      Sends over HTTPS, so unlike SMTP-based email this works on Render and every other PaaS host.
+      Uses the Gmail API (not SMTP), so it works on Render, Fly.io, and every other PaaS host that
+      blocks outbound SMTP ports. One-time setup: enable the Gmail API on a Google Cloud project,
+      create an OAuth Client ID (Desktop app type), then generate a Refresh Token for the sending
+      Gmail account with the <code>gmail.send</code> scope -- the easiest way is via
+      <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noopener">Google's OAuth Playground</a>
+      (use your own Client ID/Secret under the gear icon, authorize the <code>gmail.send</code> scope,
+      then exchange the code for tokens). From Email should be the Gmail address you authorized.
     </div>
     <hr class="my-4" />
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -639,13 +641,18 @@ async function loadNotificationSettings() {
   try {
     const data = await API.get('/settings/api/notifications');
     document.getElementById('notifForm').innerHTML = `
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">From Email</label>
-        <input type="email" class="form-control" id="nFromEmail" placeholder="notifications@yourdomain.com" value="${escapeHtml(data.resend_from_email||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">From Email (Gmail address)</label>
+        <input type="email" class="form-control" id="nFromEmail" placeholder="notifications@yourdomain.com" value="${escapeHtml(data.gmail_from_email||'')}" /></div>
       <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Sender Display Name</label>
-        <input type="text" class="form-control" id="nSenderName" value="${escapeHtml(data.resend_sender_name||'')}" /></div>
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Resend API Key</label>
-        <input type="password" class="form-control" id="nResendApiKey" placeholder="${data.resend_api_key_set ? '•••••••••••••••• (saved — leave blank to keep)' : 're_xxxxxxxxxxxxxxxxxxxx'}" />
-        <div class="text-muted mt-1" style="font-size:11.5px">${data.resend_api_key_set ? 'An API key is already saved. Leave blank to keep it.' : 'Generate at resend.com/api-keys. Not yet configured.'}</div></div>
+        <input type="text" class="form-control" id="nSenderName" value="${escapeHtml(data.gmail_sender_name||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">OAuth Client ID</label>
+        <input type="text" class="form-control" id="nGmailClientId" placeholder="xxxxxxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(data.gmail_client_id||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">OAuth Client Secret</label>
+        <input type="password" class="form-control" id="nGmailClientSecret" placeholder="${data.gmail_client_secret_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'GOCSPX-xxxxxxxxxxxxxxxx'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.gmail_client_secret_set ? 'Already saved. Leave blank to keep it.' : 'From Google Cloud Console > Credentials.'}</div></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Refresh Token</label>
+        <input type="password" class="form-control" id="nGmailRefreshToken" placeholder="${data.gmail_refresh_token_set ? '•••••••••••••••• (saved — leave blank to keep)' : '1//0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.gmail_refresh_token_set ? 'Already saved. Leave blank to keep it.' : 'Generated once via OAuth Playground for the gmail.send scope. Not yet configured.'}</div></div>
       <div class="col-md-6 d-flex align-items-end">
         <div class="form-check form-switch">
           <input class="form-check-input" type="checkbox" id="nEnabled" ${data.email_notifications_enabled ? 'checked' : ''} />
@@ -708,12 +715,15 @@ async function saveNotificationSettings() {
   setLoading(btn, true);
   try {
     const body = {
-      resend_from_email: document.getElementById('nFromEmail').value,
-      resend_sender_name: document.getElementById('nSenderName').value,
+      gmail_from_email: document.getElementById('nFromEmail').value,
+      gmail_sender_name: document.getElementById('nSenderName').value,
+      gmail_client_id: document.getElementById('nGmailClientId').value,
       email_notifications_enabled: document.getElementById('nEnabled').checked,
     };
-    const key = document.getElementById('nResendApiKey').value;
-    if (key) body.resend_api_key = key;
+    const clientSecret = document.getElementById('nGmailClientSecret').value;
+    if (clientSecret) body.gmail_client_secret = clientSecret;
+    const refreshToken = document.getElementById('nGmailRefreshToken').value;
+    if (refreshToken) body.gmail_refresh_token = refreshToken;
     await API.put('/settings/api/notifications', body);
     Toast.success('Notification settings saved');
     loadNotificationSettings();

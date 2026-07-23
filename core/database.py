@@ -1209,6 +1209,32 @@ def _migration_0020_repair_password_reset_tokens(conn):
     )
 
 
+def _migration_0021_gmail_api_email_settings(conn):
+    """Switches email delivery from Resend to the Gmail API (OAuth2), per
+    request, in place of Resend. Still avoids Gmail *SMTP* (blocked by
+    outbound-port rules on Render/most PaaS hosts) -- the Gmail *API* sends
+    over HTTPS instead, same as Resend did. Seeds the new gmail_*
+    company_settings keys; the old resend_* rows (migration 13) and the
+    pre-Resend gmail_address/gmail_app_password SMTP rows (migration 7)
+    are left in place (unused, harmless) rather than deleted, in case
+    anyone wants to roll back."""
+    now = utcnow()
+    gmail_api_defaults = {
+        'gmail_client_id': '',
+        'gmail_client_secret': '',
+        'gmail_refresh_token': '',
+        'gmail_from_email': '',
+        'gmail_sender_name': 'Jodala Microfinance',
+    }
+    for key, value in gmail_api_defaults.items():
+        row = conn.execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)",
+                (key, value, now)
+            )
+
+
 MIGRATIONS = [
 
     (1, 'initial schema', _migration_0001_initial_schema),
@@ -1233,6 +1259,7 @@ MIGRATIONS = [
     (19, "add SMS notifications (Africa's Talking) and sms_log table", _migration_0019_sms_notifications),
     (20, 'repair password_reset_tokens if missing despite migration 16 being recorded as applied',
      _migration_0020_repair_password_reset_tokens),
+    (21, 'switch email delivery from Resend to the Gmail API (OAuth2)', _migration_0021_gmail_api_email_settings),
 ]
 
 
