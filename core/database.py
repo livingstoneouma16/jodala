@@ -1184,7 +1184,33 @@ def _migration_0019_sms_notifications(conn):
             )
 
 
+def _migration_0020_repair_password_reset_tokens(conn):
+    """Self-heals production, where password_reset_tokens is missing even
+    though migration 16 is recorded as applied in schema_migrations --
+    the table was dropped independently of the migration system (e.g. a
+    manual DROP run directly against the DB), so run_migrations() has been
+    silently skipping migration 16 on every subsequent boot ever since,
+    because it only checks the tracking row, not whether the table itself
+    still exists. This reissues the exact same CREATE TABLE IF NOT EXISTS /
+    index from migration 16 -- a no-op if the table is actually present,
+    and a real repair if it isn't. Do not edit migration 16 itself: once a
+    migration has a schema_migrations row anywhere in production, it must
+    stay exactly as it ran; fixes go in new migrations instead."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        token_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT NOT NULL
+    )""")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_password_reset_token_hash ON password_reset_tokens(token_hash)"
+    )
+
+
 MIGRATIONS = [
+
     (1, 'initial schema', _migration_0001_initial_schema),
 
     (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
@@ -1205,6 +1231,8 @@ MIGRATIONS = [
     (17, 'add user_roles table so admins can grant a user more than one role', _migration_0017_user_additional_roles),
     (18, 'add notification recipient selection and session idle timeout settings', _migration_0018_notification_recipients_and_idle_timeout),
     (19, "add SMS notifications (Africa's Talking) and sms_log table", _migration_0019_sms_notifications),
+    (20, 'repair password_reset_tokens if missing despite migration 16 being recorded as applied',
+     _migration_0020_repair_password_reset_tokens),
 ]
 
 
