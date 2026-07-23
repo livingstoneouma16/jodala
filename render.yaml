@@ -6,12 +6,18 @@
 #   provisions everything below automatically.
 #
 # Recommended: sign up for Render using jodalamicrofinance@gmail.com so the
-# deployment and billing live under one account (email notifications
-# themselves go through Resend -- see below -- not this Gmail account;
-# Render blocks outbound SMTP, so Gmail SMTP can't be used to send mail).
+# deployment and billing live under one account.
+#
+# WARNING: Render blocks outbound SMTP ports (25/465/587) at the network
+# level, so Gmail SMTP (core/mailer.py) will NOT be able to send email from
+# this service regardless of credentials -- every send will fail with
+# something like "Network is unreachable". This blueprint still lets you
+# set GMAIL_* below for convenience if you configure it anyway, but for
+# working email on Render specifically you'd need an HTTP-based sender
+# (e.g. the Gmail API or a transactional email provider) instead.
 #
 # After the first deploy, go to the web service's Settings > Environment
-# and fill in the `sync: false` variables (Resend/M-Pesa credentials) --
+# and fill in the `sync: false` variables (Gmail/M-Pesa credentials) --
 # Render prompts for these during Blueprint creation, or you can add them
 # manually afterwards. They can also be set later from inside the app under
 # Settings > Notifications / Settings > M-Pesa instead, which takes
@@ -58,14 +64,15 @@ services:
           property: connectionString
       - key: CORS_ALLOWED_ORIGINS
         value: ""
-      # M-Pesa / Resend credentials -- set once in the Render dashboard
+      # M-Pesa / Gmail credentials -- set once in the Render dashboard
       # (prompted on first Blueprint deploy), or skip these entirely and
-      # configure them from inside the app under Settings instead. Email
-      # must go through Resend's HTTP API, not Gmail SMTP -- Render blocks
-      # outbound SMTP ports at the network level.
-      - key: RESEND_API_KEY
+      # configure them from inside the app under Settings instead.
+      # WARNING: Render blocks outbound SMTP ports at the network level, so
+      # Gmail SMTP email sending will not actually work here regardless of
+      # these values -- see the warning at the top of this file.
+      - key: GMAIL_ADDRESS
         sync: false
-      - key: RESEND_FROM_EMAIL
+      - key: GMAIL_APP_PASSWORD
         sync: false
       - key: MPESA_CONSUMER_KEY
         sync: false
