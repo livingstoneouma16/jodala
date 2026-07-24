@@ -525,17 +525,23 @@ def topup_loan(loan_id):
     now = utcnow()
     today = date.today()
 
-    # Rebuild the repayment schedule from today for the remaining term,
-    # replacing whatever was left of the old one -- the loan keeps its
-    # original id/loan_number, it's simply re-amortized on the bigger
-    # principal instead of spawning a new loan record.
-    execute("DELETE FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')", (loan_id,))
+    # Capture what's already been paid *before* we touch the schedule -- a
+    # 'partial' row still carries real principal_paid/interest_paid from an
+    # earlier repayment, and the DELETE below (which clears out
+    # 'pending'/'partial' rows to rebuild the schedule) would silently wipe
+    # that history out from under us if we summed it after deleting.
     already_paid_principal = get_db().execute(
         "SELECT COALESCE(SUM(principal_paid), 0) AS p FROM loan_schedules WHERE loan_id = %s", (loan_id,)
     ).fetchone()['p']
     already_paid_interest = get_db().execute(
         "SELECT COALESCE(SUM(interest_paid), 0) AS i FROM loan_schedules WHERE loan_id = %s", (loan_id,)
     ).fetchone()['i']
+
+    # Rebuild the repayment schedule from today for the remaining term,
+    # replacing whatever was left of the old one -- the loan keeps its
+    # original id/loan_number, it's simply re-amortized on the bigger
+    # principal instead of spawning a new loan record.
+    execute("DELETE FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')", (loan_id,))
 
     schedule_data = build_loan_schedule(
         new_principal, interest_rate, term, interest_type, repayment_frequency,
