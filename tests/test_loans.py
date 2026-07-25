@@ -8,6 +8,17 @@ Run with: pytest tests/test_loans.py -v
 from conftest import auth_header
 
 
+def _create_active_staff_user(db_conn):
+    cur = db_conn.execute(
+        """INSERT INTO users (username, email, password_hash, full_name, role, is_active, created_at, updated_at)
+           VALUES (%s, %s, %s, %s, %s, %s, now()::text, now()::text)""",
+        ('notifications-user', 'staff@example.com', 'not-used-in-this-test',
+         'Notifications User', 'cashier', True)
+    )
+    db_conn.commit()
+    return cur.lastrowid
+
+
 class TestLoanApplication:
     def test_create_loan_within_product_limits(self, client, admin_token, member, loan_product):
         resp = client.post('/loans/api', json={
@@ -62,6 +73,29 @@ class TestLoanApplication:
         }, headers=auth_header(admin_token))
         assert resp.status_code == 400
 
+    def test_client_receives_application_email_and_all_staff_are_notified(
+            self, client, db_conn, admin_token, loan_product):
+        _create_active_staff_user(db_conn)
+        client_row = db_conn.execute(
+            """INSERT INTO clients (client_number, first_name, last_name, phone, email, status, created_at, updated_at)
+               VALUES (%s, %s, %s, %s, %s, %s, now()::text, now()::text)""",
+            ('CLI-EMAIL-001', 'Chris', 'Otieno', '0712345678', 'client@example.com', 'active')
+        )
+        db_conn.commit()
+
+        response = client.post('/loans/api', json={
+            'client_id': client_row.lastrowid,
+            'borrower_type': 'client',
+            'product_id': loan_product['id'],
+            'principal_amount': 10000,
+            'term': 6,
+        }, headers=auth_header(admin_token))
+
+        assert response.status_code == 201, response.get_data(as_text=True)
+        recipients = [email['to'] for email in client.sent_emails]
+        assert recipients.count('client@example.com') == 1
+        assert 'staff@example.com' in recipients
+
 
 class TestApprovalAndRejection:
     def test_approve_pending_loan(self, client, admin_token, member, loan_product):
@@ -89,6 +123,36 @@ class TestApprovalAndRejection:
     def test_approve_nonexistent_loan_404s(self, client, admin_token):
         resp = client.post('/loans/api/999999/approve', json={}, headers=auth_header(admin_token))
         assert resp.status_code == 404
+
+    def test_client_receives_each_loan_process_email(self, client, db_conn, admin_token, loan_product):
+        client_row = db_conn.execute(
+            """INSERT INTO clients (client_number, first_name, last_name, phone, email, status, created_at, updated_at)
+               VALUES (%s, %s, %s, %s, %s, %s, now()::text, now()::text)""",
+            ('CLI-EMAIL-002', 'Chris', 'Otieno', '0712345678', 'client@example.com', 'active')
+        )
+        db_conn.commit()
+        created = client.post('/loans/api', json={
+            'client_id': client_row.lastrowid,
+            'borrower_type': 'client',
+            'product_id': loan_product['id'],
+            'principal_amount': 10000,
+            'term': 6,
+        }, headers=auth_header(admin_token)).get_json()['loan']
+
+        approved = client.post(f"/loans/api/{created['id']}/approve", json={},
+                               headers=auth_header(admin_token))
+        assert approved.status_code == 200
+        disbursed = client.post(f"/loans/api/{created['id']}/disburse", json={},
+                                headers=auth_header(admin_token))
+        assert disbursed.status_code == 200
+
+        client_emails = [email for email in client.sent_emails if email['to'] == 'client@example.com']
+        assert len(client_emails) == 3
+        assert [email['subject'] for email in client_emails] == [
+            f"Your loan application {created['loan_number']} has been received",
+            f"Your loan {created['loan_number']} has been approved",
+            f"Your loan {created['loan_number']} has been disbursed",
+        ]
 
 
 class TestDisbursement:
@@ -212,4 +276,3 @@ class TestRestructure:
         resp = client.post('/loans/api/999999/restructure', json={'reason': 'test'},
                             headers=auth_header(admin_token))
         assert resp.status_code == 404
-

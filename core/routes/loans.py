@@ -26,6 +26,28 @@ def _borrower_contact(loan_row):
         return None, None, None
     return f"{p['first_name']} {p['last_name']}", p['email'], p['phone']
 
+
+def _notify_loan_parties(loan, title, message, notification_type, email_subject,
+                         email_body_html, sms_message=None):
+    """Notify every active staff user and the loan's member or client."""
+    borrower_name, borrower_email, borrower_phone = _borrower_contact(loan)
+    staff_users = get_db().execute(
+        "SELECT id FROM users WHERE is_active = 1 ORDER BY id"
+    ).fetchall()
+
+    for staff_user in staff_users:
+        notify(
+            staff_user['id'], title, message,
+            notification_type=notification_type, related_type='loan', related_id=loan['id']
+        )
+
+    notify(
+        None, title, message,
+        notification_type=notification_type, related_type='loan', related_id=loan['id'],
+        email=borrower_email, email_subject=email_subject, email_body_html=email_body_html,
+        phone=borrower_phone, sms_message=sms_message
+    )
+
 loans_bp = Blueprint('loans', __name__)
 
 
@@ -179,6 +201,22 @@ def create_loan():
     loan = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (cur.lastrowid,)).fetchone()
     log_audit('LOAN_APPLICATION', 'loan', loan['id'])
 
+    borrower_name, _, _ = _borrower_contact(loan)
+    _notify_loan_parties(
+        loan,
+        'Loan Application Submitted',
+        f"Loan application {loan['loan_number']} for {borrower_name or 'the borrower'} has been submitted.",
+        'info',
+        f"Your loan application {loan['loan_number']} has been received",
+        (
+            f"<p>Dear {borrower_name or 'Customer'},</p>"
+            f"<p>We have received your loan application <strong>{loan['loan_number']}</strong> "
+            f"for <strong>{format_currency(loan['principal_amount'])}</strong>.</p>"
+            f"<p>We will notify you when it has been reviewed.</p>"
+        ),
+        f"Jodala Microfinance: We received your loan application {loan['loan_number']}."
+    )
+
     return jsonify({'message': 'Loan application submitted', 'loan': loan_public(loan)}), 201
 
 
@@ -237,23 +275,21 @@ def approve_loan(loan_id):
     log_audit('LOAN_APPROVED', 'loan', loan_id)
     updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
 
-    borrower_name, borrower_email, borrower_phone = _borrower_contact(loan)
-    notify(
-        loan['loan_officer_id'],
+    borrower_name, _, _ = _borrower_contact(loan)
+    _notify_loan_parties(
+        loan,
         'Loan Approved',
         f"Loan {loan['loan_number']} for {borrower_name or 'the borrower'} has been approved.",
-        notification_type='success', related_type='loan', related_id=loan_id,
-        email=borrower_email,
-        email_subject=f"Your loan {loan['loan_number']} has been approved",
-        email_body_html=(
+        'success',
+        f"Your loan {loan['loan_number']} has been approved",
+        (
             f"<p>Dear {borrower_name or 'Customer'},</p>"
             f"<p>Good news -- your loan application <strong>{loan['loan_number']}</strong> "
             f"for <strong>{format_currency(loan['principal_amount'])}</strong> has been "
             f"<strong>approved</strong>. It will be disbursed shortly.</p>"
             f"<p>Thank you for banking with us.</p>"
         ),
-        phone=borrower_phone,
-        sms_message=(
+        (
             f"Jodala Microfinance: Your loan {loan['loan_number']} for "
             f"{format_currency(loan['principal_amount'])} has been approved. "
             f"It will be disbursed shortly."
@@ -278,25 +314,23 @@ def reject_loan(loan_id):
     )
     log_audit('LOAN_REJECTED', 'loan', loan_id)
 
-    borrower_name, borrower_email, borrower_phone = _borrower_contact(loan)
+    borrower_name, _, _ = _borrower_contact(loan)
     reason = data.get('reason', '')
-    notify(
-        loan['loan_officer_id'],
+    _notify_loan_parties(
+        loan,
         'Loan Rejected',
         f"Loan {loan['loan_number']} for {borrower_name or 'the borrower'} was rejected." +
         (f" Reason: {reason}" if reason else ''),
-        notification_type='warning', related_type='loan', related_id=loan_id,
-        email=borrower_email,
-        email_subject=f"Update on your loan application {loan['loan_number']}",
-        email_body_html=(
+        'warning',
+        f"Update on your loan application {loan['loan_number']}",
+        (
             f"<p>Dear {borrower_name or 'Customer'},</p>"
             f"<p>We're sorry to inform you that your loan application "
             f"<strong>{loan['loan_number']}</strong> was not approved."
             + (f"<br>Reason: {reason}</p>" if reason else "</p>")
             + "<p>Please contact us if you have any questions.</p>"
         ),
-        phone=borrower_phone,
-        sms_message=(
+        (
             f"Jodala Microfinance: Your loan application {loan['loan_number']} was not approved."
             + (f" Reason: {reason}" if reason else "")
             + " Contact us with any questions."
@@ -391,25 +425,23 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
         adjust_account_balance('4100', fees)
     updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
 
-    borrower_name, borrower_email, borrower_phone = _borrower_contact(loan)
+    borrower_name, _, _ = _borrower_contact(loan)
     receipt_note = f" (M-Pesa receipt {mpesa_receipt})" if mpesa_receipt else ""
-    notify(
-        loan['loan_officer_id'],
+    _notify_loan_parties(
+        loan,
         'Loan Disbursed',
         f"Loan {loan['loan_number']} for {borrower_name or 'the borrower'} "
         f"({format_currency(amount_disbursed)}) has been disbursed{receipt_note}.",
-        notification_type='success', related_type='loan', related_id=loan_id,
-        email=borrower_email,
-        email_subject=f"Your loan {loan['loan_number']} has been disbursed",
-        email_body_html=(
+        'success',
+        f"Your loan {loan['loan_number']} has been disbursed",
+        (
             f"<p>Dear {borrower_name or 'Customer'},</p>"
             f"<p><strong>{format_currency(amount_disbursed)}</strong> has been disbursed to you "
             f"for loan <strong>{loan['loan_number']}</strong> on {disbursement_date.isoformat()}.</p>"
             f"<p>Your first repayment is due on <strong>{first_repayment.isoformat()}</strong>.</p>"
             f"<p>Thank you for banking with us.</p>"
         ),
-        phone=borrower_phone,
-        sms_message=(
+        (
             f"Jodala Microfinance: {format_currency(amount_disbursed)} has been disbursed for "
             f"loan {loan['loan_number']}{receipt_note}. First repayment due "
             f"{first_repayment.isoformat()}."
