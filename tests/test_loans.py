@@ -13,7 +13,7 @@ def _create_active_staff_user(db_conn):
         """INSERT INTO users (username, email, password_hash, full_name, role, is_active, created_at, updated_at)
            VALUES (%s, %s, %s, %s, %s, %s, now()::text, now()::text)""",
         ('notifications-user', 'staff@example.com', 'not-used-in-this-test',
-         'Notifications User', 'cashier', True)
+         'Notifications User', 'cashier', 1)
     )
     db_conn.commit()
     return cur.lastrowid

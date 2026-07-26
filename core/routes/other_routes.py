@@ -38,12 +38,90 @@ def get_company():
     return jsonify(settings)
 
 
+def _resize_logo_data_url(data_url, max_width=480, max_height=160, quality=82):
+    """Downscale + recompress an uploaded logo data URL so it doesn't bloat
+    every page load (logo_image is injected inline into base.html on every
+    request -- see core/database.py:get_company_branding). Returns the
+    original value unchanged if it isn't a data: URL or can't be decoded,
+    so non-image values (e.g. clearing the logo to '') pass through as-is."""
+    import base64
+    from PIL import Image as PILImage
+
+    if not data_url or not data_url.startswith('data:'):
+        return data_url
+
+    try:
+        header, b64data = data_url.split(',', 1)
+        raw = base64.b64decode(b64data)
+        pil_img = PILImage.open(io.BytesIO(raw))
+        pil_img.load()
+
+        # Preserve transparency where present (PNG logos), otherwise flatten
+        # onto white and export as JPEG -- JPEG compresses photos/scans far
+        # smaller than base64 PNG ever will.
+        has_alpha = pil_img.mode in ('RGBA', 'LA') or (pil_img.mode == 'P' and 'transparency' in pil_img.info)
+
+        width, height = pil_img.size
+        scale = min(max_width / width, max_height / height, 1)
+        if scale < 1:
+            pil_img = pil_img.resize((max(1, int(width * scale)), max(1, int(height * scale))), PILImage.LANCZOS)
+
+        out = io.BytesIO()
+        if has_alpha:
+            pil_img = pil_img.convert('RGBA')
+            pil_img.save(out, format='PNG', optimize=True)
+            mime = 'image/png'
+        else:
+            pil_img = pil_img.convert('RGB')
+            pil_img.save(out, format='JPEG', quality=quality, optimize=True)
+            mime = 'image/jpeg'
+
+        encoded = base64.b64encode(out.getvalue()).decode('ascii')
+        return f'data:{mime};base64,{encoded}'
+    except Exception:
+        # If we can't safely process it, fall back to the original value
+        # rather than losing the upload -- better an unoptimized logo than
+        # a broken one.
+        return data_url
+
+
+@settings_bp.route('/api/company/logo')
+def company_logo_image():
+    """Serve the company logo as a real image response instead of inlining
+    it as a base64 data URL in every page's HTML (see
+    core/database.py:get_company_branding, which is what used to bloat
+    every request by however large the uploaded logo was). Cached hard on
+    the client since logos change maybe a few times a year; a version-less
+    URL is fine to cache long because base.html/templates always reference
+    this same path and browsers will simply re-fetch after a hard refresh
+    or once the cache entry expires."""
+    import base64
+    row = get_db().execute("SELECT value FROM company_settings WHERE key = 'logo_image'").fetchone()
+    data_url = row['value'] if row else ''
+    if not data_url or not data_url.startswith('data:'):
+        return '', 404
+
+    try:
+        header, b64data = data_url.split(',', 1)
+        mime = header.split(';')[0].replace('data:', '') or 'image/png'
+        raw = base64.b64decode(b64data)
+    except Exception:
+        return '', 404
+
+    response = send_file(io.BytesIO(raw), mimetype=mime)
+    response.headers['Cache-Control'] = 'public, max-age=3600'
+    return response
+
+
 @settings_bp.route('/api/company', methods=['PUT'])
 @login_required
 @role_required('admin')
 def update_company():
     data = request.get_json()
     now = utcnow()
+
+    if 'logo_image' in data:
+        data['logo_image'] = _resize_logo_data_url(data['logo_image'])
 
     # 'main_account_opening_balance' isn't just another text setting -- it's
     # the headline cash figure that the Chart of Accounts / Trial Balance are

@@ -10,7 +10,7 @@ Responsibilities:
     codebase was written against)
   * Own the schema (CREATE TABLE statements)
   * Run versioned migrations against a `schema_migrations` table
-  * Bootstrap first-run data (default admin user, default settings, chart of accounts)
+  * Bootstrap first-run reference data (default settings and chart of accounts)
 
 Nothing in here talks HTTP. Routes call get_db() and run SQL directly (using
 conn.execute(...), a convenience method sqlite3 connections have built in but
@@ -283,9 +283,15 @@ def get_company_branding():
     except (TypeError, ValueError):
         idle_timeout_minutes = 15
 
+    # company_logo used to be the raw base64 data URL, injected inline into
+    # every page's HTML -- for an uploaded photo/scan that meant several
+    # hundred KB to 1MB+ duplicated on *every* request. It's now just a
+    # small, cacheable URL pointing at settings.company_logo_image (core/
+    # routes/other_routes.py), which serves the decoded image with a
+    # Cache-Control header so the browser only fetches it once.
     data = {
         'company_name': branding.get('company_name') or 'Jodala Microfinance',
-        'company_logo': branding.get('logo_image') or '',
+        'company_logo': '/settings/api/company/logo' if branding.get('logo_image') else '',
         'idle_timeout_minutes': idle_timeout_minutes,
     }
     _branding_cache['data'] = data
@@ -694,20 +700,6 @@ def _migration_0001_initial_schema(conn):
 
 def _migration_0002_seed_defaults(conn):
     now = utcnow()
-
-    existing_admin = conn.execute(
-        "SELECT id FROM users WHERE username = %s", ('admin',)
-    ).fetchone()
-    if not existing_admin:
-        # Local import to avoid a circular import at module load time.
-        from core.auth import hash_password
-        conn.execute(
-            """INSERT INTO users (username, email, password_hash, full_name, role,
-                                   is_active, must_change_password, totp_enabled, created_at, updated_at)
-               VALUES (%s, %s, %s, %s, %s, 1, 1, 0, %s, %s)""",
-            ('admin', 'admin@jodala.local', hash_password('ChangeMe123!'),
-             'System Administrator', 'admin', now, now)
-        )
 
     default_settings = {
         'company_name': 'Jodala Microfinance',
@@ -1238,7 +1230,7 @@ MIGRATIONS = [
 
     (1, 'initial schema', _migration_0001_initial_schema),
 
-    (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
+    (2, 'seed default settings/accounts', _migration_0002_seed_defaults),
     (3, 'clients are individual borrowers, not businesses', _migration_0003_clients_are_borrowers_not_businesses),
     (4, 'add gender/date_of_birth to clients', _migration_0004_client_gender_dob),
     (5, 'add rollover_amount to loans for correct top-up disbursement', _migration_0005_loan_rollover_amount),

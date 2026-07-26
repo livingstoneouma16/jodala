@@ -1,32 +1,29 @@
 /* ============================================================
-   Design tokens
-   Direction: a field-office ledger book, not a SaaS dashboard.
-   The brand green (#1B4332 / #D8F3DC) already exists in the
-   server-rendered v1 UI and the PDF receipts/agreements — v3
-   keeps it so the two front ends read as one product mid-migration,
-   but leans into a paper-ledger register feel: hairline rules,
-   tabular alignment, ink-stamp status badges.
+   Design tokens — shared identity with the main Jodala app
+   (static/css/main.css). Field-ledger heritage, modern SaaS
+   discipline: deep ink-forest sidebar, warm paper surfaces,
+   ink-stamp status badges as the signature element.
    ============================================================ */
 :root {
   /* Palette */
-  --ink: #16241d;
-  --forest-900: #0f2f22;
+  --ink: #17251e;
+  --forest-900: #0f2e24;
   --forest-700: #1b4332;
   --forest-600: #22543c;
   --forest-500: #2d6a4f;
-  --mint-100: #d8f3dc;
-  --mint-50: #eef8ee;
-  --paper: #faf7ee;
+  --mint-100: #dcf0e3;
+  --mint-50: #eef5f0;
+  --paper: #f7f5ef;
   --paper-raised: #ffffff;
-  --rule: #ded4b8;
-  --rule-strong: #c9bd9a;
-  --stamp-pending: #a9761f;
+  --rule: #e1dbc8;
+  --rule-strong: #cfdbd3;
+  --stamp-pending: #93701e;
   --stamp-pending-bg: #f6ecd8;
   --stamp-active: #1b4332;
-  --stamp-active-bg: #d8f3dc;
+  --stamp-active-bg: #dcf0e3;
   --stamp-rejected: #8a2f2f;
   --stamp-rejected-bg: #f6e0df;
-  --stamp-neutral: #55504a;
+  --stamp-neutral: #5a6860;
   --stamp-neutral-bg: #eae6da;
 
   /* Type */
@@ -34,11 +31,13 @@
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
 
-  --radius: 6px;
+  --radius: 12px;
+  --shadow-sm: 0 3px 12px rgba(15,46,36,.05);
+  --shadow-md: 0 8px 24px rgba(15,46,36,.10);
+  --shadow-lg: 0 16px 40px rgba(15,46,36,.18);
 }
 
 * { box-sizing: border-box; }
-
 html, body, #root { height: 100%; }
 
 body {
@@ -47,10 +46,11 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 14px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; color: var(--forest-900); }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; color: var(--forest-900); letter-spacing: -.02em; }
 
 a { color: var(--forest-600); }
 
@@ -62,16 +62,17 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 /* ---------- App shell ---------- */
-.app-shell { display: flex; min-height: 100vh; }
+.app-shell { display: flex; min-height: 100vh; background: var(--paper); }
 
 .sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: var(--forest-700);
+  background: linear-gradient(182deg, var(--forest-900) 0%, #0a2019 100%);
   color: var(--mint-100);
   padding: 24px 0;
   display: flex;
   flex-direction: column;
+  box-shadow: 8px 0 24px rgba(15,46,36,.08);
 }
 
 .sidebar-brand {
@@ -80,7 +81,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   font-weight: 700;
   color: #fff;
   padding: 0 20px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.15);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
   margin-bottom: 12px;
 }
 .sidebar-brand small { display: block; font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.08em; color: var(--mint-100); opacity: 0.7; margin-top: 2px; }
@@ -92,7 +93,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
-  border-radius: var(--radius);
+  border-radius: 9px;
   color: var(--mint-100);
   text-decoration: none;
   font-size: 13.5px;
@@ -100,44 +101,46 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   opacity: 0.85;
 }
 .sidebar-link:hover { background: rgba(255,255,255,0.08); opacity: 1; }
-.sidebar-link.active { background: rgba(255,255,255,0.14); opacity: 1; }
+.sidebar-link.active { background: linear-gradient(90deg, rgba(63,156,109,.32), rgba(63,156,109,.08)); opacity: 1; }
 
 .sidebar-footer {
   margin-top: auto;
   padding: 12px 20px 0;
-  border-top: 1px solid rgba(255,255,255,0.15);
+  border-top: 1px solid rgba(255,255,255,0.1);
 }
 .sidebar-user { font-size: 12.5px; font-weight: 600; color: #fff; }
-.sidebar-role { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.65; }
-.sidebar-logout { background: none; border: none; color: var(--mint-100); opacity: 0.7; font-size: 12px; cursor: pointer; padding: 8px 0 0; text-decoration: underline; }
+.sidebar-role { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; }
+.sidebar-logout { background: none; border: none; color: var(--mint-100); opacity: 0.65; font-size: 12px; cursor: pointer; padding: 8px 0 0; text-decoration: underline; }
 .sidebar-logout:hover { opacity: 1; }
 
 .main {
   flex: 1;
-  padding: 32px 40px;
+  padding: 28px;
   max-width: 1200px;
 }
 
-.page-header { margin-bottom: 28px; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.page-header h1 { font-size: 26px; }
+.page-header { margin-bottom: 24px; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page-header h1 { font-size: 26px; letter-spacing: -.03em; }
 .page-eyebrow { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--forest-500); margin: 0 0 4px; }
 
 /* ---------- Ledger card / table ---------- */
-.ledger-card {
+.ledger-card, .panel, .card, .table-wrap {
   background: var(--paper-raised);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
-.ledger-toolbar {
+.ledger-toolbar, .panel-header, .card-header {
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 14px 16px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--rule);
   flex-wrap: wrap;
 }
+.panel-body, .card-body { padding: 20px; }
 
 .ledger-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .ledger-table th {
@@ -148,12 +151,12 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   letter-spacing: 0.06em;
   color: var(--stamp-neutral);
   font-weight: 600;
-  padding: 10px 14px;
+  padding: 11px 14px;
   border-bottom: 1px solid var(--rule-strong);
   background: var(--mint-50);
 }
 .ledger-table td {
-  padding: 11px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--rule);
   vertical-align: middle;
 }
@@ -161,11 +164,17 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .ledger-table .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .ledger-table .row-clickable { cursor: pointer; }
 
-.ledger-empty { padding: 40px 20px; text-align: center; color: var(--stamp-neutral); font-size: 13px; }
+.ledger-empty { padding: 44px 20px; text-align: center; color: var(--stamp-neutral); font-size: 13px; }
 
 /* ---------- Stat cards ---------- */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
-.stat-card { background: var(--paper-raised); border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px 18px; }
+.stat-card {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 18px;
+}
 .stat-label { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--stamp-neutral); margin-bottom: 8px; }
 .stat-value { font-family: var(--font-display); font-size: 26px; font-weight: 600; color: var(--forest-900); font-variant-numeric: tabular-nums; }
 .stat-sub { font-size: 11.5px; color: var(--stamp-neutral); margin-top: 4px; }
@@ -175,7 +184,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   display: inline-block;
   font-family: var(--font-mono);
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   padding: 3px 9px;
@@ -191,43 +200,52 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .stamp-inactive { color: var(--stamp-neutral); background: var(--stamp-neutral-bg); }
 
 /* ---------- Forms ---------- */
-.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
-.field label { font-size: 12px; font-weight: 600; color: var(--forest-900); }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field label { font-size: 12px; font-weight: 650; color: var(--forest-900); }
 .field input, .field select, .field textarea {
   padding: 9px 11px;
+  min-height: 42px;
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
+  border-radius: 9px;
   background: var(--paper-raised);
   color: var(--ink);
+  transition: border-color .18s ease;
 }
-.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--forest-500); }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--forest-500); outline: none; box-shadow: 0 0 0 3px rgba(63,156,109,.16); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .field-hint { font-size: 11px; color: var(--stamp-neutral); }
 
-.btn {
+.btn, button {
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 650;
   font-size: 13px;
   padding: 9px 16px;
-  border-radius: var(--radius);
+  border-radius: 9px;
   border: 1px solid transparent;
   cursor: pointer;
+  transition: transform .12s ease, background .18s ease;
 }
 .btn-primary { background: var(--forest-700); color: #fff; }
-.btn-primary:hover { background: var(--forest-900); }
-.btn-primary:disabled { background: var(--rule-strong); cursor: not-allowed; }
+.btn-primary:hover { background: var(--forest-900); transform: translateY(-1px); }
+.btn-primary:disabled { background: var(--rule-strong); cursor: not-allowed; transform: none; }
 .btn-secondary { background: var(--paper-raised); color: var(--forest-700); border-color: var(--rule-strong); }
 .btn-secondary:hover { background: var(--mint-50); }
-.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-sm { padding: 6px 11px; font-size: 12px; }
 
-.search-input { padding: 8px 12px; border: 1px solid var(--rule-strong); border-radius: var(--radius); min-width: 220px; }
-.filter-select { padding: 8px 10px; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--paper-raised); }
+.search-input, .filter-select {
+  padding: 8px 12px;
+  min-height: 42px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 9px;
+  background: var(--paper-raised);
+}
+.search-input { min-width: 220px; }
 
-/* ---------- Modal dialogs (open account, record repayment, etc.) ---------- */
+/* ---------- Modal dialogs ---------- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(20, 30, 24, 0.45);
+  background: rgba(15, 30, 24, 0.5);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -237,12 +255,11 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 .modal-panel {
   background: var(--paper-raised);
-  border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
   padding: 24px;
   width: 100%;
   max-width: 560px;
-  box-shadow: 0 12px 32px rgba(20, 30, 24, 0.25);
+  box-shadow: var(--shadow-lg);
 }
 .modal-panel h3 { margin-top: 0; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
@@ -264,7 +281,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 .banner-success { background: var(--stamp-active-bg); color: var(--stamp-active); border: 1px solid var(--stamp-active); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
 
 .pagination { display: flex; gap: 8px; align-items: center; justify-content: flex-end; padding: 12px 16px; }
-.pagination button { background: none; border: 1px solid var(--rule-strong); border-radius: var(--radius); padding: 5px 10px; cursor: pointer; font-size: 12px; }
+.pagination button { background: none; border: 1px solid var(--rule-strong); border-radius: 9px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
 .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
 .pagination-info { font-size: 12px; color: var(--stamp-neutral); font-family: var(--font-mono); }
 
@@ -274,25 +291,25 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--forest-700);
-  background-image: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.04), transparent 40%);
+  background: linear-gradient(135deg, var(--forest-900) 0%, var(--forest-700) 55%, var(--forest-500) 100%);
 }
 .login-card {
-  width: 360px;
+  width: 380px;
   background: var(--paper-raised);
   border-radius: var(--radius);
-  padding: 32px 28px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  padding: 34px 30px;
+  box-shadow: var(--shadow-lg);
 }
 .login-card h1 { font-size: 22px; margin-bottom: 2px; }
 .login-eyebrow { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--forest-500); margin-bottom: 18px; }
 
 @media (max-width: 720px) {
   .app-shell { flex-direction: column; }
-  .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 12px; }
+  .sidebar { width: 100%; flex-direction: row; overflow-x: auto; padding: 12px; box-shadow: none; }
   .sidebar-brand, .sidebar-footer { display: none; }
   .sidebar-nav { flex-direction: row; }
-  .main { padding: 20px; }
+  .main { padding: 16px; }
+  .panel-body, .card-body { padding: 15px; }
   .field-row { grid-template-columns: 1fr; }
 }
 

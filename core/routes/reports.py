@@ -5,7 +5,7 @@ import io
 
 from core.database import get_db
 from core.auth import login_required, get_current_user
-from core.serializers import loan_public, repayment_public, member_public, member_full_name, client_full_name
+from core.serializers import loan_public, repayment_public, member_public, member_full_name, client_full_name, client_public
 
 reports_bp = Blueprint('reports', __name__)
 
@@ -106,6 +106,8 @@ def arrears_report():
         result.append({
             'loan_number': s['loan_number'],
             'borrower': borrower,
+            'member_id': s['member_id'],
+            'client_id': s['client_id'],
             'installment': s['installment_number'],
             'due_date': s['due_date'],
             'amount_due': s['total_due'] - s['total_paid'],
@@ -148,17 +150,43 @@ def collection_report():
 @reports_bp.route('/api/member-report')
 @login_required
 def member_report():
+    """Combined borrower report: members and clients are two separate
+    tables (see core/database.py) but both represent people loans are
+    issued to, so this report merges them into one list the same way
+    loans already resolve a borrower from either table (see
+    _loan_join_sql above). Each row carries a borrower_type field so the
+    UI/exports can still tell them apart."""
     members = get_db().execute("SELECT * FROM members ORDER BY created_at DESC").fetchall()
+    clients = get_db().execute("SELECT * FROM clients ORDER BY created_at DESC").fetchall()
+
     by_status, by_region = {}, {}
+    borrowers = []
 
     for m in members:
         by_status[m['status']] = by_status.get(m['status'], 0) + 1
         if m['region']:
             by_region[m['region']] = by_region.get(m['region'], 0) + 1
+        row = member_public(m)
+        row['borrower_type'] = 'member'
+        row['number'] = row['member_number']
+        borrowers.append(row)
+
+    for c in clients:
+        by_status[c['status']] = by_status.get(c['status'], 0) + 1
+        if c['region']:
+            by_region[c['region']] = by_region.get(c['region'], 0) + 1
+        row = client_public(c)
+        row['borrower_type'] = 'client'
+        row['number'] = row['client_number']
+        borrowers.append(row)
+
+    borrowers.sort(key=lambda b: b['created_at'] or '', reverse=True)
 
     return jsonify({
-        'members': [member_public(m) for m in members[:200]],
-        'total': len(members),
+        'members': borrowers[:200],
+        'total': len(borrowers),
+        'member_count': len(members),
+        'client_count': len(clients),
         'by_status': by_status,
         'by_region': by_region
     })
@@ -317,27 +345,44 @@ def export_members_excel():
     from openpyxl.styles import Font
 
     members = get_db().execute("SELECT * FROM members ORDER BY created_at DESC").fetchall()
+    clients = get_db().execute("SELECT * FROM clients ORDER BY created_at DESC").fetchall()
     wb = Workbook()
     ws = wb.active
-    ws.title = "Members"
+    ws.title = "Members & Clients"
 
-    headers = ['Member No', 'First Name', 'Last Name', 'Phone', 'Email',
+    headers = ['Type', 'No.', 'First Name', 'Last Name', 'Phone', 'Email',
                'Region', 'Occupation', 'Status', 'Joined']
 
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.font = Font(bold=True)
 
-    for row, m in enumerate(members, 2):
-        ws.cell(row=row, column=1, value=m['member_number'])
-        ws.cell(row=row, column=2, value=m['first_name'])
-        ws.cell(row=row, column=3, value=m['last_name'])
-        ws.cell(row=row, column=4, value=m['phone'])
-        ws.cell(row=row, column=5, value=m['email'])
-        ws.cell(row=row, column=6, value=m['region'])
-        ws.cell(row=row, column=7, value=m['occupation'])
-        ws.cell(row=row, column=8, value=m['status'])
-        ws.cell(row=row, column=9, value=m['created_at'])
+    row = 2
+    for m in members:
+        ws.cell(row=row, column=1, value='Member')
+        ws.cell(row=row, column=2, value=m['member_number'])
+        ws.cell(row=row, column=3, value=m['first_name'])
+        ws.cell(row=row, column=4, value=m['last_name'])
+        ws.cell(row=row, column=5, value=m['phone'])
+        ws.cell(row=row, column=6, value=m['email'])
+        ws.cell(row=row, column=7, value=m['region'])
+        ws.cell(row=row, column=8, value=m['occupation'])
+        ws.cell(row=row, column=9, value=m['status'])
+        ws.cell(row=row, column=10, value=m['created_at'])
+        row += 1
+
+    for c in clients:
+        ws.cell(row=row, column=1, value='Client')
+        ws.cell(row=row, column=2, value=c['client_number'])
+        ws.cell(row=row, column=3, value=c['first_name'])
+        ws.cell(row=row, column=4, value=c['last_name'])
+        ws.cell(row=row, column=5, value=c['phone'])
+        ws.cell(row=row, column=6, value=c['email'])
+        ws.cell(row=row, column=7, value=c['region'])
+        ws.cell(row=row, column=8, value=c['occupation'])
+        ws.cell(row=row, column=9, value=c['status'])
+        ws.cell(row=row, column=10, value=c['created_at'])
+        row += 1
 
     output = io.BytesIO()
     wb.save(output)
@@ -450,16 +495,23 @@ def export_loans_csv():
 @login_required
 def export_members_csv():
     members = get_db().execute("SELECT * FROM members ORDER BY created_at DESC").fetchall()
+    clients = get_db().execute("SELECT * FROM clients ORDER BY created_at DESC").fetchall()
 
-    headers = ['Member No', 'First Name', 'Last Name', 'Phone', 'Email',
+    headers = ['Type', 'No.', 'First Name', 'Last Name', 'Phone', 'Email',
                'Region', 'Occupation', 'Status', 'Joined']
 
     rows = [
         [
-            m['member_number'], m['first_name'], m['last_name'], m['phone'],
+            'Member', m['member_number'], m['first_name'], m['last_name'], m['phone'],
             m['email'], m['region'], m['occupation'], m['status'], m['created_at'],
         ]
         for m in members
+    ] + [
+        [
+            'Client', c['client_number'], c['first_name'], c['last_name'], c['phone'],
+            c['email'], c['region'], c['occupation'], c['status'], c['created_at'],
+        ]
+        for c in clients
     ]
 
     return _csv_response(headers, rows, 'members_report.csv')

@@ -144,7 +144,6 @@ def create_app():
     from app.routes.notifications import notifications_bp
     from app.routes.documents import documents_bp
     from app.routes.users import users_bp
-    from app.routes.v3 import v3_bp
     from app.routes.mpesa import mpesa_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
@@ -160,7 +159,6 @@ def create_app():
     app.register_blueprint(notifications_bp, url_prefix='/notifications')
     app.register_blueprint(documents_bp, url_prefix='/documents')
     app.register_blueprint(users_bp, url_prefix='/users')
-    app.register_blueprint(v3_bp, url_prefix='/v3')
     app.register_blueprint(mpesa_bp, url_prefix='/mpesa')
 
     # Root redirect

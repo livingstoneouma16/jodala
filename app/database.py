@@ -8,7 +8,7 @@ Responsibilities:
   * Provide per-request connections with row access by column name
   * Own the schema (CREATE TABLE statements)
   * Run versioned migrations against a `schema_migrations` table
-  * Bootstrap first-run data (default admin user, default settings, chart of accounts)
+  * Bootstrap first-run reference data (default settings and chart of accounts)
 
 Nothing in here talks HTTP. Routes call get_db() and run SQL directly, or use
 the small helper functions below (query_one/query_all/execute).
@@ -422,20 +422,6 @@ def _migration_0001_initial_schema(conn):
 def _migration_0002_seed_defaults(conn):
     now = utcnow()
 
-    existing_admin = conn.execute(
-        "SELECT id FROM users WHERE username = ?", ('admin',)
-    ).fetchone()
-    if not existing_admin:
-        # Local import to avoid a circular import at module load time.
-        from app.auth import hash_password
-        conn.execute(
-            """INSERT INTO users (username, email, password_hash, full_name, role,
-                                   is_active, totp_enabled, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 1, 0, ?, ?)""",
-            ('admin', 'admin@jodala.local', hash_password('ChangeMe123!'),
-             'System Administrator', 'admin', now, now)
-        )
-
     default_settings = {
         'company_name': 'Jodala Microfinance',
         'company_email': 'jodalamicrofinance@gmail.com',
@@ -714,7 +700,7 @@ def _migration_0010_client_full_kyc_fields(conn):
 
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
-    (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
+    (2, 'seed default settings/accounts', _migration_0002_seed_defaults),
     (3, 'clients are individual borrowers, not businesses', _migration_0003_clients_are_borrowers_not_businesses),
     (4, 'add gender/date_of_birth to clients', _migration_0004_client_gender_dob),
     (5, 'add rollover_amount to loans for correct top-up disbursement', _migration_0005_loan_rollover_amount),

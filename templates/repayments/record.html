@@ -224,8 +224,12 @@ function calcSplit() {
   if (!currentLoan) return;
   const amount = parseFloat(document.getElementById('payAmount').value) || 0;
   if (!amount) { document.getElementById('splitPreview').classList.add('d-none'); return; }
-  const ratio = currentLoan.total_interest / (currentLoan.total_repayable || 1);
-  const interest = Math.min(amount * ratio, currentLoan.total_interest || 0);
+  const totalInterest = Number(currentLoan.total_interest);
+  const totalRepayable = Number(currentLoan.total_repayable);
+  const ratio = Number.isFinite(totalInterest) && Number.isFinite(totalRepayable) && totalRepayable > 0
+    ? totalInterest / totalRepayable
+    : 0;
+  const interest = Math.min(amount * ratio, Number.isFinite(totalInterest) ? totalInterest : 0);
   const principal = amount - interest;
   document.getElementById('splitPrincipal').textContent = fmtCurrency(principal);
   document.getElementById('splitInterest').textContent = fmtCurrency(interest);
