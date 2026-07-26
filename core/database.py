@@ -743,8 +743,24 @@ def _migration_0002_seed_defaults(conn):
                 (code, name, acc_type)
             )
 
+    # Seed the very first admin user so a fresh install has a way to log in
+    # at all. Uses the well-known default password 'ChangeMe123!' -- migration
+    # 0011 forces a password change on next login for any 'admin' account
+    # still on this default, so it's never usable past the first session.
+    from core.auth import hash_password
+    existing_admin = conn.execute("SELECT id FROM users WHERE username = 'admin'").fetchone()
+    if not existing_admin:
+        conn.execute(
+            """INSERT INTO users (username, email, password_hash, full_name, role,
+                   is_active, created_at, updated_at)
+               VALUES (%s, %s, %s, %s, %s, 1, %s, %s)""",
+            ('admin', 'admin@jodala.local', hash_password('ChangeMe123!'),
+             'Administrator', 'admin', now, now)
+        )
+
 
 def _migration_0003_clients_are_borrowers_not_businesses(conn):
+
     """The `clients` table originally modeled clients as businesses
     (business_name, contact_person, business_type, annual_revenue,
     registration_number). Clients are actually just non-member borrowers --
