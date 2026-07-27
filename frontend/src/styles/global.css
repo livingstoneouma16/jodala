@@ -320,3 +320,141 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ============================================================
+   UI polish pass
+   ============================================================ */
+
+/* Sidebar nav: left rail indicator + icon dot instead of flat text */
+.sidebar-link {
+  position: relative;
+  padding-left: 14px;
+}
+.sidebar-link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  border-radius: 2px;
+  background: var(--forest-500);
+  transition: height .16s ease;
+}
+.sidebar-link.active::before { height: 60%; }
+.sidebar-link.active {
+  color: #eef3fa;
+  font-weight: 650;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sidebar-brand::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--forest-500), #4a8bc9);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset;
+}
+
+/* Cards: slightly deeper elevation + subtle top highlight for a "raised panel" feel */
+.ledger-card, .panel, .card, .table-wrap, .stat-card {
+  position: relative;
+}
+.ledger-card::before, .panel::before, .card::before, .stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent);
+}
+
+.stat-card {
+  transition: border-color .16s ease, transform .16s ease;
+}
+.stat-card:hover {
+  border-color: var(--rule-strong);
+  transform: translateY(-1px);
+}
+
+/* Table row hover: use accent-tinted background instead of flat grey, add subtle left accent on hover */
+.ledger-table tbody tr {
+  transition: background .12s ease;
+}
+.ledger-table tbody tr:hover {
+  background: rgba(74, 139, 201, 0.06);
+}
+
+/* Buttons: refined focus ring + subtle press state */
+.btn:active, button:active { transform: translateY(0); }
+.btn-primary {
+  box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 4px 10px rgba(44,95,146,.25);
+}
+.btn-primary:hover {
+  box-shadow: 0 1px 0 rgba(255,255,255,.1) inset, 0 6px 16px rgba(44,95,146,.35);
+}
+
+/* Inputs: nicer placeholder + hover affordance before focus */
+.field input::placeholder, .search-input::placeholder { color: var(--stamp-neutral); opacity: .7; }
+.field input:hover, .field select:hover, .search-input:hover, .filter-select:hover {
+  border-color: var(--rule-strong);
+}
+
+/* Login screen: centered card with layered glow instead of flat gradient */
+.login-screen {
+  position: relative;
+  overflow: hidden;
+}
+.login-screen::before {
+  content: '';
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(74,139,201,.22), transparent 70%);
+  top: -120px;
+  right: -120px;
+}
+.login-screen::after {
+  content: '';
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(44,95,146,.18), transparent 70%);
+  bottom: -100px;
+  left: -100px;
+}
+.login-card {
+  position: relative;
+  z-index: 1;
+}
+
+/* Status stamps: remove the rotation on hover for a "settle" interaction */
+.stamp { transition: transform .12s ease; }
+
+/* Scrollbars matching theme (webkit) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--paper); }
+::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--forest-500); }
+
+/* Empty state icon accent */
+.ledger-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.ledger-empty::before {
+  content: '—';
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--rule-strong);
+}
