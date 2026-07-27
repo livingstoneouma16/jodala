@@ -8,10 +8,10 @@
   <!-- Welcome Bar -->
   <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div>
-      <h5 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0">
+      <h5 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0;font-size:15px">
         Good <span id="greetPart"></span>, {{ user.full_name.split()[0] if user else 'User' }} 👋
       </h5>
-      <p class="text-muted mb-0" style="font-size:11.5px" id="todayDate"></p>
+      <p class="text-muted mb-0" style="font-size:10px" id="todayDate"></p>
     </div>
     <div class="d-flex gap-2">
       <a href="{{ url_for('loans.apply_page') }}" class="btn btn-brand btn-sm">
@@ -24,7 +24,7 @@
   </div>
 
   <!-- Main Account Balance -->
-  <div class="row g-3 mb-3">
+  <div class="row g-2 mb-2">
     <div class="col-12">
       <div class="stat-card gold">
         <div class="stat-icon gold"><i class="bi bi-bank2"></i></div>
@@ -40,7 +40,7 @@
   </div>
 
   <!-- Stat Cards Row 1 -->
-  <div class="row g-3 mb-3">
+  <div class="row g-2 mb-2">
     <div class="col-12 col-sm-6 col-md-3">
       <div class="stat-card">
         <div class="stat-icon green"><i class="bi bi-people-fill"></i></div>
@@ -84,7 +84,7 @@
   </div>
 
   <!-- Stat Cards Row 2 -->
-  <div class="row g-3 mb-4">
+  <div class="row g-2 mb-3">
     <div class="col-12 col-sm-6 col-md-3">
       <div class="stat-card">
         <div class="stat-icon teal"><i class="bi bi-arrow-down-circle-fill"></i></div>
@@ -128,19 +128,19 @@
   </div>
 
   <!-- Charts + Due Today -->
-  <div class="row g-3 mb-3">
+  <div class="row g-2 mb-2">
     <!-- Loan Trend Chart -->
     <div class="col-12 col-lg-8">
       <div class="jd-card h-100">
         <div class="jd-card-header">
           <div class="jd-card-title"><i class="bi bi-bar-chart-fill" style="color:var(--brand-light)"></i>Loan Activity (12 Months)</div>
           <div class="d-flex gap-2">
-            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px"><span style="background:var(--brand-mid);width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Disbursed</span>
-            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:10px"><span style="background:#E9C46A;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Collected</span>
+            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:9px"><span style="background:var(--brand-mid);width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Disbursed</span>
+            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:9px"><span style="background:#E9C46A;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Collected</span>
           </div>
         </div>
         <div class="jd-card-body">
-          <div class="chart-wrapper"><canvas id="loanTrendChart"></canvas></div>
+          <div class="chart-wrapper" style="height:165px"><canvas id="loanTrendChart"></canvas></div>
         </div>
       </div>
     </div>
@@ -152,7 +152,7 @@
           <div class="jd-card-title"><i class="bi bi-pie-chart-fill" style="color:var(--gold)"></i>Loan Status</div>
         </div>
         <div class="jd-card-body">
-          <div class="chart-wrapper" style="height:180px"><canvas id="statusChart"></canvas></div>
+          <div class="chart-wrapper" style="height:150px"><canvas id="statusChart"></canvas></div>
           <div id="statusLegend" class="mt-2"></div>
         </div>
       </div>
@@ -160,19 +160,19 @@
   </div>
 
   <!-- More Charts -->
-  <div class="row g-3 mb-3">
+  <div class="row g-2 mb-2">
     <!-- Income vs Expenses -->
     <div class="col-12 col-lg-6">
       <div class="jd-card h-100">
         <div class="jd-card-header">
           <div class="jd-card-title"><i class="bi bi-graph-up" style="color:var(--brand-light)"></i>Income vs Expenses (6 Months)</div>
           <div class="d-flex gap-2">
-            <span class="badge" style="background:#D1FAE5;color:#065F46;font-size:10px"><span style="background:#52B788;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Income</span>
-            <span class="badge" style="background:#FFE4E6;color:#991B1B;font-size:10px"><span style="background:#E63946;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Expenses</span>
+            <span class="badge" style="background:#D1FAE5;color:#065F46;font-size:9px"><span style="background:#52B788;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Income</span>
+            <span class="badge" style="background:#FFE4E6;color:#991B1B;font-size:9px"><span style="background:#E63946;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Expenses</span>
           </div>
         </div>
         <div class="jd-card-body">
-          <div class="chart-wrapper"><canvas id="incomeExpenseChart"></canvas></div>
+          <div class="chart-wrapper" style="height:165px"><canvas id="incomeExpenseChart"></canvas></div>
         </div>
       </div>
     </div>
@@ -183,19 +183,19 @@
         <div class="jd-card-header">
           <div class="jd-card-title"><i class="bi bi-person-lines-fill" style="color:var(--gold)"></i>Member Growth (6 Months)</div>
           <div class="d-flex gap-2">
-            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px"><span style="background:var(--brand-mid);width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Members</span>
-            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:10px"><span style="background:#E9C46A;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Clients</span>
+            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:9px"><span style="background:var(--brand-mid);width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Members</span>
+            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:9px"><span style="background:#E9C46A;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Clients</span>
           </div>
         </div>
         <div class="jd-card-body">
-          <div class="chart-wrapper"><canvas id="memberGrowthChart"></canvas></div>
+          <div class="chart-wrapper" style="height:165px"><canvas id="memberGrowthChart"></canvas></div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Tables Row -->
-  <div class="row g-3">
+  <div class="row g-2">
     <!-- Due Today -->
     <div class="col-12 col-lg-6">
       <div class="jd-card h-100">
@@ -204,7 +204,7 @@
           <a href="{{ url_for('repayments.record_page') }}" class="btn btn-brand btn-sm"><i class="bi bi-plus me-1"></i>Record</a>
         </div>
         <div id="dueTodayList">
-          <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+          <div class="text-center p-3"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
         </div>
       </div>
     </div>
@@ -217,7 +217,7 @@
           <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-brand-outline">View Report</a>
         </div>
         <div id="overdueList">
-          <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+          <div class="text-center p-3"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
         </div>
       </div>
     </div>
@@ -310,9 +310,9 @@ async function loadStatusChart(data) {
     });
 
     document.getElementById('statusLegend').innerHTML = data.slice(0,5).map(d =>
-      `<div class="d-flex justify-content-between align-items-center mb-1" style="font-size:11px">
+      `<div class="d-flex justify-content-between align-items-center mb-1" style="font-size:10px">
         <div class="d-flex align-items-center gap-1">
-          <span style="width:8px;height:8px;border-radius:50%;background:${colors[d.status] || '#9CA3AF'};display:inline-block"></span>
+          <span style="width:6px;height:6px;border-radius:50%;background:${colors[d.status] || '#9CA3AF'};display:inline-block"></span>
           <span style="text-transform:capitalize">${escapeHtml(d.status.replace('_',' '))}</span>
         </div>
         <span style="font-weight:600">${d.count}</span>
@@ -389,8 +389,8 @@ async function loadDueToday(data) {
     }
     el.innerHTML = '<div class="table-responsive"><table class="table table-borderless mb-0"><thead><tr><th>Loan</th><th>Borrower</th><th>Installment</th><th>Amount Due</th></tr></thead><tbody>' +
       data.map(d => `<tr>
-        <td><span style="font-weight:600;font-size:12px">${escapeHtml(d.loan_number)}</span></td>
-        <td style="font-size:13px">${escapeHtml(d.borrower)}</td>
+        <td><span style="font-weight:600;font-size:11px">${escapeHtml(d.loan_number)}</span></td>
+        <td style="font-size:12px">${escapeHtml(d.borrower)}</td>
         <td><span class="badge bg-secondary">#${d.installment}</span></td>
         <td style="font-weight:600;color:var(--brand-mid)">${fmtCurrency(d.amount_due)}</td>
       </tr>`).join('') + '</tbody></table></div>';
@@ -407,8 +407,8 @@ async function loadOverdue(data) {
     }
     el.innerHTML = '<div class="table-responsive"><table class="table table-borderless mb-0"><thead><tr><th>Loan</th><th>Borrower</th><th>Outstanding</th><th>Days Overdue</th></tr></thead><tbody>' +
       data.map(d => `<tr>
-        <td><span style="font-weight:600;font-size:12px">${escapeHtml(d.loan_number)}</span></td>
-        <td style="font-size:13px">${escapeHtml(d.borrower)}</td>
+        <td><span style="font-weight:600;font-size:11px">${escapeHtml(d.loan_number)}</span></td>
+        <td style="font-size:12px">${escapeHtml(d.borrower)}</td>
         <td style="font-weight:600">${fmtCurrency(d.outstanding)}</td>
         <td><span class="status-pill status-overdue">${d.overdue_days}d</span></td>
       </tr>`).join('') + '</tbody></table></div>';
