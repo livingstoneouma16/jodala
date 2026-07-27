@@ -55,7 +55,7 @@ export default function Dashboard() {
       </div>
 
       <div className="ledger-card" style={{ padding: '20px 20px 8px', marginBottom: 24 }}>
-        <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--forest-700)', marginBottom: 12 }}>
+        <h3 style={{ fontFamily: 'var(--font-mono)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--stamp-neutral)', marginBottom: 12 }}>
           Disbursed vs. collected &mdash; last 12 months
         </h3>
         <ResponsiveContainer width="100%" height={240}>
@@ -64,8 +64,8 @@ export default function Dashboard() {
             <XAxis dataKey="month" tick={{ fontSize: 11, fontFamily: 'var(--font-mono)' }} />
             <YAxis tick={{ fontSize: 11, fontFamily: 'var(--font-mono)' }} />
             <Tooltip formatter={(v) => money(v)} />
-            <Line type="monotone" dataKey="disbursed" stroke="#1b4332" strokeWidth={2} dot={false} name="Disbursed" />
-            <Line type="monotone" dataKey="collected" stroke="#a9761f" strokeWidth={2} dot={false} name="Collected" />
+            <Line type="monotone" dataKey="disbursed" stroke="#4a8bc9" strokeWidth={2} dot={false} name="Disbursed" />
+            <Line type="monotone" dataKey="collected" stroke="#c1963d" strokeWidth={2} dot={false} name="Collected" />
           </LineChart>
         </ResponsiveContainer>
       </div>
