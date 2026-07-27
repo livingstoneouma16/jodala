@@ -1,11 +1,15 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { api, getToken, setToken } from '../api/client'
 
 const AuthContext = createContext(null)
 
+const IDLE_LIMIT_MS = 15 * 60 * 1000 // log out after 15 minutes of inactivity
+const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'scroll', 'touchstart']
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const idleTimer = useRef(null)
 
   const loadMe = useCallback(async () => {
     if (!getToken()) {
@@ -40,6 +44,27 @@ export function AuthProvider({ children }) {
     setToken(null)
     setUser(null)
   }, [])
+
+  // Idle timeout: sign the user out after a period of inactivity,
+  // even within the same browser session.
+  useEffect(() => {
+    if (!user) return
+
+    const resetTimer = () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+      idleTimer.current = setTimeout(() => {
+        logout()
+      }, IDLE_LIMIT_MS)
+    }
+
+    resetTimer()
+    ACTIVITY_EVENTS.forEach((evt) => window.addEventListener(evt, resetTimer))
+
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+      ACTIVITY_EVENTS.forEach((evt) => window.removeEventListener(evt, resetTimer))
+    }
+  }, [user, logout])
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, refresh: loadMe }}>
