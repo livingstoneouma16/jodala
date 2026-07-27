@@ -1,11 +1,17 @@
 /* =========================================================
-   Jodala Microfinance — Main Stylesheet (v3)
+   Jodala Microfinance — Main Stylesheet (v4)
    Direction: field-ledger heritage, executed with modern SaaS
    discipline — not a template dashboard, not a costume. Deep
    ink-forest identity, warm paper surfaces, ink-stamp status
    badges as the signature element, tabular data set in mono.
    Type: Source Serif 4 (display) + Inter (body) + IBM Plex Mono
    (figures, labels, the ledger's own hand).
+
+   v4 changes: richer depth (layered shadows, subtle paper
+   texture on key surfaces), a stronger stat-card treatment,
+   sharper stamp badges with a second ink layer, refined
+   focus/hover states throughout, tightened dark mode contrast,
+   and a redrawn login page.
    ========================================================= */
 
 :root {
@@ -23,44 +29,50 @@
   --info:         #2D6A4F;
 
   /* ---- Layout ---- */
-  --sidebar-w:          208px;
-  --sidebar-collapsed:  56px;
+  --sidebar-w:          212px;
+  --sidebar-collapsed:  58px;
   --navbar-h:           56px;
 
   /* ---- Surfaces ---- */
-  --bg:         #F7F5EF;
+  --bg:         #F6F3EC;
   --surface:    #FFFFFF;
-  --surface-2:  #EEF5F0;
+  --surface-2:  #EFF6F1;
   --border:     #E1DBC8;
   --text:       #17251E;
   --text-muted: #66756C;
 
-  --shadow-sm: 0 1px 2px rgba(15,46,36,.05), 0 2px 8px rgba(15,46,36,.05);
-  --shadow-md: 0 6px 20px rgba(15,46,36,.10);
-  --shadow-lg: 0 16px 40px rgba(15,46,36,.18);
+  --shadow-sm: 0 1px 2px rgba(15,46,36,.05), 0 2px 6px rgba(15,46,36,.05);
+  --shadow-md: 0 4px 16px rgba(15,46,36,.08), 0 1px 3px rgba(15,46,36,.06);
+  --shadow-lg: 0 16px 40px rgba(15,46,36,.16), 0 4px 12px rgba(15,46,36,.08);
+  --shadow-focus: 0 0 0 .2rem rgba(63,156,109,.18);
 
   --radius-sm: 7px;
   --radius-md: 10px;
   --radius-lg: 13px;
-  --transition: all .18s ease;
+  --transition: all .18s cubic-bezier(.4,0,.2,1);
 
   --font-display: 'Source Serif 4', Georgia, serif;
   --font-mono:    'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+
+  /* Faint paper-grain used sparingly on key surfaces */
+  --paper-grain: radial-gradient(circle at 1px 1px, rgba(15,46,36,.035) 1px, transparent 0);
 }
 
 [data-bs-theme="dark"] {
-  --bg:         #0D1F19;
-  --surface:    #142E26;
-  --surface-2:  #1A3A2F;
-  --border:     #2A473A;
-  --text:       #E9F3EC;
-  --text-muted: #90A99C;
-  --brand-pale: rgba(63,156,109,.14);
-  --danger-bg:  rgba(138,47,47,.2);
-  --warning-bg: rgba(147,112,30,.18);
+  --bg:         #0C1D17;
+  --surface:    #153027;
+  --surface-2:  #1C3D31;
+  --border:     #2C4A3C;
+  --text:       #EAF4EE;
+  --text-muted: #93AC9E;
+  --brand-pale: rgba(63,156,109,.16);
+  --danger-bg:  rgba(138,47,47,.22);
+  --warning-bg: rgba(147,112,30,.20);
   --shadow-sm:  0 1px 3px rgba(0,0,0,.35);
-  --shadow-md:  0 8px 24px rgba(0,0,0,.45);
+  --shadow-md:  0 6px 20px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.3);
   --shadow-lg:  0 20px 48px rgba(0,0,0,.55);
+  --shadow-focus: 0 0 0 .2rem rgba(63,156,109,.28);
+  --paper-grain: radial-gradient(circle at 1px 1px, rgba(255,255,255,.025) 1px, transparent 0);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -71,18 +83,23 @@ body {
   font-size: 12px;
   line-height: 1.5;
   background: var(--bg);
+  background-image: var(--paper-grain);
+  background-size: 18px 18px;
   color: var(--text);
   margin: 0;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--brand-mid); }
+a { color: var(--brand-mid); transition: color .15s ease; }
+a:hover { color: var(--brand-light); }
 [data-bs-theme="dark"] a { color: var(--brand-light); }
+[data-bs-theme="dark"] a:hover { color: var(--brand-pale); }
 
 :focus-visible {
   outline: 2px solid var(--brand-light);
   outline-offset: 2px;
+  border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -112,13 +129,14 @@ a { color: var(--brand-mid); }
 }
 
 .brand-icon {
-  width: 30px; height: 30px;
-  background: rgba(255,255,255,.06);
+  width: 32px; height: 32px;
+  background: radial-gradient(circle at 30% 25%, rgba(201,162,75,.16), rgba(255,255,255,.04));
   border: 1.5px solid var(--gold);
   border-radius: 50%;
   display: grid; place-items: center;
-  font-size: 13.5px; color: var(--gold);
+  font-size: 14px; color: var(--gold);
   flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(201,162,75,.15);
 }
 
 .sidebar-close {
@@ -192,10 +210,11 @@ a { color: var(--brand-mid); }
   transition: var(--transition);
   margin-bottom: 1px;
 }
-.nav-link-item i { font-size: 13px; flex-shrink: 0; width: 16px; text-align: center; }
+.nav-link-item i { font-size: 13px; flex-shrink: 0; width: 16px; text-align: center; transition: transform .18s ease; }
 .nav-link-item:hover { background: rgba(255,255,255,.08); color: #fff; }
+.nav-link-item:hover i { transform: translateX(1px); }
 .nav-link-item.active {
-  background: linear-gradient(90deg, rgba(63,156,109,.32), rgba(63,156,109,.08));
+  background: linear-gradient(90deg, rgba(63,156,109,.34), rgba(63,156,109,.07));
   color: #fff;
   font-weight: 600;
 }
@@ -206,6 +225,7 @@ a { color: var(--brand-mid); }
   width: 3px;
   background: var(--brand-light);
   border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 8px rgba(63,156,109,.6);
 }
 
 .badge-count {
@@ -471,7 +491,11 @@ a { color: var(--brand-mid); }
   position: relative;
   overflow: hidden;
 }
-.stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: rgba(63,156,109,.35);
+}
 .stat-card::before {
   content: '';
   position: absolute;
@@ -484,12 +508,14 @@ a { color: var(--brand-mid); }
 .stat-card.info::before { background: linear-gradient(90deg, var(--brand-dark), var(--info)); }
 
 .stat-icon {
-  width: 35px; height: 35px;
+  width: 36px; height: 36px;
   border-radius: 10px;
   display: grid; place-items: center;
   font-size: 15px;
   flex-shrink: 0;
+  transition: transform .2s ease;
 }
+.stat-card:hover .stat-icon { transform: scale(1.06); }
 .stat-icon.green  { background: var(--brand-pale); color: var(--brand-mid); }
 .stat-icon.gold   { background: #F3E9D2; color: var(--gold-dark); }
 .stat-icon.red    { background: var(--danger-bg); color: var(--danger); }
@@ -572,6 +598,17 @@ a { color: var(--brand-mid); }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .06em;
+  position: relative;
+  box-shadow: 0 0 0 1px currentColor inset, 1px 1px 0 rgba(0,0,0,.04);
+}
+.status-pill::after {
+  content: '';
+  position: absolute;
+  inset: 1.5px;
+  border: .5px solid currentColor;
+  border-radius: 2px;
+  opacity: .35;
+  pointer-events: none;
 }
 .status-active, .status-approved, .status-completed
   { background: var(--brand-pale); color: var(--brand-mid); }
@@ -596,10 +633,11 @@ a { color: var(--brand-mid); }
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  transition: box-shadow .2s ease;
 }
 .jd-card-header, .card-header {
   padding: 12px 14px;
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
   border-bottom: 1px dashed var(--border);
   display: flex;
   align-items: center;
@@ -636,7 +674,7 @@ a { color: var(--brand-mid); }
 }
 .form-control:focus, .form-select:focus {
   border-color: var(--brand-light);
-  box-shadow: 0 0 0 .2rem rgba(63,156,109,.16);
+  box-shadow: var(--shadow-focus);
   background: var(--surface);
   color: var(--text);
 }
@@ -652,7 +690,9 @@ a { color: var(--brand-mid); }
   font-size: 11.5px;
   font-weight: 650;
   padding: .4rem .8rem;
+  transition: var(--transition);
 }
+.btn:active { transform: translateY(0) scale(.98); }
 .btn-brand, .btn-primary {
   background: var(--brand-dark);
   border-color: var(--brand-dark);
@@ -663,6 +703,7 @@ a { color: var(--brand-mid); }
   border-color: #0A2019;
   color: #fff;
   transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 .btn-brand-outline {
   background: transparent;
@@ -763,11 +804,19 @@ a { color: var(--brand-mid); }
 /* ── EMPTY STATE ──────────────────────────────────────── */
 .empty-state {
   text-align: center;
-  padding: 32px 16px;
+  padding: 36px 16px;
   color: var(--text-muted);
 }
-.empty-state i { font-size: 36px; opacity: .3; margin-bottom: 10px; }
-.empty-state p { font-size: 12px; }
+.empty-state i {
+  font-size: 38px;
+  opacity: .28;
+  margin-bottom: 10px;
+  display: inline-block;
+  color: var(--brand-mid);
+}
+[data-bs-theme="dark"] .empty-state i { color: var(--brand-light); }
+.empty-state p { font-size: 12px; margin: 0 auto; max-width: 300px; }
+.empty-state .empty-state-title { font-size: 13px; font-weight: 650; color: var(--text); margin-bottom: 4px; }
 
 /* ── SEARCH INPUT ─────────────────────────────────────── */
 .search-input-wrapper { position: relative; display: flex; align-items: center; }
@@ -786,24 +835,41 @@ a { color: var(--brand-mid); }
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-mid) 55%, var(--info) 100%);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(63,156,109,.25), transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(201,162,75,.14), transparent 50%),
+    linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-mid) 55%, var(--info) 100%);
+}
+.login-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.06) 1px, transparent 0);
+  background-size: 22px 22px;
+  pointer-events: none;
 }
 .login-card {
   background: var(--surface);
   border-radius: var(--radius-lg);
-  padding: 28px;
+  padding: 30px 28px;
   width: 100%;
-  max-width: 370px;
+  max-width: 380px;
   box-shadow: var(--shadow-lg);
+  position: relative;
+  border-top: 3px solid var(--gold);
 }
-.login-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.login-logo { display: flex; align-items: center; gap: 11px; margin-bottom: 22px; }
 .login-logo-icon {
-  width: 39px; height: 39px;
-  background: var(--brand-dark);
+  width: 42px; height: 42px;
+  background: radial-gradient(circle at 30% 25%, rgba(201,162,75,.2), var(--brand-dark) 70%);
   border-radius: 50%;
   display: grid; place-items: center;
   font-size: 19px; color: var(--brand-pale);
   border: 2px solid var(--brand-light);
+  box-shadow: 0 3px 10px rgba(15,46,36,.25);
 }
 
 /* ── TIMELINE ─────────────────────────────────────────── */
