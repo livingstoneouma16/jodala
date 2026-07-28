@@ -9,7 +9,7 @@
    navigation fails with no connection at all.
    ========================================================= */
 
-const CACHE_VERSION = 'jodala-static-v2';
+const CACHE_VERSION = 'jodala-static-v3';
 const OFFLINE_URL = '/static/offline.html';
 
 const PRECACHE_URLS = [
