@@ -1242,6 +1242,28 @@ def _migration_0021_revert_to_gmail_smtp(conn):
             )
 
 
+def _migration_0022_webauthn_credentials(conn):
+    """Adds fingerprint/passkey login (WebAuthn/FIDO2). Each row is one
+    registered authenticator (a device's fingerprint sensor, Face ID,
+    Windows Hello, or a hardware security key) for one user -- a user can
+    register more than one device. Only the public key and a signature
+    counter are stored; the private key never leaves the user's device."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS webauthn_credentials (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        credential_id TEXT UNIQUE NOT NULL,
+        public_key TEXT NOT NULL,
+        sign_count INTEGER NOT NULL DEFAULT 0,
+        device_name TEXT NOT NULL DEFAULT 'Unnamed device',
+        transports TEXT,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT
+    )""")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id ON webauthn_credentials(user_id)"
+    )
+
+
 MIGRATIONS = [
 
     (1, 'initial schema', _migration_0001_initial_schema),
@@ -1268,6 +1290,7 @@ MIGRATIONS = [
      _migration_0020_repair_password_reset_tokens),
     (21, 'switch email delivery from Resend back to Gmail SMTP with an app password',
      _migration_0021_revert_to_gmail_smtp),
+    (22, 'add webauthn_credentials table for fingerprint/passkey login', _migration_0022_webauthn_credentials),
 ]
 
 

@@ -112,10 +112,41 @@
         </div>
       </div>
     </div>
+
+    <!-- Fingerprint / Passkey login -->
+    <div class="jd-card">
+      <div class="jd-card-header">
+        <div class="jd-card-title"><i class="bi bi-fingerprint" style="color:var(--brand-light)"></i>Fingerprint Sign-In</div>
+        <span class="status-pill" id="webauthnUnsupportedPill" style="display:none">Unsupported</span>
+      </div>
+      <div class="jd-card-body">
+        <p style="font-size:13px;color:var(--text-muted)">
+          Register this device to sign in with your fingerprint, Face ID, or Windows Hello instead of typing your password.
+          You can register more than one device (e.g. your phone and your laptop).
+        </p>
+        <div id="webauthnUnsupportedMsg" class="alert alert-warning d-none" style="font-size:12.5px">
+          <i class="bi bi-exclamation-triangle me-1"></i>This browser or device doesn't support fingerprint sign-in.
+        </div>
+
+        <div class="d-flex gap-2 align-items-center mb-3">
+          <input type="text" class="form-control form-control-sm" id="deviceNameInput"
+                 placeholder="Device name (e.g. My laptop)" style="max-width:260px" maxlength="100" />
+          <button class="btn btn-brand btn-sm" id="registerDeviceBtn" onclick="registerFingerprint()">
+            <i class="bi bi-plus-circle me-1"></i>Register This Device
+          </button>
+        </div>
+
+        <div id="webauthnDeviceList">
+          <div style="font-size:12px;color:var(--text-muted)">Loading registered devices…</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
-{% block extra_js %}<script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/webauthn.js') }}"></script>
+<script>
 let totpSecret = null;
 
 document.getElementById('profileForm').addEventListener('submit', async function(e) {
@@ -180,4 +211,69 @@ async function disable2FA() {
     setTimeout(() => location.reload(), 1500);
   } catch(e) { Toast.error(e.message); }
 }
+
+// ── Fingerprint / Passkey (WebAuthn) ──────────────────────
+function fmtWebauthnDate(iso) {
+  if (!iso) return 'Never';
+  try { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); }
+  catch { return iso; }
+}
+
+async function loadWebauthnDevices() {
+  const listEl = document.getElementById('webauthnDeviceList');
+  try {
+    const devices = await API.get('/auth/webauthn/credentials');
+    if (!devices.length) {
+      listEl.innerHTML = '<div class="empty-state" style="padding:16px 0"><i class="bi bi-fingerprint"></i><p>No devices registered yet.</p></div>';
+      return;
+    }
+    listEl.innerHTML = devices.map(d => `
+      <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px dashed var(--border)">
+        <div>
+          <div style="font-size:12.5px;font-weight:600"><i class="bi bi-fingerprint me-1" style="color:var(--brand-light)"></i>${escapeHtml(d.device_name)}</div>
+          <div style="font-size:10.5px;color:var(--text-muted)">Registered ${fmtWebauthnDate(d.created_at)} · Last used ${fmtWebauthnDate(d.last_used_at)}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-danger" onclick="removeFingerprintDevice(${d.id})"><i class="bi bi-trash"></i></button>
+      </div>`
+    ).join('');
+  } catch(e) {
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--danger)">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function registerFingerprint() {
+  const btn = document.getElementById('registerDeviceBtn');
+  const nameInput = document.getElementById('deviceNameInput');
+  if (!window.WebAuthnClient || !WebAuthnClient.isSupported()) {
+    Toast.error('This browser does not support fingerprint sign-in.');
+    return;
+  }
+  setLoading(btn, true);
+  try {
+    await WebAuthnClient.registerDevice(nameInput.value.trim());
+    Toast.success('Device registered! You can now sign in with your fingerprint.');
+    nameInput.value = '';
+    await loadWebauthnDevices();
+  } catch(e) {
+    Toast.error(e.message);
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+async function removeFingerprintDevice(id) {
+  if (!confirm('Remove this device? You will no longer be able to sign in with its fingerprint.')) return;
+  try {
+    await API.delete(`/auth/webauthn/credentials/${id}`);
+    Toast.success('Device removed');
+    await loadWebauthnDevices();
+  } catch(e) { Toast.error(e.message); }
+}
+
+if (window.WebAuthnClient && !WebAuthnClient.isSupported()) {
+  document.getElementById('registerDeviceBtn').disabled = true;
+  document.getElementById('webauthnUnsupportedMsg').classList.remove('d-none');
+  document.getElementById('webauthnUnsupportedPill').style.display = 'inline-block';
+}
+loadWebauthnDevices();
 </script>{% endblock %}

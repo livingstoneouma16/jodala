@@ -175,6 +175,17 @@
         <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
       </button>
     </form>
+
+    <div id="webauthnDivider" class="d-none" style="display:flex;align-items:center;gap:8px;margin:14px 0 12px;">
+      <div style="flex:1;border-top:1px dashed var(--border)"></div>
+      <span style="font-size:9.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">or</span>
+      <div style="flex:1;border-top:1px dashed var(--border)"></div>
+    </div>
+    <button type="button" class="btn-login d-none" id="fingerprintBtn"
+            style="background:var(--surface);color:var(--brand-dark);border:1.5px solid var(--brand-mid)">
+      <i class="bi bi-fingerprint me-1"></i>Sign in with fingerprint
+    </button>
+    <div id="fingerprintError" class="d-none" style="font-size:10.5px;color:var(--danger);margin-top:8px;text-align:center"></div>
   </div>
 
   <div class="login-footer">&copy; 2025 Jodala Microfinance Ltd. All rights reserved.</div>
@@ -182,6 +193,7 @@
 
 <script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
+<script src="{{ url_for('static', filename='js/webauthn.js') }}"></script>
 <script>
   const t = localStorage.getItem('jd_theme') || 'light';
   document.documentElement.setAttribute('data-bs-theme', t);
@@ -201,6 +213,36 @@
     const btn = document.getElementById('loginBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Signing in…';
+  });
+
+  // Show the fingerprint option only if this browser can actually do
+  // WebAuthn -- no point offering a button that will just error out.
+  if (window.WebAuthnClient && WebAuthnClient.isSupported()) {
+    document.getElementById('webauthnDivider').classList.remove('d-none');
+    document.getElementById('fingerprintBtn').classList.remove('d-none');
+  }
+
+  document.getElementById('fingerprintBtn').addEventListener('click', async function() {
+    const btn = this;
+    const errEl = document.getElementById('fingerprintError');
+    errEl.classList.add('d-none');
+    const username = document.getElementById('username').value.trim();
+    const nextInput = document.querySelector('input[name="next"]');
+
+    btn.disabled = true;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Waiting for fingerprint…';
+
+    try {
+      const result = await WebAuthnClient.login(username, nextInput ? nextInput.value : null);
+      if (result.access_token) localStorage.setItem('jd_token', result.access_token);
+      window.location.href = result.redirect || '{{ url_for("dashboard.index") }}';
+    } catch (err) {
+      errEl.textContent = err.message || 'Fingerprint sign-in failed. Please use your password.';
+      errEl.classList.remove('d-none');
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
   });
 </script>
 </body>

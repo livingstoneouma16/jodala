@@ -9,6 +9,7 @@ from core.auth import (
 from core.serializers import user_public
 from core.utils import log_audit
 from core import limiter
+from core import webauthn_helper
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -313,3 +314,120 @@ def disable_2fa():
 def me():
     user = get_current_user()
     return jsonify(user_public(user))
+
+
+# ---------------------------------------------------------------------------
+# Fingerprint / passkey login (WebAuthn)
+# ---------------------------------------------------------------------------
+@auth_bp.route('/webauthn/credentials')
+@login_required
+def webauthn_list_credentials():
+    """Devices the current user has registered for fingerprint login."""
+    user = get_current_user()
+    rows = get_db().execute(
+        "SELECT id, device_name, created_at, last_used_at FROM webauthn_credentials "
+        "WHERE user_id = %s ORDER BY created_at DESC",
+        (user['id'],)
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@auth_bp.route('/webauthn/register/options', methods=['POST'])
+@login_required
+@limiter.limit('10 per minute')
+def webauthn_register_options():
+    """Step 1 of registering a new device: hand the browser a challenge to
+    pass to navigator.credentials.create()."""
+    user = get_current_user()
+    options_json = webauthn_helper.begin_registration(user)
+    return current_app.response_class(options_json, mimetype='application/json')
+
+
+@auth_bp.route('/webauthn/register/verify', methods=['POST'])
+@login_required
+@limiter.limit('10 per minute')
+def webauthn_register_verify():
+    """Step 2: verify the browser's response and store the new credential."""
+    user = get_current_user()
+    data = request.get_json(silent=True) or {}
+    credential = data.get('credential')
+    device_name = data.get('device_name')
+    if not credential:
+        return jsonify({'error': 'Missing credential'}), 400
+
+    try:
+        webauthn_helper.finish_registration(user, credential, device_name=device_name)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    log_audit('WEBAUTHN_REGISTER', 'user', user['id'])
+    return jsonify({'message': 'Device registered for fingerprint login'})
+
+
+@auth_bp.route('/webauthn/credentials/<int:credential_id>', methods=['DELETE'])
+@login_required
+def webauthn_delete_credential(credential_id):
+    """Removes a registered device (e.g. an old/lost phone)."""
+    user = get_current_user()
+    row = get_db().execute(
+        "SELECT id FROM webauthn_credentials WHERE id = %s AND user_id = %s",
+        (credential_id, user['id'])
+    ).fetchone()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+
+    execute("DELETE FROM webauthn_credentials WHERE id = %s", (credential_id,))
+    log_audit('WEBAUTHN_REMOVE', 'user', user['id'])
+    return jsonify({'message': 'Device removed'})
+
+
+@auth_bp.route('/webauthn/login/options', methods=['POST'])
+@limiter.limit('15 per minute; 60 per hour')
+def webauthn_login_options():
+    """Step 1 of fingerprint login, called from the login page -- no
+    authentication required yet (that's the whole point). Optionally scoped
+    to a typed username so only that account's devices are offered."""
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip() or None
+    options_json = webauthn_helper.begin_authentication(username=username)
+    return current_app.response_class(options_json, mimetype='application/json')
+
+
+@auth_bp.route('/webauthn/login/verify', methods=['POST'])
+@limiter.limit('15 per minute; 60 per hour')
+def webauthn_login_verify():
+    """Step 2: verify the browser's response, and if it matches a registered
+    device, log the owning user in exactly the way password login does
+    (JWT + cookie)."""
+    data = request.get_json(silent=True) or {}
+    credential = data.get('credential')
+    next_path = _safe_next_path(data.get('next'))
+    if not credential:
+        return jsonify({'error': 'Missing credential'}), 400
+
+    try:
+        user = webauthn_helper.finish_authentication(credential)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 401
+
+    if not user:
+        return jsonify({'error': 'Account no longer exists'}), 401
+    if not user['is_active']:
+        return jsonify({'error': 'Your account has been deactivated'}), 403
+
+    execute("UPDATE users SET last_login = %s WHERE id = %s", (utcnow(), user['id']))
+    access_token = create_access_token(user['id'], user['role'])
+    log_audit('LOGIN_FINGERPRINT', 'user', user['id'])
+
+    response = jsonify({
+        'access_token': access_token,
+        'user': user_public(user),
+        'must_change_password': bool(user['must_change_password']),
+        'redirect': (
+            url_for('auth.force_password_change') if user['must_change_password']
+            else (next_path or url_for('dashboard.index'))
+        ),
+    })
+    response.set_cookie('access_token', access_token, httponly=True, samesite='Lax',
+                         secure=current_app.config['COOKIE_SECURE'])
+    return response
