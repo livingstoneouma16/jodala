@@ -30,7 +30,7 @@
 
 <div class="data-table-wrapper">
   <div class="data-table-header">
-    <div class="data-table-title">Member Registry <span id="totalBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-dark)"></span></div>
+    <div class="data-table-title">Member Registry <span id="totalBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-ink)"></span></div>
     <div class="table-actions">
       <button class="btn btn-sm btn-brand-outline" onclick="exportMembers()">
         <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
@@ -85,7 +85,7 @@ async function loadMembers(page = 1) {
       return;
     }
     tbody.innerHTML = data.members.map(m => `<tr>
-      <td><span style="font-weight:600;color:var(--brand-mid);font-size:12px">${escapeHtml(m.member_number)}</span></td>
+      <td><span style="font-weight:600;color:var(--brand-ink);font-size:12px">${escapeHtml(m.member_number)}</span></td>
       <td><div style="font-weight:600;font-size:13px">${escapeHtml(m.full_name)}</div></td>
       <td style="font-size:13px">${escapeHtml(m.phone)}</td>
       <td style="font-size:13px">${escapeHtml(m.region) || '—'}</td>

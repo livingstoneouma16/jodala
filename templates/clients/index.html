@@ -18,7 +18,7 @@
 </div></div>
 <div class="data-table-wrapper">
   <div class="data-table-header">
-    <div class="data-table-title">Client Registry <span id="totalBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-dark)"></span></div>
+    <div class="data-table-title">Client Registry <span id="totalBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-ink)"></span></div>
   </div>
   <div class="table-responsive"><table class="table mb-0">
     <thead><tr><th>Client No.</th><th>Full Name</th><th>Phone</th><th>Region</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
@@ -52,7 +52,7 @@ async function loadClients(page=1) {
     document.getElementById('pageInfo').textContent = `${data.total} total`;
     if (!data.clients.length) { tbody.innerHTML='<tr><td colspan="7"><div class="empty-state"><i class="bi bi-people"></i><p>No clients found</p></div></td></tr>'; return; }
     tbody.innerHTML = data.clients.map(c=>`<tr>
-      <td><span style="font-weight:600;color:var(--brand-mid);font-size:12px">${escapeHtml(c.client_number)}</span></td>
+      <td><span style="font-weight:600;color:var(--brand-ink);font-size:12px">${escapeHtml(c.client_number)}</span></td>
       <td><div style="font-weight:600;font-size:13px">${escapeHtml(c.full_name)}</div></td>
       <td style="font-size:13px">${escapeHtml(c.phone)}</td>
       <td style="font-size:13px">${escapeHtml(c.region)||'—'}</td>

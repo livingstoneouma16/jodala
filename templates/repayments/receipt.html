@@ -95,20 +95,20 @@
           {% if repayment.penalty_portion %}
           <div class="d-flex justify-content-between mb-2" style="font-size:13px">
             <span style="color:var(--text-muted)">Penalty Portion</span>
-            <span style="font-weight:600;color:var(--danger)">KSh {{ '{:,.2f}'.format(repayment.penalty_portion) }}</span>
+            <span style="font-weight:600;color:var(--danger-ink)">KSh {{ '{:,.2f}'.format(repayment.penalty_portion) }}</span>
           </div>
           {% endif %}
           <hr style="margin:8px 0;border-color:var(--border)" />
           <div class="d-flex justify-content-between">
             <span style="font-weight:700;font-size:15px">Total Paid</span>
-            <span style="font-weight:700;font-size:20px;color:var(--brand-mid)">KSh {{ '{:,.2f}'.format(repayment.amount) }}</span>
+            <span style="font-weight:700;font-size:20px;color:var(--brand-ink)">KSh {{ '{:,.2f}'.format(repayment.amount) }}</span>
           </div>
         </div>
 
         {% if repayment.loan %}
         <div class="d-flex justify-content-between p-3 rounded" style="background:{% if repayment.loan.outstanding_balance <= 0 %}var(--brand-pale){% else %}#FEF9C3{% endif %}">
           <span style="font-size:13px;font-weight:600">Remaining Balance</span>
-          <span style="font-size:16px;font-weight:700;color:{% if repayment.loan.outstanding_balance <= 0 %}var(--brand-mid){% else %}var(--danger){% endif %}">
+          <span style="font-size:16px;font-weight:700;color:{% if repayment.loan.outstanding_balance <= 0 %}var(--brand-ink){% else %}var(--danger-ink){% endif %}">
             KSh {{ '{:,.2f}'.format(repayment.loan.outstanding_balance) }}
             {% if repayment.loan.outstanding_balance <= 0 %} ✓ FULLY PAID{% endif %}
           </span>

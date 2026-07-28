@@ -74,7 +74,7 @@
     .form-control:focus ~ .input-group-text,
     .input-group:focus-within .input-group-text { border-color: var(--brand-light); }
     .btn-show-pwd { cursor:pointer; }
-    .btn-show-pwd:hover { color: var(--brand-mid); }
+    .btn-show-pwd:hover { color:var(--brand-ink); }
 
     /* Submit */
     .btn-login {
@@ -88,6 +88,11 @@
     .btn-login:disabled { opacity: .75; transform: none; }
 
     .login-footer { text-align:center; margin-top:16px; font-size:10.5px; color:rgba(255,255,255,.45); position: relative; z-index: 1; }
+
+    /* Fingerprint button uses --brand-ink for text/border, which
+       resolves to a light tone in dark mode (see main.css) instead
+       of the dark navy --brand-mid/--brand-dark it used before. */
+    #fingerprintBtn:hover { background: var(--surface-2); }
   </style>
 </head>
 <body>
@@ -182,10 +187,10 @@
       <div style="flex:1;border-top:1px dashed var(--border)"></div>
     </div>
     <button type="button" class="btn-login d-none" id="fingerprintBtn"
-            style="background:var(--surface);color:var(--brand-dark);border:1.5px solid var(--brand-mid)">
+            style="background:var(--surface);color:var(--brand-ink);border:1.5px solid var(--brand-ink)">
       <i class="bi bi-fingerprint me-1"></i>Sign in with fingerprint
     </button>
-    <div id="fingerprintError" class="d-none" style="font-size:10.5px;color:var(--danger);margin-top:8px;text-align:center"></div>
+    <div id="fingerprintError" class="d-none" style="font-size:10.5px;color:var(--danger-ink);margin-top:8px;text-align:center"></div>
   </div>
 
   <div class="login-footer">&copy; 2025 Jodala Microfinance Ltd. All rights reserved.</div>

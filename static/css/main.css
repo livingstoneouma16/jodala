@@ -20,6 +20,10 @@
   --brand-mid:    #1B3A63;
   --brand-light:  #3F79C9;
   --brand-pale:   #DCE7F5;
+  --brand-ink:    #1B3A63; /* text/icon/border variant of brand-mid, see dark-mode override below */
+  --danger-ink:   #8A2F2F; /* text/icon variant of --danger, safe contrast on plain surfaces */
+  --warning-ink:  #93701E; /* text/icon variant of --warning/--gold-dark */
+  --info-ink:     #2D5B8A; /* text/icon variant of --info */
   --gold:         #C9A24B;
   --gold-dark:    #93701E;
   --danger:       #8A2F2F;
@@ -73,6 +77,19 @@
   --shadow-lg:  0 20px 48px rgba(0,0,0,.55);
   --shadow-focus: 0 0 0 .2rem rgba(63,121,201,.28);
   --paper-grain: radial-gradient(circle at 1px 1px, rgba(255,255,255,.025) 1px, transparent 0);
+
+  /* --brand-ink: used wherever brand-dark/brand-mid appear as TEXT,
+     icon, or border color (not as a background with white text on
+     top of it). In light mode this equals --brand-mid. In dark
+     mode those dark-navy tones were unreadable against the also-
+     dark --surface/--surface-2/--brand-pale backgrounds they sit
+     on, so here it's repointed to a lighter brand blue. Buttons,
+     avatar circles, and badges that use brand-dark/brand-mid as a
+     *background* (with #fff text on top) are untouched below. */
+  --brand-ink:   #6FA8DC;
+  --danger-ink:  #E08A85;
+  --warning-ink: #E0B85C;
+  --info-ink:    #7BA7D9;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -319,7 +336,7 @@ a:hover { color: var(--brand-light); }
   flex-shrink: 0;
   display: grid; place-items: center;
 }
-.sidebar-toggle:hover { background: var(--surface-2); color: var(--brand-dark); }
+.sidebar-toggle:hover { background: var(--surface-2); color: var(--brand-ink); }
 
 .navbar-breadcrumb { flex: 1; min-width: 0; }
 .navbar-title-wrap {
@@ -337,7 +354,7 @@ a:hover { color: var(--brand-light); }
 }
 .navbar-logo-icon {
   font-size: 17px;
-  color: var(--brand-mid);
+  color: var(--brand-ink);
   flex-shrink: 0;
 }
 .breadcrumb-page {
@@ -418,7 +435,7 @@ a:hover { color: var(--brand-light); }
   cursor: pointer;
 }
 .gsr-item:hover, .gsr-item.active { background: var(--surface-2); color: var(--text); }
-.gsr-item i { flex-shrink: 0; font-size: 12px; color: var(--brand-mid); width: 15px; text-align: center; }
+.gsr-item i { flex-shrink: 0; font-size: 12px; color: var(--brand-ink); width: 15px; text-align: center; }
 .gsr-item-text { flex: 1; min-width: 0; }
 .gsr-item-title { font-size: 10.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gsr-item-sub { font-size: 9px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -436,7 +453,7 @@ a:hover { color: var(--brand-light); }
   transition: var(--transition);
   position: relative;
 }
-.icon-btn:hover { background: var(--surface-2); color: var(--brand-dark); }
+.icon-btn:hover { background: var(--surface-2); color: var(--brand-ink); }
 
 .notif-dot {
   position: absolute;
@@ -516,12 +533,12 @@ a:hover { color: var(--brand-light); }
   transition: transform .2s ease;
 }
 .stat-card:hover .stat-icon { transform: scale(1.06); }
-.stat-icon.green  { background: var(--brand-pale); color: var(--brand-mid); }
-.stat-icon.gold   { background: #F3E9D2; color: var(--gold-dark); }
-.stat-icon.red    { background: var(--danger-bg); color: var(--danger); }
-.stat-icon.blue   { background: var(--surface-2); color: var(--info); }
-.stat-icon.purple { background: var(--brand-pale); color: var(--brand-dark); }
-.stat-icon.teal   { background: var(--brand-pale); color: var(--brand-mid); }
+.stat-icon.green  { background: var(--brand-pale); color: var(--brand-ink); }
+.stat-icon.gold   { background: #F3E9D2; color: var(--warning-ink); }
+.stat-icon.red    { background: var(--danger-bg); color: var(--danger-ink); }
+.stat-icon.blue   { background: var(--surface-2); color: var(--info-ink); }
+.stat-icon.purple { background: var(--brand-pale); color: var(--brand-ink); }
+.stat-icon.teal   { background: var(--brand-pale); color: var(--brand-ink); }
 
 .stat-body { flex: 1; min-width: 0; }
 .stat-label { font-size: 9px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
@@ -537,7 +554,7 @@ a:hover { color: var(--brand-light); }
 }
 .stat-change { font-size: 10px; color: var(--text-muted); }
 .stat-change.up { color: var(--brand-light); }
-.stat-change.down { color: var(--danger); }
+.stat-change.down { color: var(--danger-ink); }
 
 /* ── DATA TABLE ───────────────────────────────────────── */
 .data-table-wrapper {
@@ -624,7 +641,9 @@ a:hover { color: var(--brand-light); }
 [data-bs-theme="dark"] .status-pending,
 [data-bs-theme="dark"] .status-suspended { color: #E9C46A; }
 [data-bs-theme="dark"] .status-rejected,
-[data-bs-theme="dark"] .status-overdue { color: #E8A9A4; }
+[data-bs-theme="dark"] .status-overdue,
+[data-bs-theme="dark"] .status-written_off { color: #E8A9A4; }
+[data-bs-theme="dark"] .status-disbursed { color: var(--brand-light); }
 
 /* ── CARDS ────────────────────────────────────────────── */
 .jd-card, .card {
@@ -800,6 +819,7 @@ a:hover { color: var(--brand-light); }
 }
 [data-bs-theme="dark"] .loading-overlay { background: rgba(0,0,0,.4); }
 .spinner-brand { color: var(--brand-mid); }
+[data-bs-theme="dark"] .spinner-brand { color: var(--brand-light); }
 
 /* ── EMPTY STATE ──────────────────────────────────────── */
 .empty-state {
@@ -918,7 +938,7 @@ body.sidebar-locked { overflow: hidden; }
   transition: var(--transition);
 }
 .tab-item i { font-size: 15px; }
-.tab-item.active { color: var(--brand-mid); }
+.tab-item.active { color: var(--brand-ink); }
 [data-bs-theme="dark"] .tab-item.active { color: var(--brand-light); }
 .tab-item:active { background: var(--surface-2); }
 

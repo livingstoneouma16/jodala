@@ -71,7 +71,7 @@ async function loadUsers() {
   const tbody = document.getElementById('usersTable');
   try {
     const users = await API.get('/users/api');
-    const roleColor = {admin:'var(--danger)',loan_officer:'var(--brand-mid)',accountant:'#F4A261',cashier:'#4895EF'};
+    const roleColor = {admin:'var(--danger-ink)',loan_officer:'var(--brand-ink)',accountant:'#F4A261',cashier:'#4895EF'};
     tbody.innerHTML = users.map(u=>`<tr>
       <td style="font-weight:600;font-size:13px">${escapeHtml(u.full_name)}</td>
       <td style="font-size:12px;color:var(--text-muted)">@${escapeHtml(u.username)}</td>
@@ -95,7 +95,7 @@ async function loadAudit() {
     const data = await API.get('/users/api/audit-logs');
     const tbody = document.getElementById('auditTable');
     tbody.innerHTML = data.logs.map(l=>`<tr>
-      <td><span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px">${escapeHtml(l.action.replace(/_/g,' '))}</span></td>
+      <td><span class="badge" style="background:var(--brand-pale);color:var(--brand-ink);font-size:10px">${escapeHtml(l.action.replace(/_/g,' '))}</span></td>
       <td style="font-size:12px">${escapeHtml(l.user_name)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(l.resource_type||'—')} ${l.resource_id?'#'+escapeHtml(String(l.resource_id)):''}</td>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(l.ip_address||'—')}</td>

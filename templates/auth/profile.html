@@ -237,7 +237,7 @@ async function loadWebauthnDevices() {
       </div>`
     ).join('');
   } catch(e) {
-    listEl.innerHTML = `<div style="font-size:12px;color:var(--danger)">${escapeHtml(e.message)}</div>`;
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--danger-ink)">${escapeHtml(e.message)}</div>`;
   }
 }
 

@@ -135,7 +135,7 @@
         <div class="jd-card-header">
           <div class="jd-card-title"><i class="bi bi-bar-chart-fill" style="color:var(--brand-light)"></i>Loan Activity (12 Months)</div>
           <div class="d-flex gap-2">
-            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:9px"><span style="background:var(--brand-mid);width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Disbursed</span>
+            <span class="badge" style="background:var(--brand-pale);color:var(--brand-ink);font-size:9px"><span style="background:var(--brand-mid);width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Disbursed</span>
             <span class="badge" style="background:#FFF3CD;color:#856404;font-size:9px"><span style="background:#E9C46A;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Collected</span>
           </div>
         </div>
@@ -183,7 +183,7 @@
         <div class="jd-card-header">
           <div class="jd-card-title"><i class="bi bi-person-lines-fill" style="color:var(--gold)"></i>Member Growth (6 Months)</div>
           <div class="d-flex gap-2">
-            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:9px"><span style="background:var(--brand-mid);width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Members</span>
+            <span class="badge" style="background:var(--brand-pale);color:var(--brand-ink);font-size:9px"><span style="background:var(--brand-mid);width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Members</span>
             <span class="badge" style="background:#FFF3CD;color:#856404;font-size:9px"><span style="background:#E9C46A;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Clients</span>
           </div>
         </div>
@@ -213,7 +213,7 @@
     <div class="col-12 col-lg-6">
       <div class="jd-card h-100">
         <div class="jd-card-header">
-          <div class="jd-card-title"><i class="bi bi-exclamation-triangle-fill" style="color:var(--danger)"></i>Overdue Loans</div>
+          <div class="jd-card-title"><i class="bi bi-exclamation-triangle-fill" style="color:var(--danger-ink)"></i>Overdue Loans</div>
           <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-brand-outline">View Report</a>
         </div>
         <div id="overdueList">
@@ -392,7 +392,7 @@ async function loadDueToday(data) {
         <td><span style="font-weight:600;font-size:11px">${escapeHtml(d.loan_number)}</span></td>
         <td style="font-size:12px">${escapeHtml(d.borrower)}</td>
         <td><span class="badge bg-secondary">#${d.installment}</span></td>
-        <td style="font-weight:600;color:var(--brand-mid)">${fmtCurrency(d.amount_due)}</td>
+        <td style="font-weight:600;color:var(--brand-ink)">${fmtCurrency(d.amount_due)}</td>
       </tr>`).join('') + '</tbody></table></div>';
   } catch(e) {}
 }
