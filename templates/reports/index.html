@@ -201,11 +201,21 @@ function renderChart(canvasId, config) {
   if (reportCharts[canvasId]) reportCharts[canvasId].destroy();
   reportCharts[canvasId] = new Chart(document.getElementById(canvasId).getContext('2d'), config);
 }
-const CHART_PALETTE = ['#4C9FE8','#3F79C9','#F4A261','#E63946','#7C3AED','#0F2440','#9CA3AF','#E9C46A'];
-const STATUS_COLORS = {
-  active:'#3F79C9', completed:'#4C9FE8', pending:'#F4A261', approved:'#4895EF',
-  rejected:'#E63946', defaulted:'#E63946', suspended:'#9CA3AF', closed:'#9CA3AF'
-};
+let CHART_PALETTE, STATUS_COLORS, REPORT_COLORS;
+function setReportChartTheme() {
+  const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  Chart.defaults.color = isDark ? '#C4D5E8' : '#63728A';
+  Chart.defaults.borderColor = isDark ? '#4C6F95' : '#DCE3EC';
+  REPORT_COLORS = isDark
+    ? { blue:'#78B5F4', blueFill:'rgba(120,181,244,.20)', gold:'#F1CE73', red:'#F28B93', darkRed:'#E8A19D', purple:'#B59AF2', muted:'#B9C7D6' }
+    : { blue:'#3F79C9', blueFill:'rgba(76,159,232,.15)', gold:'#F4A261', red:'#E63946', darkRed:'#991B1B', purple:'#7C3AED', muted:'#9CA3AF' };
+  CHART_PALETTE = [REPORT_COLORS.blue, '#4C9FE8', REPORT_COLORS.gold, REPORT_COLORS.red, REPORT_COLORS.purple, '#8FBEE8', REPORT_COLORS.muted, '#E9C46A'];
+  STATUS_COLORS = {
+    active:REPORT_COLORS.blue, completed:'#4C9FE8', pending:REPORT_COLORS.gold, approved:'#8FBEE8',
+    rejected:REPORT_COLORS.red, defaulted:REPORT_COLORS.red, suspended:REPORT_COLORS.muted, closed:REPORT_COLORS.muted
+  };
+}
+setReportChartTheme();
 
 function showRep(tab, el) {
   document.querySelectorAll('.nav-link').forEach(b=>b.classList.remove('active'));
@@ -238,7 +248,7 @@ async function loadLoanReport() {
       type: 'bar',
       data: { labels: ['Principal','Outstanding','Collected'],
         datasets: [{ data:[s.total_principal, s.total_outstanding, s.total_collected],
-          backgroundColor: ['#4C9FE8','#E63946','#3F79C9'], borderRadius: 6 }] },
+          backgroundColor: ['#4C9FE8',REPORT_COLORS.red,REPORT_COLORS.blue], borderRadius: 6 }] },
       options: { responsive:true, plugins:{ legend:{ display:false } },
         scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
     });
@@ -272,7 +282,7 @@ async function loadArrears() {
     renderChart('arrAgingChart', {
       type: 'bar',
       data: { labels: Object.keys(buckets), datasets: [{ data: Object.values(buckets),
-        backgroundColor: ['#F4A261','#E9C46A','#E63946','#991B1B'], borderRadius: 6 }] },
+        backgroundColor: [REPORT_COLORS.gold,'#E9C46A',REPORT_COLORS.red,REPORT_COLORS.darkRed], borderRadius: 6 }] },
       options: { responsive:true, plugins:{ legend:{ display:false } },
         scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
     });
@@ -319,7 +329,7 @@ async function loadCollections() {
     renderChart('colDailyChart', {
       type: 'line',
       data: { labels: dailyLabels.map(fmtDate), datasets: [{ label:'Collected', data: dailyLabels.map(d=>dailyTotals[d]),
-        borderColor:'#1D5A96', backgroundColor:'rgba(76,159,232,.15)', fill:true, tension:.3 }] },
+        borderColor:REPORT_COLORS.blue, backgroundColor:REPORT_COLORS.blueFill, fill:true, tension:.3 }] },
       options: { responsive:true, plugins:{ legend:{ display:false } },
         scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
     });
@@ -354,7 +364,7 @@ async function loadMemberReport() {
     renderChart('memRegionChart', {
       type: 'bar',
       data: { labels: regionEntries.map(([k])=>k), datasets: [{ data: regionEntries.map(([,v])=>v),
-        backgroundColor: '#4C9FE8', borderRadius: 6 }] },
+        backgroundColor: REPORT_COLORS.blue, borderRadius: 6 }] },
       options: { responsive:true, plugins:{ legend:{ display:false } }, scales: { y: { beginAtZero:true } } }
     });
 
@@ -396,8 +406,8 @@ async function loadRegionalReport() {
     renderChart('regOutstandingChart', {
       type: 'bar',
       data: { labels: regions.map(r=>r.region), datasets: [
-        { label:'Outstanding', data: regions.map(r=>r.total_outstanding), backgroundColor:'#E63946', borderRadius:6 },
-        { label:'Collected', data: regions.map(r=>r.total_collected), backgroundColor:'#3F79C9', borderRadius:6 },
+        { label:'Outstanding', data: regions.map(r=>r.total_outstanding), backgroundColor:REPORT_COLORS.red, borderRadius:6 },
+        { label:'Collected', data: regions.map(r=>r.total_collected), backgroundColor:REPORT_COLORS.blue, borderRadius:6 },
       ] },
       options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } },
         scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
@@ -406,7 +416,7 @@ async function loadRegionalReport() {
     renderChart('regParChart', {
       type: 'bar',
       data: { labels: regions.map(r=>r.region), datasets: [{ label:'PAR %', data: regions.map(r=>r.par_pct),
-        backgroundColor: regions.map(r=>r.par_pct>20?'#E63946':r.par_pct>5?'#F4A261':'#3F79C9'), borderRadius: 6 }] },
+        backgroundColor: regions.map(r=>r.par_pct>20?REPORT_COLORS.red:r.par_pct>5?REPORT_COLORS.gold:REPORT_COLORS.blue), borderRadius: 6 }] },
       options: { responsive:true, plugins:{ legend:{ display:false } },
         scales: { y: { beginAtZero:true, ticks:{ callback:v=>v+'%' } } } }
     });

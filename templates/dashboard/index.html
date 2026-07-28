@@ -234,13 +234,39 @@ const h = new Date().getHours();
 document.getElementById('greetPart').textContent = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
 document.getElementById('todayDate').textContent = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
-// Theme-aware chart defaults
-const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-Chart.defaults.color = isDark ? '#7A93B0' : '#63728A';
-Chart.defaults.borderColor = isDark ? '#233A54' : '#DCE3EC';
+// Theme-aware chart defaults. These colours need more contrast than the card
+// background so axis labels and grid lines remain readable in dark mode.
+function setChartTheme() {
+  const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  Chart.defaults.color = isDark ? '#C4D5E8' : '#63728A';
+  Chart.defaults.borderColor = isDark ? '#4C6F95' : '#DCE3EC';
+}
+setChartTheme();
 Chart.defaults.font.family = 'Inter';
 
-let trendChart, statusChart;
+function getChartPalette() {
+  const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  if (isDark) {
+    return {
+      disbursedBar: 'rgba(90,155,234,.88)', collectedBar: 'rgba(233,196,106,.88)',
+      income: '#78B5F4', incomeFill: 'rgba(120,181,244,.20)',
+      expense: '#F28B93', expenseFill: 'rgba(242,139,147,.16)',
+      membersBar: 'rgba(90,155,234,.88)', clientsBar: 'rgba(233,196,106,.88)',
+      status: { active:'#5A9BEA', pending:'#E9C46A', approved:'#8FBEE8', completed:'#C4D5E8',
+                rejected:'#F28B93', disbursed:'#B59AF2', written_off:'#B9C7D6' }
+    };
+  }
+  return {
+    disbursedBar: 'rgba(27,58,99,.75)', collectedBar: 'rgba(233,196,106,.7)',
+    income: '#3F79C9', incomeFill: 'rgba(63,121,201,.15)',
+    expense: '#E63946', expenseFill: 'rgba(230,57,70,.1)',
+    membersBar: 'rgba(29,90,150,.7)', clientsBar: 'rgba(233,196,106,.7)',
+    status: { active:'#3F79C9', pending:'#E9C46A', approved:'#1B3A63', completed:'#0F2440',
+              rejected:'#E63946', disbursed:'#7C3AED', written_off:'#9CA3AF' }
+  };
+}
+
+let trendChart, statusChart, incomeExpenseChart, memberGrowthChart;
 
 async function loadStats(s) {
   try {
@@ -266,9 +292,11 @@ async function loadStats(s) {
 async function loadTrendChart(data) {
   try {
     data = data || await API.get('/dashboard/loan-trend');
+    trendChart?.destroy();
     const labels = data.map(d => d.month);
     const disbursed = data.map(d => d.disbursed);
     const collected = data.map(d => d.collected);
+    const palette = getChartPalette();
 
     const ctx = document.getElementById('loanTrendChart').getContext('2d');
     trendChart = new Chart(ctx, {
@@ -276,8 +304,8 @@ async function loadTrendChart(data) {
       data: {
         labels,
         datasets: [
-          { label: 'Disbursed', data: disbursed, backgroundColor: 'rgba(27,58,99,.75)', borderRadius: 4, borderSkipped: false },
-          { label: 'Collected', data: collected, backgroundColor: 'rgba(233,196,106,.7)', borderRadius: 4, borderSkipped: false }
+          { label: 'Disbursed', data: disbursed, backgroundColor: palette.disbursedBar, borderRadius: 4, borderSkipped: false },
+          { label: 'Collected', data: collected, backgroundColor: palette.collectedBar, borderRadius: 4, borderSkipped: false }
         ]
       },
       options: {
@@ -295,8 +323,8 @@ async function loadTrendChart(data) {
 async function loadStatusChart(data) {
   try {
     data = data || await API.get('/dashboard/loan-status-distribution');
-    const colors = { active:'#3F79C9', pending:'#E9C46A', approved:'#1B3A63', completed:'#0F2440',
-                     rejected:'#E63946', disbursed:'#7C3AED', written_off:'#9CA3AF' };
+    statusChart?.destroy();
+    const colors = getChartPalette().status;
     const labels = data.map(d => d.status);
     const values = data.map(d => d.count);
     const bgs = labels.map(l => colors[l] || '#9CA3AF');
@@ -324,18 +352,20 @@ async function loadStatusChart(data) {
 async function loadIncomeExpenseChart(data) {
   try {
     data = data || await API.get('/dashboard/income-expense-trend');
+    incomeExpenseChart?.destroy();
     const labels = data.map(d => d.month);
     const income = data.map(d => d.income);
     const expenses = data.map(d => d.expenses);
+    const palette = getChartPalette();
 
     const ctx = document.getElementById('incomeExpenseChart').getContext('2d');
-    new Chart(ctx, {
+    incomeExpenseChart = new Chart(ctx, {
       type: 'line',
       data: {
         labels,
         datasets: [
-          { label: 'Income', data: income, borderColor: '#3F79C9', backgroundColor: 'rgba(63,121,201,.15)', fill: true, tension: 0.3 },
-          { label: 'Expenses', data: expenses, borderColor: '#E63946', backgroundColor: 'rgba(230,57,70,.1)', fill: true, tension: 0.3 }
+          { label: 'Income', data: income, borderColor: palette.income, backgroundColor: palette.incomeFill, fill: true, tension: 0.3 },
+          { label: 'Expenses', data: expenses, borderColor: palette.expense, backgroundColor: palette.expenseFill, fill: true, tension: 0.3 }
         ]
       },
       options: {
@@ -353,18 +383,20 @@ async function loadIncomeExpenseChart(data) {
 async function loadMemberGrowthChart(data) {
   try {
     data = data || await API.get('/dashboard/member-growth');
+    memberGrowthChart?.destroy();
     const labels = data.map(d => d.month);
     const members = data.map(d => d.members);
     const clients = data.map(d => d.clients);
+    const palette = getChartPalette();
 
     const ctx = document.getElementById('memberGrowthChart').getContext('2d');
-    new Chart(ctx, {
+    memberGrowthChart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels,
         datasets: [
-          { label: 'Members', data: members, backgroundColor: 'rgba(29,90,150,.7)', borderRadius: 4, borderSkipped: false },
-          { label: 'Clients', data: clients, backgroundColor: 'rgba(233,196,106,.7)', borderRadius: 4, borderSkipped: false }
+          { label: 'Members', data: members, backgroundColor: palette.membersBar, borderRadius: 4, borderSkipped: false },
+          { label: 'Clients', data: clients, backgroundColor: palette.clientsBar, borderRadius: 4, borderSkipped: false }
         ]
       },
       options: {
@@ -378,6 +410,16 @@ async function loadMemberGrowthChart(data) {
     });
   } catch(e) {}
 }
+
+// Redraw charts after a live theme switch so their canvas text, grid lines,
+// and legend markers follow the newly selected theme as well.
+document.addEventListener('jd:themechange', () => {
+  setChartTheme();
+  loadTrendChart();
+  loadStatusChart();
+  loadIncomeExpenseChart();
+  loadMemberGrowthChart();
+});
 
 async function loadDueToday(data) {
   try {

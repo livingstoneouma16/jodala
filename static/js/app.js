@@ -170,6 +170,7 @@ function initTheme() {
     document.documentElement.setAttribute('data-bs-theme', next);
     if (icon) icon.className = next === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
     localStorage.setItem('jd_theme', next);
+    document.dispatchEvent(new CustomEvent('jd:themechange', { detail: { theme: next } }));
   });
 }
 

@@ -104,6 +104,9 @@
 [data-bs-theme="dark"] [style*="#FFE4E6"],
 [data-bs-theme="dark"] [style*="#FEF3C7"] { background-color: #4A252B !important; }
 [data-bs-theme="dark"] [style*="#E9FBF0"] { background-color: #173D32 !important; }
+[data-bs-theme="dark"] [style*="#A7F3D0"] { border-color: #2C8B68 !important; }
+[data-bs-theme="dark"] [style*="#FCA5A5"] { border-color: #B85B64 !important; }
+[data-bs-theme="dark"] [style*="#6EE7B7"] { border-color: #419B78 !important; }
 
 [data-bs-theme="dark"] [style*="color:#856404"],
 [data-bs-theme="dark"] [style*="color:#92400E"] { color: #F1CE73 !important; }
@@ -120,6 +123,16 @@
 [data-bs-theme="dark"] .btn-primary:hover {
   background: #2E6EAF;
   border-color: #3F79C9;
+}
+[data-bs-theme="dark"] .stat-icon.gold {
+  background: #4A3B18;
+  color: #F1CE73;
+}
+[data-bs-theme="dark"] .filter-pill.active,
+[data-bs-theme="dark"] .filter-pill:hover,
+[data-bs-theme="dark"] .page-btn.active {
+  background: #245A92;
+  border-color: #2E6EAF;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
