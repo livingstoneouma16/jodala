@@ -64,9 +64,9 @@
 
 [data-bs-theme="dark"] {
   --bg:         #0A1626;
-  --surface:    #1E3A63;
-  --surface-2:  #25436F;
-  --border:     #4A6D9E;
+  --surface:    #101F33;
+  --surface-2:  #172D49;
+  --border:     #36506F;
   --text:       #EAF0F6;
   --text-muted: #A2B5C8;
   --brand-pale: rgba(63,121,201,.16);
@@ -91,6 +91,35 @@
   --warning-ink: #E0B85C;
   --info-ink:    #94BBE3;
   --brand-light: #8FBEE8;
+}
+
+/* A few pages use utility colours inline for small callouts, chart legends,
+   and destructive actions.  Keep those elements legible in dark mode without
+   changing their meaning or requiring every template to duplicate a theme
+   branch. */
+[data-bs-theme="dark"] [style*="#FFF3CD"],
+[data-bs-theme="dark"] [style*="#FEF9C3"] { background-color: #4A3B18 !important; }
+[data-bs-theme="dark"] [style*="#DCE7F5"],
+[data-bs-theme="dark"] [style*="#DBEAFE"] { background-color: #19395E !important; }
+[data-bs-theme="dark"] [style*="#FFE4E6"],
+[data-bs-theme="dark"] [style*="#FEF3C7"] { background-color: #4A252B !important; }
+[data-bs-theme="dark"] [style*="#E9FBF0"] { background-color: #173D32 !important; }
+
+[data-bs-theme="dark"] [style*="color:#856404"],
+[data-bs-theme="dark"] [style*="color:#92400E"] { color: #F1CE73 !important; }
+[data-bs-theme="dark"] [style*="color:#1B3A63"] { color: #A9D0F5 !important; }
+[data-bs-theme="dark"] [style*="color:#991B1B"] { color: #F2ABA7 !important; }
+[data-bs-theme="dark"] [style*="color:#059669"] { color: #73D5AD !important; }
+
+[data-bs-theme="dark"] .btn-brand,
+[data-bs-theme="dark"] .btn-primary {
+  background: #245A92;
+  border-color: #2E6EAF;
+}
+[data-bs-theme="dark"] .btn-brand:hover,
+[data-bs-theme="dark"] .btn-primary:hover {
+  background: #2E6EAF;
+  border-color: #3F79C9;
 }
 
 *, *::before, *::after { box-sizing: border-box; }

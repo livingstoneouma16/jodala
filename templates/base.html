@@ -11,6 +11,20 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Jodala" />
+  <script>
+    /* Apply the saved preference before stylesheets paint, preventing a
+       light-mode flash when a returning user has chosen dark mode. */
+    (function () {
+      try {
+        document.documentElement.setAttribute(
+          'data-bs-theme',
+          localStorage.getItem('jd_theme') || 'light'
+        );
+      } catch (error) {
+        document.documentElement.setAttribute('data-bs-theme', 'light');
+      }
+    }());
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/font/bootstrap-icons.min.css') }}" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
