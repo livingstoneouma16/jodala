@@ -96,6 +96,44 @@ a:hover { color: var(--brand-light); }
 [data-bs-theme="dark"] a { color: var(--brand-light); }
 [data-bs-theme="dark"] a:hover { color: var(--brand-pale); }
 
+/* Bootstrap ships its own green for "success" (bg-success, text-success,
+   btn-success, alert-success, badge bg-success, etc) via --bs-success and
+   friends -- completely separate from our --brand-* tokens above, and its
+   dark-mode variant is an even more visible mint green. Overridden here so
+   every Bootstrap success/positive utility class renders in the app's blue
+   identity instead, in both themes. */
+:root, [data-bs-theme="dark"] {
+  --bs-success: var(--brand-mid);
+  --bs-success-rgb: 27, 58, 99;
+  --bs-success-text-emphasis: var(--brand-dark);
+  --bs-success-bg-subtle: var(--brand-pale);
+  --bs-success-border-subtle: var(--brand-light);
+}
+[data-bs-theme="dark"] {
+  --bs-success-text-emphasis: var(--brand-pale);
+  --bs-success-bg-subtle: #16324F;
+  --bs-success-border-subtle: var(--brand-mid);
+}
+.text-success { color: var(--brand-mid) !important; }
+[data-bs-theme="dark"] .text-success { color: var(--brand-light) !important; }
+.bg-success { background-color: var(--brand-mid) !important; }
+.btn-success {
+  background-color: var(--brand-mid) !important;
+  border-color: var(--brand-mid) !important;
+  color: #fff !important;
+}
+.btn-success:hover { background-color: var(--brand-dark) !important; border-color: var(--brand-dark) !important; }
+.alert-success {
+  background-color: var(--brand-pale) !important;
+  border-color: var(--brand-light) !important;
+  color: var(--brand-dark) !important;
+}
+[data-bs-theme="dark"] .alert-success {
+  background-color: rgba(63,121,201,.16) !important;
+  border-color: var(--brand-mid) !important;
+  color: var(--brand-pale) !important;
+}
+
 :focus-visible {
   outline: 2px solid var(--brand-light);
   outline-offset: 2px;
