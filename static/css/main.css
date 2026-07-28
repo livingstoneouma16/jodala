@@ -64,11 +64,11 @@
 
 [data-bs-theme="dark"] {
   --bg:         #0A1626;
-  --surface:    #122238;
-  --surface-2:  #17304C;
-  --border:     #24405F;
+  --surface:    #1E3A63;
+  --surface-2:  #25436F;
+  --border:     #4A6D9E;
   --text:       #EAF0F6;
-  --text-muted: #90A3B8;
+  --text-muted: #A2B5C8;
   --brand-pale: rgba(63,121,201,.16);
   --danger-bg:  rgba(138,47,47,.22);
   --warning-bg: rgba(147,112,30,.20);
@@ -86,10 +86,11 @@
      on, so here it's repointed to a lighter brand blue. Buttons,
      avatar circles, and badges that use brand-dark/brand-mid as a
      *background* (with #fff text on top) are untouched below. */
-  --brand-ink:   #6FA8DC;
-  --danger-ink:  #E08A85;
+  --brand-ink:   #8FBEE8;
+  --danger-ink:  #E8A19D;
   --warning-ink: #E0B85C;
-  --info-ink:    #7BA7D9;
+  --info-ink:    #94BBE3;
+  --brand-light: #8FBEE8;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -205,7 +206,7 @@ a:hover { color: var(--brand-light); }
   font-weight: 700;
   letter-spacing: .11em;
   text-transform: uppercase;
-  color: rgba(255,255,255,.32);
+  color: rgba(255,255,255,.55);
   padding: 12px 8px 5px;
   white-space: nowrap;
   overflow: hidden;
