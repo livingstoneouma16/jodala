@@ -19,7 +19,7 @@ async function loadNotifs(page=1) {
     document.getElementById('nfPageInfo').textContent = data.unread + ' unread of ' + data.total;
     const feed = document.getElementById('notifFeed');
     const typeIcon = {info:'bi-info-circle',warning:'bi-exclamation-triangle',alert:'bi-bell',success:'bi-check-circle'};
-    const typeColor = {info:'#4895EF',warning:'#F4A261',alert:'#E63946',success:'#52B788'};
+    const typeColor = {info:'#4895EF',warning:'#F4A261',alert:'#E63946',success:'#3F79C9'};
     if (!data.notifications.length) {
       feed.innerHTML='<div class="empty-state"><i class="bi bi-bell-slash"></i><p>No notifications</p></div>'; return;
     }

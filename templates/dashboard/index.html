@@ -167,7 +167,7 @@
         <div class="jd-card-header">
           <div class="jd-card-title"><i class="bi bi-graph-up" style="color:var(--brand-light)"></i>Income vs Expenses (6 Months)</div>
           <div class="d-flex gap-2">
-            <span class="badge" style="background:#D1FAE5;color:#065F46;font-size:9px"><span style="background:#52B788;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Income</span>
+            <span class="badge" style="background:#DCE7F5;color:#1B3A63;font-size:9px"><span style="background:#3F79C9;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Income</span>
             <span class="badge" style="background:#FFE4E6;color:#991B1B;font-size:9px"><span style="background:#E63946;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Expenses</span>
           </div>
         </div>
@@ -236,8 +236,8 @@ document.getElementById('todayDate').textContent = new Date().toLocaleDateString
 
 // Theme-aware chart defaults
 const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-Chart.defaults.color = isDark ? '#7A9B85' : '#6B8070';
-Chart.defaults.borderColor = isDark ? '#2D4035' : '#E2E8E4';
+Chart.defaults.color = isDark ? '#7A93B0' : '#63728A';
+Chart.defaults.borderColor = isDark ? '#233A54' : '#DCE3EC';
 Chart.defaults.font.family = 'Inter';
 
 let trendChart, statusChart;
@@ -276,7 +276,7 @@ async function loadTrendChart(data) {
       data: {
         labels,
         datasets: [
-          { label: 'Disbursed', data: disbursed, backgroundColor: 'rgba(45,106,79,.7)', borderRadius: 4, borderSkipped: false },
+          { label: 'Disbursed', data: disbursed, backgroundColor: 'rgba(27,58,99,.75)', borderRadius: 4, borderSkipped: false },
           { label: 'Collected', data: collected, backgroundColor: 'rgba(233,196,106,.7)', borderRadius: 4, borderSkipped: false }
         ]
       },
@@ -295,7 +295,7 @@ async function loadTrendChart(data) {
 async function loadStatusChart(data) {
   try {
     data = data || await API.get('/dashboard/loan-status-distribution');
-    const colors = { active:'#52B788', pending:'#E9C46A', approved:'#4895EF', completed:'#0F766E',
+    const colors = { active:'#3F79C9', pending:'#E9C46A', approved:'#1B3A63', completed:'#0F2440',
                      rejected:'#E63946', disbursed:'#7C3AED', written_off:'#9CA3AF' };
     const labels = data.map(d => d.status);
     const values = data.map(d => d.count);
@@ -334,7 +334,7 @@ async function loadIncomeExpenseChart(data) {
       data: {
         labels,
         datasets: [
-          { label: 'Income', data: income, borderColor: '#52B788', backgroundColor: 'rgba(82,183,136,.15)', fill: true, tension: 0.3 },
+          { label: 'Income', data: income, borderColor: '#3F79C9', backgroundColor: 'rgba(63,121,201,.15)', fill: true, tension: 0.3 },
           { label: 'Expenses', data: expenses, borderColor: '#E63946', backgroundColor: 'rgba(230,57,70,.1)', fill: true, tension: 0.3 }
         ]
       },

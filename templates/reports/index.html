@@ -201,9 +201,9 @@ function renderChart(canvasId, config) {
   if (reportCharts[canvasId]) reportCharts[canvasId].destroy();
   reportCharts[canvasId] = new Chart(document.getElementById(canvasId).getContext('2d'), config);
 }
-const CHART_PALETTE = ['#4C9FE8','#52B788','#F4A261','#E63946','#7C3AED','#0F766E','#9CA3AF','#E9C46A'];
+const CHART_PALETTE = ['#4C9FE8','#3F79C9','#F4A261','#E63946','#7C3AED','#0F2440','#9CA3AF','#E9C46A'];
 const STATUS_COLORS = {
-  active:'#52B788', completed:'#4C9FE8', pending:'#F4A261', approved:'#4895EF',
+  active:'#3F79C9', completed:'#4C9FE8', pending:'#F4A261', approved:'#4895EF',
   rejected:'#E63946', defaulted:'#E63946', suspended:'#9CA3AF', closed:'#9CA3AF'
 };
 
@@ -238,7 +238,7 @@ async function loadLoanReport() {
       type: 'bar',
       data: { labels: ['Principal','Outstanding','Collected'],
         datasets: [{ data:[s.total_principal, s.total_outstanding, s.total_collected],
-          backgroundColor: ['#4C9FE8','#E63946','#52B788'], borderRadius: 6 }] },
+          backgroundColor: ['#4C9FE8','#E63946','#3F79C9'], borderRadius: 6 }] },
       options: { responsive:true, plugins:{ legend:{ display:false } },
         scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
     });
@@ -397,7 +397,7 @@ async function loadRegionalReport() {
       type: 'bar',
       data: { labels: regions.map(r=>r.region), datasets: [
         { label:'Outstanding', data: regions.map(r=>r.total_outstanding), backgroundColor:'#E63946', borderRadius:6 },
-        { label:'Collected', data: regions.map(r=>r.total_collected), backgroundColor:'#52B788', borderRadius:6 },
+        { label:'Collected', data: regions.map(r=>r.total_collected), backgroundColor:'#3F79C9', borderRadius:6 },
       ] },
       options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } },
         scales: { y: { beginAtZero:true, ticks:{ callback:v=>fmtCurrency(v) } } } }
@@ -406,7 +406,7 @@ async function loadRegionalReport() {
     renderChart('regParChart', {
       type: 'bar',
       data: { labels: regions.map(r=>r.region), datasets: [{ label:'PAR %', data: regions.map(r=>r.par_pct),
-        backgroundColor: regions.map(r=>r.par_pct>20?'#E63946':r.par_pct>5?'#F4A261':'#52B788'), borderRadius: 6 }] },
+        backgroundColor: regions.map(r=>r.par_pct>20?'#E63946':r.par_pct>5?'#F4A261':'#3F79C9'), borderRadius: 6 }] },
       options: { responsive:true, plugins:{ legend:{ display:false } },
         scales: { y: { beginAtZero:true, ticks:{ callback:v=>v+'%' } } } }
     });

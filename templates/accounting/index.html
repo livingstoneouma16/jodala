@@ -196,14 +196,14 @@ async function loadPL() {
     if (data.income.length) {
       new Chart(document.getElementById('incomeChart').getContext('2d'), {
         type:'doughnut',
-        data:{ labels:data.income.map(i=>i.category), datasets:[{data:data.income.map(i=>i.amount), backgroundColor:['#52B788','#4895EF','#E9C46A','#F4A261']}] },
+        data:{ labels:data.income.map(i=>i.category), datasets:[{data:data.income.map(i=>i.amount), backgroundColor:['#3F79C9','#4895EF','#E9C46A','#F4A261']}] },
         options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
       });
     }
     if (data.expenses.length) {
       new Chart(document.getElementById('expenseChart').getContext('2d'), {
         type:'doughnut',
-        data:{ labels:data.expenses.map(e=>e.category), datasets:[{data:data.expenses.map(e=>e.amount), backgroundColor:['#E63946','#F4A261','#4895EF','#7C3AED','#0F766E','#9CA3AF']}] },
+        data:{ labels:data.expenses.map(e=>e.category), datasets:[{data:data.expenses.map(e=>e.amount), backgroundColor:['#E63946','#F4A261','#4895EF','#7C3AED','#0F2440','#9CA3AF']}] },
         options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
       });
     }

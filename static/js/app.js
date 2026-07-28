@@ -63,7 +63,7 @@ const Toast = {
   show(message, type = 'info', duration = 4000) {
     const icons = { success: 'bi-check-circle-fill', error: 'bi-x-circle-fill',
                     warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' };
-    const colors = { success: '#52B788', error: '#E63946', warning: '#F4A261', info: '#4895EF' };
+    const colors = { success: '#3F79C9', error: '#E63946', warning: '#F4A261', info: '#4895EF' };
 
     const toast = document.createElement('div');
     toast.className = `jd-toast ${type}`;
@@ -307,7 +307,7 @@ async function loadNotifications() {
       } else {
         const typeIcon = { info: 'bi-info-circle', warning: 'bi-exclamation-triangle',
                            alert: 'bi-bell', success: 'bi-check-circle' };
-        const typeColor = { info: '#4895EF', warning: '#F4A261', alert: '#E63946', success: '#52B788' };
+        const typeColor = { info: '#4895EF', warning: '#F4A261', alert: '#E63946', success: '#3F79C9' };
         list.innerHTML = data.map(n => `
           <div class="d-flex gap-2 p-3 border-bottom" style="font-size:12px">
             <i class="bi ${typeIcon[n.notification_type] || 'bi-bell'}" style="color:${typeColor[n.notification_type] || '#6B8070'};font-size:16px;flex-shrink:0;margin-top:1px"></i>
