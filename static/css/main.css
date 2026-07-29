@@ -28,6 +28,7 @@
   --gold-dark:    #93701E;
   --danger:       #8A2F2F;
   --danger-bg:    #F6E0DF;
+  --outstanding-red: #DC3545;
   --warning:      #93701E;
   --warning-bg:   #F6ECD8;
   --info:         #2D5B8A;
@@ -88,6 +89,7 @@
      *background* (with #fff text on top) are untouched below. */
   --brand-ink:   #8FBEE8;
   --danger-ink:  #E8A19D;
+  --outstanding-red: #FF8A94;
   --warning-ink: #E0B85C;
   --info-ink:    #94BBE3;
   --brand-light: #8FBEE8;
@@ -133,6 +135,34 @@
 [data-bs-theme="dark"] .page-btn.active {
   background: #245A92;
   border-color: #2E6EAF;
+}
+
+/* Section accents keep each working area visually distinct while preserving
+   the shared layout and component behaviour. */
+body.section-members    { --section-accent: #7C3AED; }
+body.section-clients    { --section-accent: #0F766E; }
+body.section-loans      { --section-accent: #C2410C; }
+body.section-repayments { --section-accent: #2563EB; }
+body.section-savings    { --section-accent: #15803D; }
+body.section-accounting { --section-accent: #B45309; }
+body.section-cashbook   { --section-accent: #A16207; }
+body.section-reports    { --section-accent: #9333EA; }
+body.section-users      { --section-accent: #0369A1; }
+body.section-settings   { --section-accent: #475569; }
+
+body[class*="section-"] .breadcrumb-page,
+body[class*="section-"] .navbar-logo-icon,
+body[class*="section-"] .page-content .jd-card-title > i {
+  color: var(--section-accent) !important;
+}
+body[class*="section-"] .nav-link-item.active {
+  color: var(--section-accent);
+  border-left-color: var(--section-accent);
+}
+
+.outstanding-value {
+  color: var(--outstanding-red) !important;
+  font-weight: 600;
 }
 
 *, *::before, *::after { box-sizing: border-box; }

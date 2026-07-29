@@ -108,7 +108,7 @@
         {% if repayment.loan %}
         <div class="d-flex justify-content-between p-3 rounded" style="background:{% if repayment.loan.outstanding_balance <= 0 %}var(--brand-pale){% else %}#FEF9C3{% endif %}">
           <span style="font-size:13px;font-weight:600">Remaining Balance</span>
-          <span style="font-size:16px;font-weight:700;color:{% if repayment.loan.outstanding_balance <= 0 %}var(--brand-ink){% else %}var(--danger-ink){% endif %}">
+          <span class="outstanding-value" style="font-size:16px;font-weight:700">
             KSh {{ '{:,.2f}'.format(repayment.loan.outstanding_balance) }}
             {% if repayment.loan.outstanding_balance <= 0 %} ✓ FULLY PAID{% endif %}
           </span>

@@ -33,7 +33,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
   {% block extra_css %}{% endblock %}
 </head>
-<body data-idle-timeout-minutes="{{ idle_timeout_minutes }}">
+<body class="{% if request.endpoint %}{% if 'members' in request.endpoint %}section-members{% elif 'clients' in request.endpoint %}section-clients{% elif 'loans' in request.endpoint %}section-loans{% elif 'repayments' in request.endpoint %}section-repayments{% elif 'savings' in request.endpoint %}section-savings{% elif request.endpoint == 'accounting.cashbook' %}section-cashbook{% elif 'accounting' in request.endpoint %}section-accounting{% elif 'reports' in request.endpoint %}section-reports{% elif 'users' in request.endpoint %}section-users{% elif 'settings' in request.endpoint %}section-settings{% endif %}{% endif %}" data-idle-timeout-minutes="{{ idle_timeout_minutes }}">
 
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">

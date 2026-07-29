@@ -65,8 +65,8 @@
       <div class="stat-card gold">
         <div class="stat-icon gold"><i class="bi bi-graph-up-arrow"></i></div>
         <div class="stat-body">
-          <div class="stat-label" style="color:#dc3545">What is Owed</div>
-          <div class="stat-value" id="statPortfolio" style="color:#dc3545">—</div>
+          <div class="stat-label outstanding-value">What is Owed</div>
+          <div class="stat-value outstanding-value" id="statPortfolio">—</div>
           <div class="stat-change"><span id="statDisbursed">—</span> disbursed total</div>
         </div>
       </div>
@@ -447,11 +447,11 @@ async function loadOverdue(data) {
       el.innerHTML = '<div class="empty-state"><i class="bi bi-check-circle text-success"></i><p>No overdue loans — great work!</p></div>';
       return;
     }
-    el.innerHTML = '<div class="table-responsive"><table class="table table-borderless mb-0"><thead><tr><th>Loan</th><th>Borrower</th><th>Outstanding</th><th>Days Overdue</th></tr></thead><tbody>' +
+    el.innerHTML = '<div class="table-responsive"><table class="table table-borderless mb-0"><thead><tr><th>Loan</th><th>Borrower</th><th class="outstanding-value">Outstanding</th><th>Days Overdue</th></tr></thead><tbody>' +
       data.map(d => `<tr>
         <td><span style="font-weight:600;font-size:11px">${escapeHtml(d.loan_number)}</span></td>
         <td style="font-size:12px">${escapeHtml(d.borrower)}</td>
-        <td style="font-weight:600">${fmtCurrency(d.outstanding)}</td>
+        <td class="outstanding-value">${fmtCurrency(d.outstanding)}</td>
         <td><span class="status-pill status-overdue">${d.overdue_days}d</span></td>
       </tr>`).join('') + '</tbody></table></div>';
   } catch(e) {}

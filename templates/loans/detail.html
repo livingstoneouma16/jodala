@@ -84,8 +84,8 @@
             <div class="detail-value" style="color:var(--brand-light)">KSh {{ '{:,.2f}'.format(loan.total_paid or 0) }}</div>
           </div>
           <div class="detail-item">
-            <div class="detail-label">Outstanding</div>
-            <div class="detail-value" style="color:var(--danger-ink);font-weight:700">KSh {{ '{:,.2f}'.format(loan.outstanding_balance) }}</div>
+            <div class="detail-label outstanding-value">Outstanding</div>
+            <div class="detail-value outstanding-value">KSh {{ '{:,.2f}'.format(loan.outstanding_balance) }}</div>
           </div>
           <div class="detail-item">
             <div class="detail-label">Term</div>
@@ -278,7 +278,7 @@
         <div class="alert alert-danger" style="font-size:12px">
           <i class="bi bi-exclamation-triangle me-1"></i>
           This marks the loan as a bad debt loss. The outstanding balance of
-          <strong>KSh {{ '{:,.2f}'.format(loan.outstanding_balance) }}</strong> will no longer be tracked as
+          <strong class="outstanding-value">KSh {{ '{:,.2f}'.format(loan.outstanding_balance) }}</strong> will no longer be tracked as
           collectible. This cannot be undone.
         </div>
         <label class="form-label">Reason <span class="text-danger">*</span></label>

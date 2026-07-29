@@ -69,7 +69,7 @@
       <thead>
         <tr>
           <th>Loan No.</th><th>Borrower</th><th>Product</th><th>Principal</th>
-          <th>Outstanding</th><th>Term</th><th>Status</th><th>Date</th><th>Actions</th>
+          <th class="outstanding-value">Outstanding</th><th>Term</th><th>Status</th><th>Date</th><th>Actions</th>
         </tr>
       </thead>
       <tbody id="loansTable">
@@ -128,7 +128,7 @@ async function loadLoans(page = 1) {
         <td style="font-size:13px">${escapeHtml(l.member_name)}</td>
         <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(l.product_name)}</td>
         <td style="font-weight:600">${fmtCurrency(l.principal_amount)}</td>
-        <td style="font-weight:600;color:${l.outstanding_balance > 0 ? 'var(--danger-ink)' : 'var(--brand-light)'}">${fmtCurrency(l.outstanding_balance)}</td>
+        <td class="outstanding-value">${fmtCurrency(l.outstanding_balance)}</td>
         <td style="font-size:12px">${l.term} months</td>
         <td>${statusPill(l.status)}</td>
         <td style="font-size:12px;color:var(--text-muted)">${fmtDate(l.application_date)}</td>

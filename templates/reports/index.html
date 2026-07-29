@@ -46,7 +46,7 @@
   <div class="data-table-wrapper">
     <div class="data-table-header"><div class="data-table-title">Loan Report <span id="lrBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-ink)"></span></div></div>
     <div class="table-responsive"><table class="table mb-0">
-      <thead><tr><th>Loan No.</th><th>Borrower</th><th>Principal</th><th>Outstanding</th><th>Total Paid</th><th>Status</th><th>Date</th></tr></thead>
+      <thead><tr><th>Loan No.</th><th>Borrower</th><th>Principal</th><th class="outstanding-value">Outstanding</th><th>Total Paid</th><th>Status</th><th>Date</th></tr></thead>
       <tbody id="lrTable"><tr><td colspan="7" class="text-center p-4 text-muted">Click Generate to load report</td></tr></tbody>
     </table></div>
   </div>
@@ -74,7 +74,7 @@
   <div class="data-table-wrapper">
     <div class="data-table-header"><div class="data-table-title">Arrears Report</div></div>
     <div class="table-responsive"><table class="table mb-0">
-      <thead><tr><th>Loan No.</th><th>Borrower</th><th>Installment</th><th>Due Date</th><th>Amount Due</th><th>Days Overdue</th><th>Outstanding</th></tr></thead>
+      <thead><tr><th>Loan No.</th><th>Borrower</th><th>Installment</th><th>Due Date</th><th>Amount Due</th><th>Days Overdue</th><th class="outstanding-value">Outstanding</th></tr></thead>
       <tbody id="arrTable"><tr><td colspan="7" class="text-center p-4 text-muted">Click Generate to load</td></tr></tbody>
     </table></div>
   </div>
@@ -178,7 +178,7 @@
   <div class="data-table-wrapper">
     <div class="data-table-header"><div class="data-table-title">Regional Performance <span id="regBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-ink)"></span></div></div>
     <div class="table-responsive"><table class="table mb-0">
-      <thead><tr><th>Region</th><th>Members</th><th>Active/Total Loans</th><th>Principal</th><th>Outstanding</th><th>Collected</th><th>Arrears</th><th>PAR%</th><th>Collection Rate</th></tr></thead>
+      <thead><tr><th>Region</th><th>Members</th><th>Active/Total Loans</th><th>Principal</th><th class="outstanding-value">Outstanding</th><th>Collected</th><th>Arrears</th><th>PAR%</th><th>Collection Rate</th></tr></thead>
       <tbody id="regTable"><tr><td colspan="9" class="text-center p-4 text-muted">Click Generate</td></tr></tbody>
     </table></div>
   </div>
@@ -234,7 +234,7 @@ async function loadLoanReport() {
     document.getElementById('lrSummary').innerHTML=`
       <div class="col-md-3"><div class="stat-card"><div class="stat-icon blue"><i class="bi bi-hash"></i></div><div class="stat-body"><div class="stat-label">Total Loans</div><div class="stat-value">${s.total}</div></div></div></div>
       <div class="col-md-3"><div class="stat-card"><div class="stat-icon green"><i class="bi bi-cash-coin"></i></div><div class="stat-body"><div class="stat-label">Total Principal</div><div class="stat-value" style="font-size:18px">${fmtCurrency(s.total_principal)}</div></div></div></div>
-      <div class="col-md-3"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-exclamation-circle"></i></div><div class="stat-body"><div class="stat-label">Outstanding</div><div class="stat-value" style="font-size:18px">${fmtCurrency(s.total_outstanding)}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-exclamation-circle"></i></div><div class="stat-body"><div class="stat-label outstanding-value">Outstanding</div><div class="stat-value outstanding-value" style="font-size:18px">${fmtCurrency(s.total_outstanding)}</div></div></div></div>
       <div class="col-md-3"><div class="stat-card gold"><div class="stat-icon gold"><i class="bi bi-check-circle"></i></div><div class="stat-body"><div class="stat-label">Total Collected</div><div class="stat-value" style="font-size:18px">${fmtCurrency(s.total_collected)}</div></div></div></div>`;
 
     const statusEntries = Object.entries(data.by_status || {});
@@ -257,7 +257,7 @@ async function loadLoanReport() {
       <td><a href="/loans/${l.id}" style="font-weight:600;color:var(--brand-ink);font-size:12px">${escapeHtml(l.loan_number)}</a></td>
       <td style="font-size:13px">${escapeHtml(l.member_name || 'N/A')}</td>
       <td style="font-weight:600">${fmtCurrency(l.principal_amount)}</td>
-      <td style="color:var(--danger-ink);font-weight:600">${fmtCurrency(l.outstanding_balance)}</td>
+      <td class="outstanding-value">${fmtCurrency(l.outstanding_balance)}</td>
       <td style="color:var(--brand-light);font-weight:600">${fmtCurrency(l.total_paid)}</td>
       <td>${statusPill(l.status)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${fmtDate(l.application_date)}</td>
@@ -295,7 +295,7 @@ async function loadArrears() {
       <td style="font-size:12px;color:var(--danger-ink)">${fmtDate(a.due_date)}</td>
       <td style="font-weight:700;color:var(--danger-ink)">${fmtCurrency(a.amount_due)}</td>
       <td><span class="status-pill ${a.days_overdue>90?'status-rejected':a.days_overdue>30?'status-overdue':'status-suspended'}">${a.days_overdue}d</span></td>
-      <td style="font-weight:600">${fmtCurrency(a.outstanding_balance)}</td>
+      <td class="outstanding-value">${fmtCurrency(a.outstanding_balance)}</td>
     </tr>`).join('');
   } catch(e) { Toast.error(e.message); }
 }
@@ -398,7 +398,7 @@ async function loadRegionalReport() {
     document.getElementById('regBadge').textContent=t.region_count+' regions';
     document.getElementById('regSummary').innerHTML=`
       <div class="col-md-3"><div class="stat-card"><div class="stat-icon blue"><i class="bi bi-people"></i></div><div class="stat-body"><div class="stat-label">Members Reached</div><div class="stat-value">${t.member_count}</div></div></div></div>
-      <div class="col-md-3"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-exclamation-circle"></i></div><div class="stat-body"><div class="stat-label">Outstanding</div><div class="stat-value" style="font-size:18px">${fmtCurrency(t.total_outstanding)}</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-exclamation-circle"></i></div><div class="stat-body"><div class="stat-label outstanding-value">Outstanding</div><div class="stat-value outstanding-value" style="font-size:18px">${fmtCurrency(t.total_outstanding)}</div></div></div></div>
       <div class="col-md-3"><div class="stat-card gold"><div class="stat-icon gold"><i class="bi bi-check-circle"></i></div><div class="stat-body"><div class="stat-label">Total Collected</div><div class="stat-value" style="font-size:18px">${fmtCurrency(t.total_collected)}</div></div></div></div>
       <div class="col-md-3"><div class="stat-card"><div class="stat-icon purple"><i class="bi bi-clock-history"></i></div><div class="stat-body"><div class="stat-label">Total Arrears</div><div class="stat-value" style="font-size:18px">${fmtCurrency(t.arrears_amount)}</div></div></div></div>`;
 
@@ -427,7 +427,7 @@ async function loadRegionalReport() {
       <td style="font-size:13px">${r.member_count}</td>
       <td style="font-size:13px">${r.active_loan_count} / ${r.loan_count}</td>
       <td style="font-weight:600">${fmtCurrency(r.total_principal)}</td>
-      <td style="color:var(--danger-ink);font-weight:600">${fmtCurrency(r.total_outstanding)}</td>
+      <td class="outstanding-value">${fmtCurrency(r.total_outstanding)}</td>
       <td style="color:var(--brand-light);font-weight:600">${fmtCurrency(r.total_collected)}</td>
       <td style="font-size:13px;color:${r.arrears_amount>0?'var(--danger-ink)':'var(--text-muted)'}">${fmtCurrency(r.arrears_amount)}</td>
       <td><span class="status-pill ${r.par_pct>20?'status-rejected':r.par_pct>5?'status-overdue':'status-active'}">${r.par_pct}%</span></td>
