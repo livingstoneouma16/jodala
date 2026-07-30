@@ -1092,11 +1092,19 @@ def update_user(user_id):
         return jsonify({'error': 'User not found'}), 404
     data = request.get_json()
 
+    username = data.get('username', target['username'])
     full_name = data.get('full_name', target['full_name'])
     email = data.get('email', target['email'])
     phone = data.get('phone', target['phone'])
     role = target['role']
     is_active = target['is_active']
+
+    if username != target['username']:
+        clash = get_db().execute(
+            "SELECT id FROM users WHERE username = %s AND id != %s", (username, user_id)
+        ).fetchone()
+        if clash:
+            return jsonify({'error': 'Username already taken'}), 400
 
     if current['role'] == 'admin':
         role = data.get('role', role)
@@ -1112,14 +1120,14 @@ def update_user(user_id):
         # own password here already knows it, so clear the flag instead.
         force_change = 1 if current['id'] != user_id else 0
         execute(
-            "UPDATE users SET full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, password_hash=%s, "
+            "UPDATE users SET username=%s, full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, password_hash=%s, "
             "must_change_password=%s, updated_at=%s WHERE id=%s",
-            (full_name, email, phone, role, is_active, password_hash, force_change, utcnow(), user_id)
+            (username, full_name, email, phone, role, is_active, password_hash, force_change, utcnow(), user_id)
         )
     else:
         execute(
-            "UPDATE users SET full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, updated_at=%s WHERE id=%s",
-            (full_name, email, phone, role, is_active, utcnow(), user_id)
+            "UPDATE users SET username=%s, full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, updated_at=%s WHERE id=%s",
+            (username, full_name, email, phone, role, is_active, utcnow(), user_id)
         )
 
     updated = get_db().execute("SELECT * FROM users WHERE id = %s", (user_id,)).fetchone()
