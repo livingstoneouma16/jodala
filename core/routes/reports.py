@@ -82,11 +82,13 @@ def _loan_join_sql(where_sql=''):
                       ) AS borrower_name,
                       COALESCE(members.phone, clients.phone) AS borrower_phone,
                       COALESCE(members.region, clients.region) AS region,
-                      loan_products.name AS product_name
+                      loan_products.name AS product_name,
+                      officers.full_name AS loan_officer_name
                FROM loans
                LEFT JOIN members ON members.id = loans.member_id
                LEFT JOIN clients ON clients.id = loans.client_id
-               LEFT JOIN loan_products ON loan_products.id = loans.product_id{where_sql}"""
+               LEFT JOIN loan_products ON loan_products.id = loans.product_id
+               LEFT JOIN users officers ON officers.id = loans.loan_officer_id{where_sql}"""
 
 
 @reports_bp.route('/')
@@ -414,6 +416,34 @@ def export_loans_excel():
         _add_bar_chart(wb, ws, 'O20', 'Principal, Outstanding & Collected',
                         totals, [('Amount (Ksh)', total_values)], '_chart_amounts', y_title='Ksh')
 
+    by_product = {}
+    by_officer = {}
+    by_month = {}
+    for loan in loans:
+        product = loan['product_name'] or 'Unassigned'
+        by_product[product] = by_product.get(product, 0) + 1
+
+        officer = loan['loan_officer_name'] or 'Unassigned'
+        by_officer[officer] = by_officer.get(officer, 0) + loan['principal_amount']
+
+        disb = loan['disbursement_date']
+        if disb:
+            month = str(disb)[:7]  # YYYY-MM
+            by_month[month] = by_month.get(month, 0) + loan['principal_amount']
+
+    if by_product:
+        _add_bar_chart(wb, ws, 'O38', 'Loans by Product', list(by_product.keys()),
+                        [('Loan Count', list(by_product.values()))], '_chart_product')
+
+    if by_officer:
+        _add_bar_chart(wb, ws, 'O56', 'Principal Disbursed by Loan Officer', list(by_officer.keys()),
+                        [('Principal (Ksh)', list(by_officer.values()))], '_chart_officer', y_title='Ksh')
+
+    if by_month:
+        months_sorted = sorted(by_month.keys())
+        _add_line_chart(wb, ws, 'O74', 'Disbursement Trend', months_sorted,
+                         [by_month[m] for m in months_sorted], '_chart_disbursement', y_title='Ksh')
+
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
@@ -442,7 +472,7 @@ def export_members_excel():
         cell.font = Font(bold=True)
 
     row = 2
-    by_status, by_region = {}, {}
+    by_status, by_region, by_month = {}, {}, {}
     for m in members:
         ws.cell(row=row, column=1, value='Member')
         ws.cell(row=row, column=2, value=m['member_number'])
@@ -457,6 +487,9 @@ def export_members_excel():
         by_status[m['status']] = by_status.get(m['status'], 0) + 1
         if m['region']:
             by_region[m['region']] = by_region.get(m['region'], 0) + 1
+        if m['created_at']:
+            month = str(m['created_at'])[:7]
+            by_month[month] = by_month.get(month, 0) + 1
         row += 1
 
     for c in clients:
@@ -473,6 +506,9 @@ def export_members_excel():
         by_status[c['status']] = by_status.get(c['status'], 0) + 1
         if c['region']:
             by_region[c['region']] = by_region.get(c['region'], 0) + 1
+        if c['created_at']:
+            month = str(c['created_at'])[:7]
+            by_month[month] = by_month.get(month, 0) + 1
         row += 1
 
     if by_status:
@@ -481,6 +517,10 @@ def export_members_excel():
     if by_region:
         _add_bar_chart(wb, ws, 'M20', 'Members & Clients by Region',
                         list(by_region.keys()), [('Count', list(by_region.values()))], '_chart_region')
+    if by_month:
+        months_sorted = sorted(by_month.keys())
+        _add_line_chart(wb, ws, 'M38', 'Growth Over Time (New Joins per Month)', months_sorted,
+                         [by_month[m] for m in months_sorted], '_chart_growth', y_title='New Joins')
 
     output = io.BytesIO()
     wb.save(output)
@@ -536,18 +576,29 @@ def export_regional_excel():
     regions = data['regions']
     if regions:
         names = [r['region'] for r in regions]
-        # Default chart height is ~8 rows tall; stack the second chart below
-        # the first with a margin instead of a hardcoded row, so the two
-        # charts can't overlap as the region count grows.
-        first_chart_row = 2
-        second_chart_row = first_chart_row + 18
-        _add_bar_chart(wb, ws, f'M{first_chart_row}', 'Outstanding vs Collected by Region', names,
+        # Default chart height is ~8 rows tall; stack each chart below the
+        # last with a margin instead of hardcoded rows, so charts can't
+        # overlap as the region count grows.
+        row_1 = 2
+        row_2 = row_1 + 18
+        row_3 = row_2 + 18
+        row_4 = row_3 + 18
+        _add_bar_chart(wb, ws, f'M{row_1}', 'Outstanding vs Collected by Region', names,
                         [('Outstanding', [r['total_outstanding'] for r in regions]),
                          ('Collected', [r['total_collected'] for r in regions])],
                         '_chart_outstanding', y_title='Ksh')
-        _add_bar_chart(wb, ws, f'M{second_chart_row}', 'Portfolio at Risk (PAR %) by Region', names,
+        _add_bar_chart(wb, ws, f'M{row_2}', 'Portfolio at Risk (PAR %) by Region', names,
                         [('PAR %', [r['par_pct'] for r in regions])],
                         '_chart_par', y_title='%')
+        _add_bar_chart(wb, ws, f'M{row_3}', 'Loan Count by Region', names,
+                        [('Loans', [r['loan_count'] for r in regions])],
+                        '_chart_loan_count')
+        avg_loan_size = [
+            (r['total_principal'] / r['loan_count']) if r['loan_count'] else 0
+            for r in regions
+        ]
+        _add_bar_chart(wb, ws, f'M{row_4}', 'Average Loan Size by Region', names,
+                        [('Average Principal (Ksh)', avg_loan_size)], '_chart_avg_size', y_title='Ksh')
 
     output = io.BytesIO()
     wb.save(output)
@@ -573,6 +624,98 @@ def _csv_response(headers, rows, download_name):
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename={download_name}'}
     )
+
+
+@reports_bp.route('/api/export/arrears/excel')
+@login_required
+def export_arrears_excel():
+    """Excel sibling of /api/arrears-report -- rebuilds the same overdue-
+    installment query rather than calling the view function directly, so
+    this stays a plain data export independent of the JSON response shape."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    today = date.today()
+    overdue = get_db().execute(
+        """SELECT loan_schedules.*,
+                  loans.loan_number, loans.status AS loan_status, loans.outstanding_balance,
+                  loans.member_id, loans.client_id
+           FROM loan_schedules
+           LEFT JOIN loans ON loans.id = loan_schedules.loan_id
+           WHERE loan_schedules.due_date < %s AND loan_schedules.status IN ('pending', 'partial')""",
+        (today.isoformat(),)
+    ).fetchall()
+    active_overdue = [s for s in overdue if s['loan_status'] == 'active']
+
+    member_ids = {s['member_id'] for s in active_overdue if s['member_id']}
+    client_ids = {s['client_id'] for s in active_overdue if s['client_id']}
+    members_by_id, clients_by_id = {}, {}
+    if member_ids:
+        placeholders = ','.join(['%s'] * len(member_ids))
+        for m in get_db().execute(f"SELECT * FROM members WHERE id IN ({placeholders})", tuple(member_ids)).fetchall():
+            members_by_id[m['id']] = member_full_name(m)
+    if client_ids:
+        placeholders = ','.join(['%s'] * len(client_ids))
+        for c in get_db().execute(f"SELECT * FROM clients WHERE id IN ({placeholders})", tuple(client_ids)).fetchall():
+            clients_by_id[c['id']] = client_full_name(c)
+
+    rows = []
+    for s in active_overdue:
+        days_overdue = (today - date.fromisoformat(s['due_date'])).days
+        borrower = members_by_id.get(s['member_id']) or clients_by_id.get(s['client_id']) or 'N/A'
+        rows.append({
+            'loan_number': s['loan_number'], 'borrower': borrower,
+            'installment': s['installment_number'], 'due_date': s['due_date'],
+            'amount_due': s['total_due'] - s['total_paid'], 'days_overdue': days_overdue,
+            'outstanding_balance': s['outstanding_balance']
+        })
+    rows.sort(key=lambda x: x['days_overdue'], reverse=True)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Arrears Report"
+
+    headers = ['Loan No', 'Borrower', 'Installment #', 'Due Date', 'Amount Due',
+               'Days Overdue', 'Outstanding Balance']
+    header_fill = PatternFill(start_color="1B4332", end_color="1B4332", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+        ws.column_dimensions[get_column_letter(col)].width = 16
+
+    aging_buckets = {'1-30 days': 0, '31-60 days': 0, '61-90 days': 0, '90+ days': 0}
+    for row_num, r in enumerate(rows, 2):
+        ws.cell(row=row_num, column=1, value=r['loan_number'])
+        ws.cell(row=row_num, column=2, value=r['borrower'])
+        ws.cell(row=row_num, column=3, value=r['installment'])
+        ws.cell(row=row_num, column=4, value=r['due_date'])
+        ws.cell(row=row_num, column=5, value=r['amount_due'])
+        ws.cell(row=row_num, column=6, value=r['days_overdue'])
+        ws.cell(row=row_num, column=7, value=r['outstanding_balance'])
+
+        d = r['days_overdue']
+        if d <= 30:
+            aging_buckets['1-30 days'] += r['amount_due']
+        elif d <= 60:
+            aging_buckets['31-60 days'] += r['amount_due']
+        elif d <= 90:
+            aging_buckets['61-90 days'] += r['amount_due']
+        else:
+            aging_buckets['90+ days'] += r['amount_due']
+
+    if rows:
+        _add_bar_chart(wb, ws, 'I2', 'Arrears Aging (Amount Due)', list(aging_buckets.keys()),
+                        [('Amount Due (Ksh)', list(aging_buckets.values()))], '_chart_aging', y_title='Ksh')
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(output, as_attachment=True, download_name='arrears_report.xlsx',
+                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 @reports_bp.route('/api/export/loans/csv')
@@ -645,8 +788,9 @@ def export_collections_excel():
     date_to = request.args.get('date_to', date.today().isoformat())
 
     repayments = get_db().execute(
-        """SELECT repayments.*, loans.loan_number FROM repayments
+        """SELECT repayments.*, loans.loan_number, officers.full_name AS collector_name FROM repayments
            LEFT JOIN loans ON loans.id = repayments.loan_id
+           LEFT JOIN users officers ON officers.id = repayments.collected_by
            WHERE repayments.payment_date >= %s AND repayments.payment_date <= %s
            ORDER BY repayments.payment_date DESC""",
         (date_from, date_to)
@@ -667,7 +811,7 @@ def export_collections_excel():
         cell.alignment = Alignment(horizontal='center')
         ws.column_dimensions[get_column_letter(col)].width = 16
 
-    by_method, by_day = {}, {}
+    by_method, by_day, by_officer, by_day_method = {}, {}, {}, {}
     for row, r in enumerate(repayments, 2):
         ws.cell(row=row, column=1, value=r['loan_number'])
         ws.cell(row=row, column=2, value=r['amount'])
@@ -676,6 +820,8 @@ def export_collections_excel():
         ws.cell(row=row, column=5, value=r['reference_number'] or '')
         by_method[r['payment_method']] = by_method.get(r['payment_method'], 0) + r['amount']
         by_day[r['payment_date']] = by_day.get(r['payment_date'], 0) + r['amount']
+        officer = r['collector_name'] or 'Unassigned'
+        by_officer[officer] = by_officer.get(officer, 0) + r['amount']
 
     if by_method:
         _add_pie_chart(wb, ws, 'H2', 'Collections by Method',
@@ -684,6 +830,9 @@ def export_collections_excel():
         days_sorted = sorted(by_day.keys())
         _add_line_chart(wb, ws, 'H20', 'Daily Collections', days_sorted,
                          [by_day[d] for d in days_sorted], '_chart_daily', y_title='Ksh')
+    if by_officer:
+        _add_bar_chart(wb, ws, 'H38', 'Collections by Loan Officer', list(by_officer.keys()),
+                        [('Amount (Ksh)', list(by_officer.values()))], '_chart_officer', y_title='Ksh')
 
     output = io.BytesIO()
     wb.save(output)

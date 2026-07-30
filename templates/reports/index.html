@@ -56,6 +56,7 @@
 <div id="arrearsRep" class="d-none">
   <div class="jd-card mb-3"><div class="jd-card-body">
     <button class="btn btn-brand" onclick="loadArrears()"><i class="bi bi-search me-1"></i>Generate Arrears Report</button>
+    <button class="btn btn-brand-outline ms-2" onclick="API.download('/reports/api/export/arrears/excel','arrears_report.xlsx').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
   </div></div>
   <div class="row g-3 mb-3">
     <div class="col-md-4"><div class="stat-card danger"><div class="stat-icon red"><i class="bi bi-exclamation-triangle-fill"></i></div>
