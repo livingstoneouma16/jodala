@@ -138,17 +138,40 @@
 }
 
 /* Section accents keep each working area visually distinct while preserving
-   the shared layout and component behaviour. */
-body.section-members    { --section-accent: #7C3AED; }
-body.section-clients    { --section-accent: #0F766E; }
-body.section-loans      { --section-accent: #C2410C; }
-body.section-repayments { --section-accent: #2563EB; }
-body.section-savings    { --section-accent: #15803D; }
-body.section-accounting { --section-accent: #B45309; }
-body.section-cashbook   { --section-accent: #A16207; }
-body.section-reports    { --section-accent: #9333EA; }
-body.section-users      { --section-accent: #0369A1; }
-body.section-settings   { --section-accent: #475569; }
+   the shared layout and component behaviour.
+
+   v4.1: retuned from the original stock Tailwind swatches. Two problems
+   drove the change — (1) members/reports were both a raw violet/purple
+   and accounting/cashbook/loans were all a raw orange-brown, so adjacent
+   sections were easy to mix up at a glance; (2) none of the ten had a
+   dark-mode variant, so every one of them read as a muddy, low-contrast
+   smudge (~3:1 against the navy surfaces, some as low as 2.4:1) instead
+   of clear text/icon colour. Hues are now spaced for distinctness, and
+   desaturated slightly to sit with the ink/gold/paper palette rather
+   than look like an unrelated sticker sheet. Dark variants are lighter
+   tints of the same hue, each re-checked for ≥6.5:1 contrast on
+   --surface/--bg dark values. */
+body.section-members    { --section-accent: #6B3FA0; } /* violet   — was #7C3AED */
+body.section-clients    { --section-accent: #0E6B5C; } /* teal     — was #0F766E */
+body.section-loans      { --section-accent: #A8481E; } /* terracotta — was #C2410C */
+body.section-repayments { --section-accent: #33538C; } /* indigo   — was #2563EB, no longer reads as plain "blue" like Users */
+body.section-savings    { --section-accent: #1E7A3D; } /* moss green — was #15803D */
+body.section-accounting { --section-accent: #7A5A14; } /* antique gold — was #B45309, no longer brown/orange like Cashbook */
+body.section-cashbook   { --section-accent: #8C4A2E; } /* copper/sienna — was #A16207 */
+body.section-reports    { --section-accent: #9C2F63; } /* berry/magenta — was #9333EA, no longer reads as the same purple as Members */
+body.section-users      { --section-accent: #1D6E96; } /* sky/cyan-blue — was #0369A1, distinct from Repayments' indigo */
+body.section-settings   { --section-accent: #52504A; } /* warm graphite — was #475569, warmed to match the paper/ink palette */
+
+[data-bs-theme="dark"] body.section-members    { --section-accent: #B99BE0; }
+[data-bs-theme="dark"] body.section-clients    { --section-accent: #6EC9B4; }
+[data-bs-theme="dark"] body.section-loans      { --section-accent: #E2905F; }
+[data-bs-theme="dark"] body.section-repayments { --section-accent: #8FA9DC; }
+[data-bs-theme="dark"] body.section-savings    { --section-accent: #6FCB8E; }
+[data-bs-theme="dark"] body.section-accounting { --section-accent: #D9B35C; }
+[data-bs-theme="dark"] body.section-cashbook   { --section-accent: #D99873; }
+[data-bs-theme="dark"] body.section-reports    { --section-accent: #E091B5; }
+[data-bs-theme="dark"] body.section-users      { --section-accent: #7EC4E0; }
+[data-bs-theme="dark"] body.section-settings   { --section-accent: #B8B4A8; }
 
 body[class*="section-"] .breadcrumb-page,
 body[class*="section-"] .navbar-logo-icon,
