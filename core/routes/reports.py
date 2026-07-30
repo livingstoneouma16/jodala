@@ -16,6 +16,7 @@ def _loan_join_sql(where_sql=''):
                           TRIM(members.first_name || ' ' || COALESCE(members.middle_name, '') || ' ' || members.last_name),
                           TRIM(clients.first_name || ' ' || clients.last_name)
                       ) AS borrower_name,
+                      COALESCE(members.phone, clients.phone) AS borrower_phone,
                       COALESCE(members.region, clients.region) AS region,
                       loan_products.name AS product_name
                FROM loans
@@ -302,7 +303,7 @@ def export_loans_excel():
     ws = wb.active
     ws.title = "Loans Report"
 
-    headers = ['Loan No', 'Borrower', 'Product', 'Principal', 'Interest Rate',
+    headers = ['Loan No', 'Borrower', 'Phone', 'Product', 'Principal', 'Interest Rate',
                'Total Repayable', 'Outstanding', 'Total Paid', 'Status',
                'Application Date', 'Disbursement Date', 'Due Date']
 
@@ -319,16 +320,17 @@ def export_loans_excel():
     for row, loan in enumerate(loans, 2):
         ws.cell(row=row, column=1, value=loan['loan_number'])
         ws.cell(row=row, column=2, value=loan['borrower_name'] or 'N/A')
-        ws.cell(row=row, column=3, value=loan['product_name'] or '')
-        ws.cell(row=row, column=4, value=loan['principal_amount'])
-        ws.cell(row=row, column=5, value=f"{loan['interest_rate']}%")
-        ws.cell(row=row, column=6, value=loan['total_repayable'])
-        ws.cell(row=row, column=7, value=loan['outstanding_balance'])
-        ws.cell(row=row, column=8, value=loan['total_paid'])
-        ws.cell(row=row, column=9, value=(loan['status'] or '').upper())
-        ws.cell(row=row, column=10, value=loan['application_date'] or '')
-        ws.cell(row=row, column=11, value=loan['disbursement_date'] or '')
-        ws.cell(row=row, column=12, value=loan['expected_end_date'] or '')
+        ws.cell(row=row, column=3, value=loan['borrower_phone'] or '')
+        ws.cell(row=row, column=4, value=loan['product_name'] or '')
+        ws.cell(row=row, column=5, value=loan['principal_amount'])
+        ws.cell(row=row, column=6, value=f"{loan['interest_rate']}%")
+        ws.cell(row=row, column=7, value=loan['total_repayable'])
+        ws.cell(row=row, column=8, value=loan['outstanding_balance'])
+        ws.cell(row=row, column=9, value=loan['total_paid'])
+        ws.cell(row=row, column=10, value=(loan['status'] or '').upper())
+        ws.cell(row=row, column=11, value=loan['application_date'] or '')
+        ws.cell(row=row, column=12, value=loan['disbursement_date'] or '')
+        ws.cell(row=row, column=13, value=loan['expected_end_date'] or '')
 
     output = io.BytesIO()
     wb.save(output)
@@ -466,7 +468,7 @@ def _csv_response(headers, rows, download_name):
 def export_loans_csv():
     loans = get_db().execute(_loan_join_sql() + " ORDER BY loans.created_at DESC").fetchall()
 
-    headers = ['Loan No', 'Borrower', 'Product', 'Principal', 'Interest Rate',
+    headers = ['Loan No', 'Borrower', 'Phone', 'Product', 'Principal', 'Interest Rate',
                'Total Repayable', 'Outstanding', 'Total Paid', 'Status',
                'Application Date', 'Disbursement Date', 'Due Date']
 
@@ -474,6 +476,7 @@ def export_loans_csv():
         [
             loan['loan_number'],
             loan['borrower_name'] or 'N/A',
+            loan['borrower_phone'] or '',
             loan['product_name'] or '',
             loan['principal_amount'],
             f"{loan['interest_rate']}%",

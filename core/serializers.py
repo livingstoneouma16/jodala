@@ -120,6 +120,7 @@ def loan_public(row):
         'id': d['id'],
         'loan_number': d['loan_number'],
         'member_name': d.get('borrower_name', 'N/A'),
+        'phone': d.get('borrower_phone', ''),
         'member_id': d.get('member_id'),
         'client_id': d.get('client_id'),
         'product_name': d.get('product_name', ''),
