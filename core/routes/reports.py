@@ -31,7 +31,7 @@ def _write_chart_data_sheet(wb, sheet_name, categories, series):
 def _add_pie_chart(wb, ws, anchor, title, categories, values, sheet_name):
     from openpyxl.chart import PieChart, Reference
 
-    data_ws, _c1, _c2, r1, r2 = _write_chart_data_sheet(wb, sheet_name, categories, [(title, values)])
+    data_ws, _, _, _, r2 = _write_chart_data_sheet(wb, sheet_name, categories, [(title, values)])
     chart = PieChart()
     chart.title = title
     chart.height, chart.width = 8, 12
@@ -46,7 +46,7 @@ def _add_bar_chart(wb, ws, anchor, title, categories, series, sheet_name, y_titl
     """series: list of (label, values) tuples for grouped bars."""
     from openpyxl.chart import BarChart, Reference
 
-    data_ws, c1, c2, r1, r2 = _write_chart_data_sheet(wb, sheet_name, categories, series)
+    data_ws, _, c2, _, r2 = _write_chart_data_sheet(wb, sheet_name, categories, series)
     chart = BarChart()
     chart.type = 'col'
     chart.title = title
@@ -62,7 +62,7 @@ def _add_bar_chart(wb, ws, anchor, title, categories, series, sheet_name, y_titl
 def _add_line_chart(wb, ws, anchor, title, categories, values, sheet_name, y_title=''):
     from openpyxl.chart import LineChart, Reference
 
-    data_ws, _c1, _c2, r1, r2 = _write_chart_data_sheet(wb, sheet_name, categories, [(title, values)])
+    data_ws, _, _, _, r2 = _write_chart_data_sheet(wb, sheet_name, categories, [(title, values)])
     chart = LineChart()
     chart.title = title
     chart.y_axis.title = y_title
@@ -401,17 +401,18 @@ def export_loans_excel():
         by_status[loan['status']] = by_status.get(loan['status'], 0) + 1
 
     if by_status:
-        _add_pie_chart(wb, ws, f'O2', 'Loans by Status',
+        _add_pie_chart(wb, ws, 'O2', 'Loans by Status',
                         list(by_status.keys()), list(by_status.values()), '_chart_status')
 
-    totals = ['Principal', 'Outstanding', 'Total Paid']
-    total_values = [
-        sum(l['principal_amount'] for l in loans),
-        sum(l['outstanding_balance'] for l in loans),
-        sum(l['total_paid'] for l in loans),
-    ]
-    _add_bar_chart(wb, ws, 'O20', 'Principal, Outstanding & Collected',
-                    totals, [('Amount (Ksh)', total_values)], '_chart_amounts', y_title='Ksh')
+    if loans:
+        totals = ['Principal', 'Outstanding', 'Total Paid']
+        total_values = [
+            sum(l['principal_amount'] for l in loans),
+            sum(l['outstanding_balance'] for l in loans),
+            sum(l['total_paid'] for l in loans),
+        ]
+        _add_bar_chart(wb, ws, 'O20', 'Principal, Outstanding & Collected',
+                        totals, [('Amount (Ksh)', total_values)], '_chart_amounts', y_title='Ksh')
 
     output = io.BytesIO()
     wb.save(output)
@@ -535,11 +536,16 @@ def export_regional_excel():
     regions = data['regions']
     if regions:
         names = [r['region'] for r in regions]
-        _add_bar_chart(wb, ws, f'M2', 'Outstanding vs Collected by Region', names,
+        # Default chart height is ~8 rows tall; stack the second chart below
+        # the first with a margin instead of a hardcoded row, so the two
+        # charts can't overlap as the region count grows.
+        first_chart_row = 2
+        second_chart_row = first_chart_row + 18
+        _add_bar_chart(wb, ws, f'M{first_chart_row}', 'Outstanding vs Collected by Region', names,
                         [('Outstanding', [r['total_outstanding'] for r in regions]),
                          ('Collected', [r['total_collected'] for r in regions])],
                         '_chart_outstanding', y_title='Ksh')
-        _add_bar_chart(wb, ws, f'M20', 'Portfolio at Risk (PAR %) by Region', names,
+        _add_bar_chart(wb, ws, f'M{second_chart_row}', 'Portfolio at Risk (PAR %) by Region', names,
                         [('PAR %', [r['par_pct'] for r in regions])],
                         '_chart_par', y_title='%')
 
