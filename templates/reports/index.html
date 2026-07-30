@@ -87,6 +87,7 @@
       <div class="col-md-3"><label class="form-label">From</label><input type="date" class="form-control" id="colFrom" /></div>
       <div class="col-md-3"><label class="form-label">To</label><input type="date" class="form-control" id="colTo" /></div>
       <div class="col-md-3"><button class="btn btn-brand w-100" onclick="loadCollections()"><i class="bi bi-search me-1"></i>Generate</button></div>
+      <div class="col-md-3"><button class="btn btn-brand-outline w-100" onclick="API.download('/reports/api/export/collections/excel?date_from='+document.getElementById('colFrom').value+'&date_to='+document.getElementById('colTo').value,'collections_report.xlsx').then(()=>Toast.success('Downloaded!'))"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button></div>
       <div class="col-md-3"><button class="btn btn-brand-outline w-100" onclick="exportCollectionsCsv()"><i class="bi bi-filetype-csv me-1"></i>CSV</button></div>
     </div>
   </div></div>

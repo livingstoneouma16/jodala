@@ -10,6 +10,70 @@ from core.serializers import loan_public, repayment_public, member_public, membe
 reports_bp = Blueprint('reports', __name__)
 
 
+def _write_chart_data_sheet(wb, sheet_name, categories, series):
+    """Writes a small data table on its own sheet (kept out of the way after
+    the main report sheet) and returns (data_ws, min_col, max_col, min_row,
+    max_row) refs openpyxl charts need. `series` is a list of (label, values)
+    tuples, all the same length as `categories`."""
+    data_ws = wb.create_sheet(sheet_name)
+    data_ws.cell(row=1, column=1, value='Category')
+    for col, (label, _values) in enumerate(series, 2):
+        data_ws.cell(row=1, column=col, value=label)
+    for row, cat in enumerate(categories, 2):
+        data_ws.cell(row=row, column=1, value=cat)
+    for col, (_label, values) in enumerate(series, 2):
+        for row, value in enumerate(values, 2):
+            data_ws.cell(row=row, column=col, value=value)
+    data_ws.sheet_state = 'hidden'
+    return data_ws, 1, len(series) + 1, 1, len(categories) + 1
+
+
+def _add_pie_chart(wb, ws, anchor, title, categories, values, sheet_name):
+    from openpyxl.chart import PieChart, Reference
+
+    data_ws, _c1, _c2, r1, r2 = _write_chart_data_sheet(wb, sheet_name, categories, [(title, values)])
+    chart = PieChart()
+    chart.title = title
+    chart.height, chart.width = 8, 12
+    data_ref = Reference(data_ws, min_col=2, min_row=1, max_row=r2)
+    cats_ref = Reference(data_ws, min_col=1, min_row=2, max_row=r2)
+    chart.add_data(data_ref, titles_from_data=True)
+    chart.set_categories(cats_ref)
+    ws.add_chart(chart, anchor)
+
+
+def _add_bar_chart(wb, ws, anchor, title, categories, series, sheet_name, y_title=''):
+    """series: list of (label, values) tuples for grouped bars."""
+    from openpyxl.chart import BarChart, Reference
+
+    data_ws, c1, c2, r1, r2 = _write_chart_data_sheet(wb, sheet_name, categories, series)
+    chart = BarChart()
+    chart.type = 'col'
+    chart.title = title
+    chart.y_axis.title = y_title
+    chart.height, chart.width = 8, 14
+    data_ref = Reference(data_ws, min_col=2, max_col=c2, min_row=1, max_row=r2)
+    cats_ref = Reference(data_ws, min_col=1, min_row=2, max_row=r2)
+    chart.add_data(data_ref, titles_from_data=True)
+    chart.set_categories(cats_ref)
+    ws.add_chart(chart, anchor)
+
+
+def _add_line_chart(wb, ws, anchor, title, categories, values, sheet_name, y_title=''):
+    from openpyxl.chart import LineChart, Reference
+
+    data_ws, _c1, _c2, r1, r2 = _write_chart_data_sheet(wb, sheet_name, categories, [(title, values)])
+    chart = LineChart()
+    chart.title = title
+    chart.y_axis.title = y_title
+    chart.height, chart.width = 8, 14
+    data_ref = Reference(data_ws, min_col=2, min_row=1, max_row=r2)
+    cats_ref = Reference(data_ws, min_col=1, min_row=2, max_row=r2)
+    chart.add_data(data_ref, titles_from_data=True)
+    chart.set_categories(cats_ref)
+    ws.add_chart(chart, anchor)
+
+
 def _loan_join_sql(where_sql=''):
     return f"""SELECT loans.*,
                       COALESCE(
@@ -332,6 +396,23 @@ def export_loans_excel():
         ws.cell(row=row, column=12, value=loan['disbursement_date'] or '')
         ws.cell(row=row, column=13, value=loan['expected_end_date'] or '')
 
+    by_status = {}
+    for loan in loans:
+        by_status[loan['status']] = by_status.get(loan['status'], 0) + 1
+
+    if by_status:
+        _add_pie_chart(wb, ws, f'O2', 'Loans by Status',
+                        list(by_status.keys()), list(by_status.values()), '_chart_status')
+
+    totals = ['Principal', 'Outstanding', 'Total Paid']
+    total_values = [
+        sum(l['principal_amount'] for l in loans),
+        sum(l['outstanding_balance'] for l in loans),
+        sum(l['total_paid'] for l in loans),
+    ]
+    _add_bar_chart(wb, ws, 'O20', 'Principal, Outstanding & Collected',
+                    totals, [('Amount (Ksh)', total_values)], '_chart_amounts', y_title='Ksh')
+
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
@@ -360,6 +441,7 @@ def export_members_excel():
         cell.font = Font(bold=True)
 
     row = 2
+    by_status, by_region = {}, {}
     for m in members:
         ws.cell(row=row, column=1, value='Member')
         ws.cell(row=row, column=2, value=m['member_number'])
@@ -371,6 +453,9 @@ def export_members_excel():
         ws.cell(row=row, column=8, value=m['occupation'])
         ws.cell(row=row, column=9, value=m['status'])
         ws.cell(row=row, column=10, value=m['created_at'])
+        by_status[m['status']] = by_status.get(m['status'], 0) + 1
+        if m['region']:
+            by_region[m['region']] = by_region.get(m['region'], 0) + 1
         row += 1
 
     for c in clients:
@@ -384,7 +469,17 @@ def export_members_excel():
         ws.cell(row=row, column=8, value=c['occupation'])
         ws.cell(row=row, column=9, value=c['status'])
         ws.cell(row=row, column=10, value=c['created_at'])
+        by_status[c['status']] = by_status.get(c['status'], 0) + 1
+        if c['region']:
+            by_region[c['region']] = by_region.get(c['region'], 0) + 1
         row += 1
+
+    if by_status:
+        _add_pie_chart(wb, ws, 'M2', 'Members & Clients by Status',
+                        list(by_status.keys()), list(by_status.values()), '_chart_status')
+    if by_region:
+        _add_bar_chart(wb, ws, 'M20', 'Members & Clients by Region',
+                        list(by_region.keys()), [('Count', list(by_region.values()))], '_chart_region')
 
     output = io.BytesIO()
     wb.save(output)
@@ -436,6 +531,17 @@ def export_regional_excel():
     for row, values in enumerate(_regional_rows(data['regions']), 2):
         for col, value in enumerate(values, 1):
             ws.cell(row=row, column=col, value=value)
+
+    regions = data['regions']
+    if regions:
+        names = [r['region'] for r in regions]
+        _add_bar_chart(wb, ws, f'M2', 'Outstanding vs Collected by Region', names,
+                        [('Outstanding', [r['total_outstanding'] for r in regions]),
+                         ('Collected', [r['total_collected'] for r in regions])],
+                        '_chart_outstanding', y_title='Ksh')
+        _add_bar_chart(wb, ws, f'M20', 'Portfolio at Risk (PAR %) by Region', names,
+                        [('PAR %', [r['par_pct'] for r in regions])],
+                        '_chart_par', y_title='%')
 
     output = io.BytesIO()
     wb.save(output)
@@ -518,6 +624,67 @@ def export_members_csv():
     ]
 
     return _csv_response(headers, rows, 'members_report.csv')
+
+
+@reports_bp.route('/api/export/collections/excel')
+@login_required
+def export_collections_excel():
+    """Excel sibling of /api/collection-report -- same date_from/date_to
+    filters and query, so the download always matches what's on screen."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    date_from = request.args.get('date_from', date.today().replace(day=1).isoformat())
+    date_to = request.args.get('date_to', date.today().isoformat())
+
+    repayments = get_db().execute(
+        """SELECT repayments.*, loans.loan_number FROM repayments
+           LEFT JOIN loans ON loans.id = repayments.loan_id
+           WHERE repayments.payment_date >= %s AND repayments.payment_date <= %s
+           ORDER BY repayments.payment_date DESC""",
+        (date_from, date_to)
+    ).fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Collections Report"
+
+    headers = ['Loan No', 'Amount', 'Payment Method', 'Payment Date', 'Reference']
+    header_fill = PatternFill(start_color="1B4332", end_color="1B4332", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+        ws.column_dimensions[get_column_letter(col)].width = 16
+
+    by_method, by_day = {}, {}
+    for row, r in enumerate(repayments, 2):
+        ws.cell(row=row, column=1, value=r['loan_number'])
+        ws.cell(row=row, column=2, value=r['amount'])
+        ws.cell(row=row, column=3, value=(r['payment_method'] or '').replace('_', ' ').title())
+        ws.cell(row=row, column=4, value=r['payment_date'])
+        ws.cell(row=row, column=5, value=r['reference_number'] or '')
+        by_method[r['payment_method']] = by_method.get(r['payment_method'], 0) + r['amount']
+        by_day[r['payment_date']] = by_day.get(r['payment_date'], 0) + r['amount']
+
+    if by_method:
+        _add_pie_chart(wb, ws, 'H2', 'Collections by Method',
+                        list(by_method.keys()), list(by_method.values()), '_chart_method')
+    if by_day:
+        days_sorted = sorted(by_day.keys())
+        _add_line_chart(wb, ws, 'H20', 'Daily Collections', days_sorted,
+                         [by_day[d] for d in days_sorted], '_chart_daily', y_title='Ksh')
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return send_file(output, as_attachment=True, download_name='collections_report.xlsx',
+                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 @reports_bp.route('/api/export/collections/csv')
