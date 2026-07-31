@@ -314,9 +314,11 @@
         </div>
         <label class="form-label">Reason <span class="text-danger">*</span></label>
         <textarea class="form-control mb-2" id="pushScheduleReason" rows="2" placeholder="Why is the schedule being pushed?"></textarea>
+        <label class="form-label" style="font-size:11.5px">New Due Date for Next Installment</label>
+        <input type="date" class="form-control form-control-sm mb-2" id="pushScheduleNewDate" onchange="syncPushScheduleDays()" />
         <label class="form-label" style="font-size:11.5px">Days to push</label>
-        <input type="number" class="form-control form-control-sm" id="pushScheduleDays" value="30" />
-        <div style="font-size:11px;color:var(--text-muted)" class="mt-1">Use a negative number to pull dates earlier.</div>
+        <input type="number" class="form-control form-control-sm" id="pushScheduleDays" value="30" oninput="syncPushScheduleDate()" />
+        <div style="font-size:11px;color:var(--text-muted)" class="mt-1">Set either field -- they stay in sync. Use a negative number of days to pull dates earlier.</div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -583,7 +585,33 @@ function showTopupModal() {
 function showPushScheduleModal() {
   document.getElementById('pushScheduleReason').value = '';
   document.getElementById('pushScheduleDays').value = 30;
+  const nextDue = (loanData.schedule || []).find(s => s.status === 'pending' || s.status === 'partial');
+  document.getElementById('pushScheduleModal').dataset.nextDueDate = nextDue ? nextDue.due_date : '';
+  if (nextDue) {
+    const d = new Date(nextDue.due_date + 'T00:00:00');
+    d.setDate(d.getDate() + 30);
+    document.getElementById('pushScheduleNewDate').value = d.toISOString().split('T')[0];
+  } else {
+    document.getElementById('pushScheduleNewDate').value = '';
+  }
   new bootstrap.Modal(document.getElementById('pushScheduleModal')).show();
+}
+
+function syncPushScheduleDays() {
+  const nextDueDate = document.getElementById('pushScheduleModal').dataset.nextDueDate;
+  const newDate = document.getElementById('pushScheduleNewDate').value;
+  if (!nextDueDate || !newDate) return;
+  const days = Math.round((new Date(newDate) - new Date(nextDueDate)) / 86400000);
+  document.getElementById('pushScheduleDays').value = days;
+}
+
+function syncPushScheduleDate() {
+  const nextDueDate = document.getElementById('pushScheduleModal').dataset.nextDueDate;
+  const days = parseInt(document.getElementById('pushScheduleDays').value);
+  if (!nextDueDate || isNaN(days)) return;
+  const d = new Date(nextDueDate + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  document.getElementById('pushScheduleNewDate').value = d.toISOString().split('T')[0];
 }
 
 async function pushSchedule() {
