@@ -44,7 +44,7 @@ def _resolve_recipients(audience_type, region, overdue_only):
             sql += " AND region = %s"
             params.append(region)
         if overdue_only:
-            sql += f"""AND id IN (
+            sql += f""" AND id IN (
                 SELECT {id_col} FROM loans WHERE {id_col} IS NOT NULL AND id IN (
                     SELECT DISTINCT loan_id FROM loan_schedules
                     WHERE due_date < %s AND status IN ('pending', 'partial')
