@@ -323,3 +323,38 @@ def audit_log_public(row):
         'ip_address': d['ip_address'],
         'created_at': d['created_at'],
     }
+
+
+def campaign_public(row):
+    if row is None:
+        return None
+    d = dict(row)
+    return {
+        'id': d['id'],
+        'channel': d['channel'],
+        'audience_type': d['audience_type'],
+        'region': d['region'],
+        'overdue_only': bool(d['overdue_only']),
+        'message': d['message'],
+        'subject': d.get('subject'),
+        'recipient_count': d['recipient_count'],
+        'sent_count': d['sent_count'],
+        'failed_count': d['failed_count'],
+        'created_at': d['created_at'],
+    }
+
+
+def backup_public(row):
+    if row is None:
+        return None
+    d = dict(row)
+    return {
+        'id': d['id'],
+        'filename': d['filename'],
+        'size_bytes': d['size_bytes'],
+        'status': d['status'],
+        'storage': d['storage'],
+        'error': d.get('error'),
+        'triggered_by': d['triggered_by'],
+        'created_at': d['created_at'],
+    }

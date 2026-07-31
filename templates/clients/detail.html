@@ -23,6 +23,12 @@
 <div class="row g-3">
   <div class="col-12 col-lg-4">
     <div class="jd-card mb-3">
+      <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-shield-check" style="color:var(--brand-light)"></i>Credit Score</div></div>
+      <div class="jd-card-body" id="creditScoreCard">
+        <div class="text-center p-3"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+      </div>
+    </div>
+    <div class="jd-card mb-3">
       <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-person-fill" style="color:var(--brand-light)"></i>Personal Information</div></div>
       <div class="jd-card-body">
         <div class="detail-grid">
@@ -53,9 +59,36 @@
 {% endblock %}
 
 {% block extra_js %}<script>
+const BAND_COLORS = {
+  'Excellent': 'var(--brand-light)', 'Good': 'var(--brand-light)',
+  'Fair': 'var(--warning)', 'Poor': 'var(--danger)', 'High Risk': 'var(--danger)'
+};
+
+function renderCreditScore(cs) {
+  const el = document.getElementById('creditScoreCard');
+  if (!cs) { el.innerHTML = '<p class="text-muted small mb-0">Unavailable</p>'; return; }
+  const color = BAND_COLORS[cs.band] || 'var(--text-muted)';
+  const d = cs.details;
+  el.innerHTML = `
+    <div class="text-center mb-3">
+      <div style="font-size:40px;font-weight:700;color:${color};font-family:'Source Serif 4',serif;line-height:1">${cs.score}</div>
+      <div style="font-size:13px;font-weight:600;color:${color};margin-top:4px">${escapeHtml(cs.band)}</div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-item"><div class="detail-label">On-time Payments</div>
+        <div class="detail-value">${d.has_history ? (d.installments_due ? Math.round(100*d.installments_on_time/d.installments_due)+'%' : 'No installments due yet') : 'No loan history'}</div></div>
+      <div class="detail-item"><div class="detail-label">Currently Overdue</div>
+        <div class="detail-value">${d.installments_overdue} installment(s)${d.installments_overdue ? ' (oldest '+d.oldest_overdue_days+'d)' : ''}</div></div>
+      <div class="detail-item"><div class="detail-label">Loans Completed</div>
+        <div class="detail-value">${d.loans_completed}</div></div>
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);margin:10px 0 0">Internal rules-based score for triage only, not an automatic approval gate.</p>`;
+}
+
 async function load() {
   try {
     const data = await API.get('/clients/api/{{ client.id }}');
+    renderCreditScore(data.credit_score);
     const tbody = document.getElementById('loansTable');
     if (!data.loans.length) { tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><i class="bi bi-cash-coin"></i><p>No loans</p></div></td></tr>'; return; }
     tbody.innerHTML = data.loans.map(l=>`<tr>

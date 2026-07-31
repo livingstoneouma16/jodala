@@ -1264,8 +1264,59 @@ def _migration_0022_webauthn_credentials(conn):
     )
 
 
-MIGRATIONS = [
+def _migration_0023_campaigns(conn):
+    """Bulk SMS/email broadcast to a filtered group of members/clients (e.g.
+    "everyone overdue in Nairobi region"), on top of the existing one-off
+    per-user reminders/receipts in core/sms.py and core/mailer.py. Each row
+    is one broadcast attempt -- the filter used and a delivery summary, not
+    the individual messages (those still land in the existing sms_log /
+    email_log tables per recipient, so a failed send is traceable there)."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS campaigns (
+        id SERIAL PRIMARY KEY,
+        channel TEXT NOT NULL,
+        audience_type TEXT NOT NULL,
+        region TEXT,
+        overdue_only INTEGER DEFAULT 0,
+        message TEXT NOT NULL,
+        subject TEXT,
+        recipient_count INTEGER DEFAULT 0,
+        sent_count INTEGER DEFAULT 0,
+        failed_count INTEGER DEFAULT 0,
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL
+    )""")
 
+
+def _migration_0024_backups(conn):
+    """Scheduled/on-demand database backups (core/backup.py). One row per
+    backup attempt -- filename, size, and whether it made it somewhere
+    durable (see core/backup.py's module docstring for why local-disk-only
+    isn't good enough on Render/Fly.io/most PaaS hosts)."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS backups (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        size_bytes INTEGER DEFAULT 0,
+        status TEXT NOT NULL,
+        storage TEXT NOT NULL DEFAULT 'local',
+        error TEXT,
+        triggered_by TEXT NOT NULL DEFAULT 'scheduled',
+        created_at TEXT NOT NULL
+    )""")
+
+
+def _migration_0025_disbursement_date_on_restructure(conn):
+    """Loan restructuring and extension (rescheduling) previously left
+    loans.disbursement_date untouched -- correct, since neither action
+    disburses new cash -- but there was no way to record/correct the
+    disbursement date as part of either action (e.g. fixing a data-entry
+    error found while restructuring), and no snapshot of what it was at
+    the time. Adds an editable disbursement_date on loans.extend, plus a
+    before/after snapshot on loan_restructures for the restructure case."""
+    conn.execute("ALTER TABLE loan_restructures ADD COLUMN IF NOT EXISTS old_disbursement_date TEXT")
+    conn.execute("ALTER TABLE loan_restructures ADD COLUMN IF NOT EXISTS new_disbursement_date TEXT")
+
+
+MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
     (2, 'seed default settings/accounts', _migration_0002_seed_defaults),
@@ -1291,6 +1342,9 @@ MIGRATIONS = [
     (21, 'switch email delivery from Resend back to Gmail SMTP with an app password',
      _migration_0021_revert_to_gmail_smtp),
     (22, 'add webauthn_credentials table for fingerprint/passkey login', _migration_0022_webauthn_credentials),
+    (23, 'add campaigns table for bulk SMS/email broadcasts', _migration_0023_campaigns),
+    (24, 'add backups table for scheduled/on-demand database backups', _migration_0024_backups),
+    (25, 'add old/new disbursement_date snapshot columns to loan_restructures', _migration_0025_disbursement_date_on_restructure),
 ]
 
 

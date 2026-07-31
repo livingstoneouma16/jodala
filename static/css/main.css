@@ -161,6 +161,7 @@ body.section-cashbook   { --section-accent: #8C4A2E; } /* copper/sienna — was 
 body.section-reports    { --section-accent: #9C2F63; } /* berry/magenta — was #9333EA, no longer reads as the same purple as Members */
 body.section-users      { --section-accent: #1D6E96; } /* sky/cyan-blue — was #0369A1, distinct from Repayments' indigo */
 body.section-settings   { --section-accent: #52504A; } /* warm graphite — was #475569, warmed to match the paper/ink palette */
+body.section-campaigns  { --section-accent: #B0472E; } /* brick/signal red-orange — distinct from Loans' terracotta, reads as "outreach/broadcast" */
 
 [data-bs-theme="dark"] body.section-members    { --section-accent: #B99BE0; }
 [data-bs-theme="dark"] body.section-clients    { --section-accent: #6EC9B4; }
@@ -172,6 +173,7 @@ body.section-settings   { --section-accent: #52504A; } /* warm graphite — was 
 [data-bs-theme="dark"] body.section-reports    { --section-accent: #E091B5; }
 [data-bs-theme="dark"] body.section-users      { --section-accent: #7EC4E0; }
 [data-bs-theme="dark"] body.section-settings   { --section-accent: #B8B4A8; }
+[data-bs-theme="dark"] body.section-campaigns  { --section-accent: #E0906F; }
 
 body[class*="section-"] .breadcrumb-page,
 body[class*="section-"] .navbar-logo-icon,

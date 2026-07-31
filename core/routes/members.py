@@ -185,6 +185,9 @@ def get_member(member_id):
         loan_public({**dict(l), 'borrower_name': member_full_name(l)}) for l in loans
     ]
 
+    from core.credit_score import compute_credit_score
+    data['credit_score'] = compute_credit_score('member', member_id)
+
     savings = get_db().execute(
         """SELECT savings_accounts.*, savings_products.name AS product_name
            FROM savings_accounts

@@ -176,6 +176,10 @@ def get_client(client_id):
     data['loans'] = [
         loan_public({**dict(l), 'borrower_name': client_full_name(l)}) for l in loans
     ]
+
+    from core.credit_score import compute_credit_score
+    data['credit_score'] = compute_credit_score('client', client_id)
+
     return jsonify(data)
 
 

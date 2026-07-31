@@ -709,6 +709,40 @@ def delete_region(region_id):
     return jsonify({'message': 'Region deleted successfully'})
 
 
+# ==================== BACKUPS ====================
+
+@settings_bp.route('/api/backups', methods=['GET'])
+@login_required
+@role_required('admin')
+def list_backups():
+    from core.serializers import backup_public
+    rows = get_db().execute("SELECT * FROM backups ORDER BY created_at DESC LIMIT 30").fetchall()
+    return jsonify({'backups': [backup_public(b) for b in rows]})
+
+
+@settings_bp.route('/api/backups/run', methods=['POST'])
+@login_required
+@role_required('admin')
+def run_backup_now():
+    from core.backup import run_backup
+    result = run_backup(triggered_by=f"manual:{get_current_user()['username']}")
+    log_audit('RUN_BACKUP', 'backup', None, new_values=result)
+    if result['status'] != 'success':
+        return jsonify({'error': result.get('error') or 'Backup failed'}), 500
+    return jsonify({'message': 'Backup completed', **result})
+
+
+@settings_bp.route('/api/backups/<path:filename>/download', methods=['GET'])
+@login_required
+@role_required('admin')
+def download_backup(filename):
+    from core.backup import local_backup_path
+    path = local_backup_path(filename)
+    if not path:
+        return jsonify({'error': 'That backup is no longer on this instance\'s disk (ephemeral filesystem -- see Settings note), or it was uploaded to S3 only'}), 404
+    return send_file(path, as_attachment=True, download_name=os.path.basename(path))
+
+
 # ==================== NOTIFICATIONS ====================
 
 @notifications_bp.route('/')

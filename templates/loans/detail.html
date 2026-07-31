@@ -256,7 +256,10 @@
       </div>
       <div class="modal-body">
         <label class="form-label">Additional Periods</label>
-        <input type="number" class="form-control" id="extPeriods" min="1" max="12" value="1" />
+        <input type="number" class="form-control mb-2" id="extPeriods" min="1" max="12" value="1" />
+        <label class="form-label">Disbursement Date</label>
+        <input type="date" class="form-control" id="extDisbursementDate" value="{{ loan.disbursement_date or '' }}" max="{{ today }}" />
+        <div class="form-text" style="font-size:11px">Only change this if correcting a data-entry error — it doesn't move any repayment due dates.</div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -333,6 +336,10 @@
               <option value="weekly" {% if loan.repayment_frequency == 'weekly' %}selected{% endif %}>Weekly</option>
               <option value="monthly" {% if loan.repayment_frequency == 'monthly' %}selected{% endif %}>Monthly</option>
             </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label" style="font-size:11.5px">Disbursement Date</label>
+            <input type="date" class="form-control form-control-sm" id="restructureDisbursementDate" value="{{ loan.disbursement_date or '' }}" max="{{ today }}" />
           </div>
         </div>
       </div>
@@ -522,8 +529,9 @@ function showExtendModal() { new bootstrap.Modal(document.getElementById('extend
 
 async function extendLoan() {
   const periods = parseInt(document.getElementById('extPeriods').value);
+  const disbDate = document.getElementById('extDisbursementDate').value;
   try {
-    await API.post('/loans/api/{{ loan.id }}/extend', { extension_periods: periods });
+    await API.post('/loans/api/{{ loan.id }}/extend', { extension_periods: periods, new_disbursement_date: disbDate });
     Toast.success(`Loan extended by ${periods} period(s)`);
     setTimeout(() => location.reload(), 1200);
   } catch(e) { Toast.error(e.message); }
@@ -553,6 +561,7 @@ async function restructureLoan() {
   const rate = parseFloat(document.getElementById('restructureRate').value);
   const interestType = document.getElementById('restructureInterestType').value;
   const frequency = document.getElementById('restructureFrequency').value;
+  const disbDate = document.getElementById('restructureDisbursementDate').value;
 
   const btn = document.getElementById('restructureBtn');
   setLoading(btn, true);
@@ -563,6 +572,7 @@ async function restructureLoan() {
       new_interest_rate: rate,
       new_interest_type: interestType,
       new_repayment_frequency: frequency,
+      new_disbursement_date: disbDate,
     });
     Toast.success('Loan restructured');
     setTimeout(() => location.reload(), 1200);

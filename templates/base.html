@@ -33,7 +33,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
   {% block extra_css %}{% endblock %}
 </head>
-<body class="{% if request.endpoint %}{% if 'members' in request.endpoint %}section-members{% elif 'clients' in request.endpoint %}section-clients{% elif 'loans' in request.endpoint %}section-loans{% elif 'repayments' in request.endpoint %}section-repayments{% elif 'savings' in request.endpoint %}section-savings{% elif request.endpoint == 'accounting.cashbook' %}section-cashbook{% elif 'accounting' in request.endpoint %}section-accounting{% elif 'reports' in request.endpoint %}section-reports{% elif 'users' in request.endpoint %}section-users{% elif 'settings' in request.endpoint %}section-settings{% endif %}{% endif %}" data-idle-timeout-minutes="{{ idle_timeout_minutes }}">
+<body class="{% if request.endpoint %}{% if 'members' in request.endpoint %}section-members{% elif 'clients' in request.endpoint %}section-clients{% elif 'loans' in request.endpoint %}section-loans{% elif 'repayments' in request.endpoint %}section-repayments{% elif 'savings' in request.endpoint %}section-savings{% elif request.endpoint == 'accounting.cashbook' %}section-cashbook{% elif 'accounting' in request.endpoint %}section-accounting{% elif 'reports' in request.endpoint %}section-reports{% elif 'campaigns' in request.endpoint %}section-campaigns{% elif 'users' in request.endpoint %}section-users{% elif 'campaigns' in request.endpoint %}section-campaigns{% elif 'settings' in request.endpoint %}section-settings{% endif %}{% endif %}" data-idle-timeout-minutes="{{ idle_timeout_minutes }}">
 
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">
@@ -97,6 +97,9 @@
     <a href="{{ url_for('notifications.index') }}" class="nav-link-item {% if request.endpoint and 'notifications' in request.endpoint %}active{% endif %}">
       <i class="bi bi-bell-fill"></i><span>Notifications</span>
       <span class="badge-count" id="notifBadge" style="display:none"></span>
+    </a>
+    <a href="{{ url_for('campaigns.index') }}" class="nav-link-item {% if request.endpoint and 'campaigns' in request.endpoint %}active{% endif %}">
+      <i class="bi bi-megaphone-fill"></i><span>Campaigns</span>
     </a>
     <a href="{{ url_for('users.index') }}" class="nav-link-item {% if request.endpoint and 'users' in request.endpoint %}active{% endif %}">
       <i class="bi bi-shield-lock-fill"></i><span>Users</span>

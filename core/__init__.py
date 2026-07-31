@@ -203,6 +203,7 @@ def create_app():
     from core.routes.users import users_bp
 
     from core.routes.mpesa import mpesa_bp
+    from core.routes.campaigns import campaigns_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -218,6 +219,7 @@ def create_app():
     app.register_blueprint(documents_bp, url_prefix='/documents')
     app.register_blueprint(users_bp, url_prefix='/users')
     app.register_blueprint(mpesa_bp, url_prefix='/mpesa')
+    app.register_blueprint(campaigns_bp, url_prefix='/campaigns')
 
     # Root redirect
     from flask import redirect, url_for
