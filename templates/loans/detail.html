@@ -29,6 +29,7 @@
     <button class="btn btn-info btn-sm" onclick="showExtendModal()"><i class="bi bi-calendar-plus me-1"></i>Extend</button>
     {% if user and user.role in ('admin', 'loan_officer') %}
     <button class="btn btn-sm" style="background:#7c3aed;border:1px solid #6d28d9;color:#fff" onclick="showRestructureModal()"><i class="bi bi-arrow-repeat me-1"></i>Restructure</button>
+    <button class="btn btn-sm" style="background:#0f766e;border:1px solid #0d5f59;color:#fff" onclick="showRescheduleModal()"><i class="bi bi-calendar-week me-1"></i>Reschedule</button>
     {% endif %}
     {% if user and user.role == 'admin' %}
     <button class="btn btn-danger btn-sm" onclick="showWriteOffModal()"><i class="bi bi-x-octagon me-1"></i>Write Off</button>
@@ -296,6 +297,38 @@
     </div>
   </div>
 </div>
+<!-- Reschedule Modal -->
+<div class="modal fade" id="rescheduleModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Reschedule Due Dates</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info" style="font-size:12px">
+          <i class="bi bi-info-circle me-1"></i>
+          Shifts every unpaid installment's due date by a fixed number of days.
+          No interest, principal, or totals change -- unlike Restructure, which
+          re-amortizes remaining principal and produces a new interest figure.
+        </div>
+        <label class="form-label">Reason <span class="text-danger">*</span></label>
+        <textarea class="form-control mb-2" id="rescheduleReason" rows="2" placeholder="Why are these due dates being rescheduled?"></textarea>
+        <label class="form-label" style="font-size:11.5px">New Due Date for Next Installment</label>
+        <input type="date" class="form-control form-control-sm mb-2" id="rescheduleNewDate" onchange="syncRescheduleDays()" />
+        <label class="form-label" style="font-size:11.5px">Days to shift</label>
+        <input type="number" class="form-control form-control-sm" id="rescheduleDays" value="30" oninput="syncRescheduleDate()" />
+        <div style="font-size:11px;color:var(--text-muted)" class="mt-1">Set either field -- they stay in sync. Use a negative number of days to pull dates earlier.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm" style="background:#0f766e;border:1px solid #0d5f59;color:#fff" id="rescheduleBtn" onclick="rescheduleLoan()">
+          <i class="bi bi-calendar-week me-1"></i>Reschedule
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- Restructure Modal -->
 <div class="modal fade" id="restructureModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -547,6 +580,55 @@ function showTopupModal() {
       setTimeout(() => window.location.href = `/loans/${data.loan.id}`, 1200);
     } catch(e) { Toast.error(e.message); }
   });
+}
+
+function showRescheduleModal() {
+  document.getElementById('rescheduleReason').value = '';
+  document.getElementById('rescheduleDays').value = 30;
+  const nextDue = (loanData.schedule || []).find(s => s.status === 'pending' || s.status === 'partial');
+  document.getElementById('rescheduleModal').dataset.nextDueDate = nextDue ? nextDue.due_date : '';
+  if (nextDue) {
+    const d = new Date(nextDue.due_date + 'T00:00:00');
+    d.setDate(d.getDate() + 30);
+    document.getElementById('rescheduleNewDate').value = d.toISOString().split('T')[0];
+  } else {
+    document.getElementById('rescheduleNewDate').value = '';
+  }
+  new bootstrap.Modal(document.getElementById('rescheduleModal')).show();
+}
+
+function syncRescheduleDays() {
+  const nextDueDate = document.getElementById('rescheduleModal').dataset.nextDueDate;
+  const newDate = document.getElementById('rescheduleNewDate').value;
+  if (!nextDueDate || !newDate) return;
+  const days = Math.round((new Date(newDate) - new Date(nextDueDate)) / 86400000);
+  document.getElementById('rescheduleDays').value = days;
+}
+
+function syncRescheduleDate() {
+  const nextDueDate = document.getElementById('rescheduleModal').dataset.nextDueDate;
+  const days = parseInt(document.getElementById('rescheduleDays').value);
+  if (!nextDueDate || isNaN(days)) return;
+  const d = new Date(nextDueDate + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  document.getElementById('rescheduleNewDate').value = d.toISOString().split('T')[0];
+}
+
+async function rescheduleLoan() {
+  const reason = document.getElementById('rescheduleReason').value.trim();
+  if (!reason) { Toast.warning('Please provide a reason for rescheduling'); return; }
+  const days = parseInt(document.getElementById('rescheduleDays').value);
+  if (!days) { Toast.warning('Enter a non-zero number of days'); return; }
+
+  const btn = document.getElementById('rescheduleBtn');
+  setLoading(btn, true);
+  try {
+    await API.post('/loans/api/{{ loan.id }}/reschedule', { days, reason });
+    Toast.success('Loan rescheduled -- no interest added');
+    setTimeout(() => location.reload(), 1200);
+  } catch(e) {
+    Toast.error(e.message); setLoading(btn, false);
+  }
 }
 
 function showRestructureModal() {
