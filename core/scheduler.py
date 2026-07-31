@@ -1,18 +1,20 @@
 """
-In-process daily scheduler for overdue-loan reminder emails.
+In-process daily scheduler for background jobs: overdue-loan reminder
+emails, and database backups.
 
 `send_overdue_reminders.py` (repo root) does the same job but relies on an
 *external* scheduler (cron, Windows Task Scheduler, a systemd timer, a
 platform "Cron Job" service) to actually invoke it -- and none of Render,
 Fly.io, Railway, or docker-compose are configured to do that here, so it
 was silently never running. Rather than pick one platform's cron mechanism
-(which the other three wouldn't get), this runs the same job as a
-background thread inside the web process itself via APScheduler, so it
-works identically no matter where/how this app is deployed.
+(which the other three wouldn't get), this runs both jobs as background
+threads inside the web process itself via APScheduler, so it works
+identically no matter where/how this app is deployed.
 
-Started once from app.py (see the guard there for why). Safe to disable
-with ENABLE_OVERDUE_SCHEDULER=false if you'd rather drive
-send_overdue_reminders.py from your own external cron instead.
+Started once from app.py (see the guard there for why). Each job can be
+disabled independently -- see ENABLE_OVERDUE_SCHEDULER and
+ENABLE_BACKUP_SCHEDULER below -- if you'd rather drive either from your
+own external cron instead.
 """
 import logging
 import os
@@ -66,4 +68,33 @@ def start_scheduler(app):
     _scheduler.start()
     logger.info('Overdue-reminder scheduler started (daily at %02d:%02d %s).',
                 hour, minute, os.getenv('SCHEDULER_TIMEZONE', 'UTC'))
+
+    if os.getenv('ENABLE_BACKUP_SCHEDULER', 'true').strip().lower() in ('1', 'true', 'yes'):
+        backup_hour = int(os.getenv('BACKUP_HOUR', '2'))
+        backup_minute = int(os.getenv('BACKUP_MINUTE', '0'))
+
+        def _run_backup_job():
+            with app.app_context():
+                from core.backup import run_backup
+                try:
+                    result = run_backup(triggered_by='scheduled')
+                    logger.info('Database backup (scheduled): %s', result)
+                except Exception:
+                    # Same reasoning as the reminders job above -- a failed
+                    # backup attempt shouldn't kill the scheduler thread,
+                    # it'll retry at the next scheduled time.
+                    logger.exception('Scheduled database backup failed')
+
+        _scheduler.add_job(
+            _run_backup_job,
+            trigger=CronTrigger(hour=backup_hour, minute=backup_minute),
+            id='database_backup',
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+        logger.info('Database backup scheduler started (daily at %02d:%02d %s).',
+                    backup_hour, backup_minute, os.getenv('SCHEDULER_TIMEZONE', 'UTC'))
+    else:
+        logger.info('Database backup scheduler disabled via ENABLE_BACKUP_SCHEDULER.')
+
     return _scheduler

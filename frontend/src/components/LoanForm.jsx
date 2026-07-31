@@ -10,22 +10,30 @@ export default function LoanForm() {
   const navigate = useNavigate()
   const [products, setProducts] = useState([])
   const [members, setMembers] = useState([])
+  const [clients, setClients] = useState([])
   const [form, setForm] = useState({
-    product_id: '', borrower_type: 'member', member_id: '', principal_amount: '', term: '', purpose: '',
+    product_id: '', borrower_type: 'member', member_id: '', client_id: '', principal_amount: '', term: '', purpose: '',
   })
   const [quote, setQuote] = useState(null)
   const [quoteError, setQuoteError] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     async function load() {
-      const [productData, memberData] = await Promise.all([
-        api.get('/settings/api/loan-products'),
-        api.get('/members/api', { per_page: 200, status: 'active' }),
-      ])
-      setProducts(productData.filter((p) => p.is_active))
-      setMembers(memberData.members)
+      try {
+        const [productData, memberData, clientData] = await Promise.all([
+          api.get('/settings/api/loan-products'),
+          api.get('/members/api', { per_page: 200, status: 'active' }),
+          api.get('/clients/api', { per_page: 200, status: 'active' }),
+        ])
+        setProducts(productData.filter((p) => p.is_active))
+        setMembers(memberData.members)
+        setClients(clientData.clients)
+      } catch (err) {
+        setLoadError(err.message || 'Could not load products or members.')
+      }
     }
     load()
   }, [])
@@ -66,6 +74,7 @@ export default function LoanForm() {
         product_id: Number(form.product_id),
         borrower_type: form.borrower_type,
         member_id: form.borrower_type === 'member' ? Number(form.member_id) : undefined,
+        client_id: form.borrower_type === 'client' ? Number(form.client_id) : undefined,
         principal_amount: Number(form.principal_amount),
         term: Number(form.term),
         purpose: form.purpose,
@@ -87,6 +96,7 @@ export default function LoanForm() {
         </div>
       </div>
 
+      {loadError && <div className="banner-error">{loadError}</div>}
       {submitError && <div className="banner-error">{submitError}</div>}
 
       <div className="ledger-card" style={{ padding: 24, maxWidth: 640 }}>
@@ -109,14 +119,38 @@ export default function LoanForm() {
           </div>
 
           <div className="field">
-            <label htmlFor="member">Member</label>
-            <select id="member" value={form.member_id} onChange={(e) => update('member_id', e.target.value)} required>
-              <option value="">Select a member…</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>{m.full_name} ({m.member_number})</option>
-              ))}
+            <label htmlFor="borrower_type">Borrower type</label>
+            <select
+              id="borrower_type"
+              value={form.borrower_type}
+              onChange={(e) => setForm((f) => ({ ...f, borrower_type: e.target.value, member_id: '', client_id: '' }))}
+            >
+              <option value="member">Member</option>
+              <option value="client">Client</option>
             </select>
           </div>
+
+          {form.borrower_type === 'member' ? (
+            <div className="field">
+              <label htmlFor="member">Member</label>
+              <select id="member" value={form.member_id} onChange={(e) => update('member_id', e.target.value)} required>
+                <option value="">Select a member…</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>{m.full_name} ({m.member_number})</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="field">
+              <label htmlFor="client">Client</label>
+              <select id="client" value={form.client_id} onChange={(e) => update('client_id', e.target.value)} required>
+                <option value="">Select a client…</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.full_name} ({c.client_number})</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="field-row">
             <div className="field">

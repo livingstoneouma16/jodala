@@ -39,7 +39,7 @@
     </div>
     <div class="col-12 col-lg-6">
       <div class="jd-card h-100">
-        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-bar-chart" style="color:var(--danger)"></i>Expenses by Category</div></div>
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-bar-chart" style="color:var(--danger-ink)"></i>Expenses by Category</div></div>
         <div class="jd-card-body"><canvas id="expenseChart" style="max-height:220px"></canvas></div>
       </div>
     </div>
@@ -50,7 +50,7 @@
 <div id="incomeTab" class="d-none">
   <div class="data-table-wrapper">
     <div class="data-table-header"><div class="data-table-title">Income Records</div>
-      <div id="incomeTotalDisplay" style="font-weight:700;color:var(--brand-mid)"></div></div>
+      <div id="incomeTotalDisplay" style="font-weight:700;color:var(--brand-ink)"></div></div>
     <div class="table-responsive"><table class="table mb-0">
       <thead><tr><th>Reference</th><th>Description</th><th>Category</th><th>Amount</th><th>Method</th><th>Date</th></tr></thead>
       <tbody id="incomeTable"><tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
@@ -196,14 +196,14 @@ async function loadPL() {
     if (data.income.length) {
       new Chart(document.getElementById('incomeChart').getContext('2d'), {
         type:'doughnut',
-        data:{ labels:data.income.map(i=>i.category), datasets:[{data:data.income.map(i=>i.amount), backgroundColor:['#52B788','#4895EF','#E9C46A','#F4A261']}] },
+        data:{ labels:data.income.map(i=>i.category), datasets:[{data:data.income.map(i=>i.amount), backgroundColor:['#3F79C9','#4895EF','#E9C46A','#F4A261']}] },
         options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
       });
     }
     if (data.expenses.length) {
       new Chart(document.getElementById('expenseChart').getContext('2d'), {
         type:'doughnut',
-        data:{ labels:data.expenses.map(e=>e.category), datasets:[{data:data.expenses.map(e=>e.amount), backgroundColor:['#E63946','#F4A261','#4895EF','#7C3AED','#0F766E','#9CA3AF']}] },
+        data:{ labels:data.expenses.map(e=>e.category), datasets:[{data:data.expenses.map(e=>e.amount), backgroundColor:['#E63946','#F4A261','#4895EF','#7C3AED','#0F2440','#9CA3AF']}] },
         options:{ responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
       });
     }
@@ -218,10 +218,10 @@ async function loadIncome() {
     document.getElementById('incomeTotalDisplay').textContent = 'Total: ' + fmtCurrency(data.total_amount);
     if (!data.income.length) { tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><i class="bi bi-receipt"></i><p>No income recorded</p></div></td></tr>'; return; }
     tbody.innerHTML = data.income.map(i=>`<tr>
-      <td style="font-weight:600;font-size:12px;color:var(--brand-mid)">${escapeHtml(i.reference)}</td>
+      <td style="font-weight:600;font-size:12px;color:var(--brand-ink)">${escapeHtml(i.reference)}</td>
       <td style="font-size:13px">${escapeHtml(i.description)}</td>
-      <td><span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px">${escapeHtml(i.category)}</span></td>
-      <td style="font-weight:700;color:var(--brand-mid)">${fmtCurrency(i.amount)}</td>
+      <td><span class="badge" style="background:var(--brand-pale);color:var(--brand-ink);font-size:10px">${escapeHtml(i.category)}</span></td>
+      <td style="font-weight:700;color:var(--brand-ink)">${fmtCurrency(i.amount)}</td>
       <td style="font-size:12px;text-transform:capitalize">${escapeHtml(i.payment_method.replace('_',' '))}</td>
       <td style="font-size:12px;color:var(--text-muted)">${fmtDate(i.income_date)}</td>
     </tr>`).join('');
@@ -235,10 +235,10 @@ async function loadExpenses() {
     const data = await API.get('/accounting/api/expenses?per_page=50');
     if (!data.expenses.length) { tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><i class="bi bi-receipt-cutoff"></i><p>No expenses recorded</p></div></td></tr>'; return; }
     tbody.innerHTML = data.expenses.map(e=>`<tr>
-      <td style="font-weight:600;font-size:12px;color:var(--danger)">${escapeHtml(e.reference)}</td>
+      <td style="font-weight:600;font-size:12px;color:var(--danger-ink)">${escapeHtml(e.reference)}</td>
       <td style="font-size:13px">${escapeHtml(e.description)}</td>
       <td><span class="badge" style="background:#FFE4E6;color:#991B1B;font-size:10px">${escapeHtml(e.category)}</span></td>
-      <td style="font-weight:700;color:var(--danger)">${fmtCurrency(e.amount)}</td>
+      <td style="font-weight:700;color:var(--danger-ink)">${fmtCurrency(e.amount)}</td>
       <td style="font-size:12px">${escapeHtml(e.vendor||'—')}</td>
       <td style="font-size:12px;color:var(--text-muted)">${fmtDate(e.expense_date)}</td>
     </tr>`).join('');
@@ -346,13 +346,13 @@ async function loadTrialBalance() {
       <td style="font-size:12px;font-weight:600">${escapeHtml(a.code)}</td>
       <td style="font-size:13px">${escapeHtml(a.name)}</td>
       <td><span class="badge" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted);font-size:10px">${escapeHtml(a.type)}</span></td>
-      <td style="font-weight:600;color:var(--brand-mid)">${a.debit > 0 ? fmtCurrency(a.debit) : '—'}</td>
-      <td style="font-weight:600;color:var(--danger)">${a.credit > 0 ? fmtCurrency(a.credit) : '—'}</td>
+      <td style="font-weight:600;color:var(--brand-ink)">${a.debit > 0 ? fmtCurrency(a.debit) : '—'}</td>
+      <td style="font-weight:600;color:var(--danger-ink)">${a.credit > 0 ? fmtCurrency(a.credit) : '—'}</td>
     </tr>`).join('');
     document.getElementById('trialFoot').innerHTML = `<tr style="background:var(--surface-2);font-weight:700">
       <td colspan="3">TOTALS</td>
-      <td style="color:var(--brand-mid)">${fmtCurrency(data.total_debit)}</td>
-      <td style="color:var(--danger)">${fmtCurrency(data.total_credit)}</td>
+      <td style="color:var(--brand-ink)">${fmtCurrency(data.total_debit)}</td>
+      <td style="color:var(--danger-ink)">${fmtCurrency(data.total_credit)}</td>
     </tr>`;
   } catch(e) {}
 }

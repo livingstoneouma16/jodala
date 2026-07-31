@@ -19,8 +19,8 @@
 </div></div>
 <div class="data-table-wrapper">
   <div class="data-table-header">
-    <div class="data-table-title">Transactions <span id="totalBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-dark)"></span></div>
-    <div id="totalAmount" style="font-weight:700;color:var(--brand-mid)"></div>
+    <div class="data-table-title">Transactions <span id="totalBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-ink)"></span></div>
+    <div id="totalAmount" style="font-weight:700;color:var(--brand-ink)"></div>
   </div>
   <div class="table-responsive"><table class="table mb-0">
     <thead><tr><th>Receipt No.</th><th>Loan No.</th><th>Amount</th><th>Principal</th><th>Interest</th><th>Method</th><th>Date</th><th>Actions</th></tr></thead>
@@ -55,7 +55,7 @@ async function loadRepayments(page=1) {
     const total = data.repayments.reduce((s,r)=>s+r.amount, 0);
     document.getElementById('totalAmount').textContent = 'Total: ' + fmtCurrency(total);
     tbody.innerHTML = data.repayments.map(r=>`<tr>
-      <td><span style="font-weight:600;font-size:12px;color:var(--brand-mid)">${escapeHtml(r.receipt_number)}</span></td>
+      <td><span style="font-weight:600;font-size:12px;color:var(--brand-ink)">${escapeHtml(r.receipt_number)}</span></td>
       <td style="font-size:12px">${escapeHtml(r.loan_number)}</td>
       <td style="font-weight:700;color:var(--brand-light)">${fmtCurrency(r.amount)}</td>
       <td style="font-size:12px">${fmtCurrency(r.principal_portion)}</td>

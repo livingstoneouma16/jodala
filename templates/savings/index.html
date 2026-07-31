@@ -29,7 +29,7 @@
     </div>
   </div></div>
   <div class="data-table-wrapper">
-    <div class="data-table-header"><div class="data-table-title">Savings Accounts <span id="accBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-dark)"></span></div></div>
+    <div class="data-table-header"><div class="data-table-title">Savings Accounts <span id="accBadge" class="badge ms-2" style="background:var(--brand-pale);color:var(--brand-ink)"></span></div></div>
     <div class="table-responsive"><table class="table mb-0">
       <thead><tr><th>Account No.</th><th>Member</th><th>Product</th><th>Balance</th><th>Status</th><th>Opened</th><th>Actions</th></tr></thead>
       <tbody id="accountsTable"><tr><td colspan="7" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
@@ -101,7 +101,7 @@
         <div class="p-3 rounded" style="background:#E9FBF0;border:1px solid #A7F3D0">
           <div class="d-flex align-items-center gap-2 mb-2">
             <i class="bi bi-phone" style="color:#059669"></i>
-            <div style="font-size:12.5px;font-weight:600;color:#065F46">Or collect via M-Pesa STK Push</div>
+            <div style="font-size:12.5px;font-weight:600;color:#1B3A63">Or collect via M-Pesa STK Push</div>
           </div>
           <div class="row g-2 align-items-end">
             <div class="col-8">
@@ -162,13 +162,13 @@ async function loadAccounts(page=1) {
     document.getElementById('accBadge').textContent = data.total + ' accounts';
     if (!data.accounts.length) { tbody.innerHTML='<tr><td colspan="7"><div class="empty-state"><i class="bi bi-piggy-bank"></i><p>No savings accounts</p></div></td></tr>'; return; }
     tbody.innerHTML = data.accounts.map(a=>`<tr>
-      <td><span style="font-weight:600;font-size:12px;color:var(--brand-mid)">${escapeHtml(a.account_number)}</span></td>
+      <td><span style="font-weight:600;font-size:12px;color:var(--brand-ink)">${escapeHtml(a.account_number)}</span></td>
       <td style="font-size:13px">${escapeHtml(a.member_name)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(a.product_name)}</td>
-      <td style="font-weight:700;color:var(--brand-mid)">${fmtCurrency(a.balance)}</td>
+      <td style="font-weight:700;color:var(--brand-ink)">${fmtCurrency(a.balance)}</td>
       <td>${statusPill(a.status)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${fmtDate(a.opened_at)}</td>
-      <td><button onclick="prefillDeposit('${jsAttr(a.account_number)}')" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--brand-pale);border:1px solid var(--brand-light);color:var(--brand-dark)" title="Deposit"><i class="bi bi-plus"></i></button></td>
+      <td><button onclick="prefillDeposit('${jsAttr(a.account_number)}')" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--brand-pale);border:1px solid var(--brand-light);color:var(--brand-ink)" title="Deposit"><i class="bi bi-plus"></i></button></td>
     </tr>`).join('');
     renderPagination('accPageBtns', data.current_page, data.pages, loadAccounts);
   } catch(e) { Toast.error(e.message); }
@@ -180,9 +180,9 @@ async function loadTransactions() {
   try {
     const data = await API.get('/savings/api/transactions?per_page=50');
     if (!data.transactions.length) { tbody.innerHTML='<tr><td colspan="7"><div class="empty-state"><i class="bi bi-arrow-repeat"></i><p>No transactions</p></div></td></tr>'; return; }
-    const typeColor = {deposit:'var(--brand-light)',withdrawal:'var(--danger)',interest:'var(--info)'};
+    const typeColor = {deposit:'var(--brand-light)',withdrawal:'var(--danger-ink)',interest:'var(--info-ink)'};
     tbody.innerHTML = data.transactions.map(t=>`<tr>
-      <td style="font-size:12px;font-weight:600;color:var(--brand-mid)">${escapeHtml(t.transaction_number)}</td>
+      <td style="font-size:12px;font-weight:600;color:var(--brand-ink)">${escapeHtml(t.transaction_number)}</td>
       <td style="font-size:12px">${escapeHtml(t.account_number)}</td>
       <td><span style="font-size:11px;font-weight:600;color:${typeColor[t.transaction_type]||'var(--text-muted)'}">▲ ${escapeHtml(String(t.transaction_type).toUpperCase())}</span></td>
       <td style="font-weight:700;color:${typeColor[t.transaction_type]||'var(--text)'}">${t.transaction_type==='withdrawal'?'-':'+'} ${fmtCurrency(t.amount)}</td>

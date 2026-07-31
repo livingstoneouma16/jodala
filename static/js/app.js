@@ -63,7 +63,7 @@ const Toast = {
   show(message, type = 'info', duration = 4000) {
     const icons = { success: 'bi-check-circle-fill', error: 'bi-x-circle-fill',
                     warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' };
-    const colors = { success: '#52B788', error: '#E63946', warning: '#F4A261', info: '#4895EF' };
+    const colors = { success: '#3F79C9', error: '#E63946', warning: '#F4A261', info: '#4895EF' };
 
     const toast = document.createElement('div');
     toast.className = `jd-toast ${type}`;
@@ -163,13 +163,14 @@ function initTheme() {
 
   const current = localStorage.getItem('jd_theme') || 'light';
   document.documentElement.setAttribute('data-bs-theme', current);
-  icon.className = current === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+  if (icon) icon.className = current === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
 
   btn.addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-bs-theme', next);
-    icon.className = next === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+    if (icon) icon.className = next === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
     localStorage.setItem('jd_theme', next);
+    document.dispatchEvent(new CustomEvent('jd:themechange', { detail: { theme: next } }));
   });
 }
 
@@ -307,7 +308,7 @@ async function loadNotifications() {
       } else {
         const typeIcon = { info: 'bi-info-circle', warning: 'bi-exclamation-triangle',
                            alert: 'bi-bell', success: 'bi-check-circle' };
-        const typeColor = { info: '#4895EF', warning: '#F4A261', alert: '#E63946', success: '#52B788' };
+        const typeColor = { info: '#4895EF', warning: '#F4A261', alert: '#E63946', success: '#3F79C9' };
         list.innerHTML = data.map(n => `
           <div class="d-flex gap-2 p-3 border-bottom" style="font-size:12px">
             <i class="bi ${typeIcon[n.notification_type] || 'bi-bell'}" style="color:${typeColor[n.notification_type] || '#6B8070'};font-size:16px;flex-shrink:0;margin-top:1px"></i>

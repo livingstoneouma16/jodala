@@ -34,7 +34,7 @@ export default function App() {
             <Route path="savings" element={<SavingsAccounts />} />
             <Route path="repayments" element={<Repayments />} />
           </Route>
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

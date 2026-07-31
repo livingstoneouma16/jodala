@@ -5,12 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}Jodala Microfinance{% endblock %}</title>
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
-  <meta name="theme-color" content="#123C31" />
+  <meta name="theme-color" content="#0F2440" />
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" />
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Jodala" />
+  <script>
+    /* Apply the saved preference before stylesheets paint, preventing a
+       light-mode flash when a returning user has chosen dark mode. */
+    (function () {
+      try {
+        document.documentElement.setAttribute(
+          'data-bs-theme',
+          localStorage.getItem('jd_theme') || 'light'
+        );
+      } catch (error) {
+        document.documentElement.setAttribute('data-bs-theme', 'light');
+      }
+    }());
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/font/bootstrap-icons.min.css') }}" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -19,7 +33,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
   {% block extra_css %}{% endblock %}
 </head>
-<body data-idle-timeout-minutes="{{ idle_timeout_minutes }}">
+<body class="{% if request.endpoint %}{% if 'members' in request.endpoint %}section-members{% elif 'clients' in request.endpoint %}section-clients{% elif 'loans' in request.endpoint %}section-loans{% elif 'repayments' in request.endpoint %}section-repayments{% elif 'savings' in request.endpoint %}section-savings{% elif request.endpoint == 'accounting.cashbook' %}section-cashbook{% elif 'accounting' in request.endpoint %}section-accounting{% elif 'reports' in request.endpoint %}section-reports{% elif 'campaigns' in request.endpoint %}section-campaigns{% elif 'users' in request.endpoint %}section-users{% elif 'campaigns' in request.endpoint %}section-campaigns{% elif 'settings' in request.endpoint %}section-settings{% endif %}{% endif %}" data-idle-timeout-minutes="{{ idle_timeout_minutes }}">
 
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">
@@ -83,6 +97,9 @@
     <a href="{{ url_for('notifications.index') }}" class="nav-link-item {% if request.endpoint and 'notifications' in request.endpoint %}active{% endif %}">
       <i class="bi bi-bell-fill"></i><span>Notifications</span>
       <span class="badge-count" id="notifBadge" style="display:none"></span>
+    </a>
+    <a href="{{ url_for('campaigns.index') }}" class="nav-link-item {% if request.endpoint and 'campaigns' in request.endpoint %}active{% endif %}">
+      <i class="bi bi-megaphone-fill"></i><span>Campaigns</span>
     </a>
     <a href="{{ url_for('users.index') }}" class="nav-link-item {% if request.endpoint and 'users' in request.endpoint %}active{% endif %}">
       <i class="bi bi-shield-lock-fill"></i><span>Users</span>

@@ -108,6 +108,18 @@ def create_app():
     _cookie_secure_default = 'true' if app.config['ENV_NAME'] == 'production' else 'false'
     app.config['COOKIE_SECURE'] = os.getenv('COOKIE_SECURE', _cookie_secure_default).strip().lower() in ('1', 'true', 'yes')
 
+    # WebAuthn (fingerprint/passkey login) needs the exact domain the app is
+    # served on. WEBAUTHN_RP_ID must be a bare domain with no scheme/port
+    # (e.g. "app.jodala.co", or "localhost" for local dev -- browsers allow
+    # WebAuthn on localhost over plain HTTP as a special case, but any real
+    # domain needs HTTPS). WEBAUTHN_ORIGIN is the full origin the browser
+    # actually navigates to (scheme + domain + optional port); it must match
+    # exactly what's in the address bar or the browser will refuse the
+    # ceremony. Both default to sane localhost values for local dev.
+    app.config['WEBAUTHN_RP_ID'] = os.getenv('WEBAUTHN_RP_ID', 'localhost')
+    app.config['WEBAUTHN_RP_NAME'] = os.getenv('WEBAUTHN_RP_NAME', 'Jodala Microfinance')
+    app.config['WEBAUTHN_ORIGIN'] = os.getenv('WEBAUTHN_ORIGIN', 'http://localhost:5000')
+
     # Jinja filters
     app.jinja_env.filters['fmtdate'] = fmtdate
 
@@ -191,6 +203,7 @@ def create_app():
     from core.routes.users import users_bp
 
     from core.routes.mpesa import mpesa_bp
+    from core.routes.campaigns import campaigns_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -206,6 +219,7 @@ def create_app():
     app.register_blueprint(documents_bp, url_prefix='/documents')
     app.register_blueprint(users_bp, url_prefix='/users')
     app.register_blueprint(mpesa_bp, url_prefix='/mpesa')
+    app.register_blueprint(campaigns_bp, url_prefix='/campaigns')
 
     # Root redirect
     from flask import redirect, url_for

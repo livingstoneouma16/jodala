@@ -25,6 +25,7 @@ Run with:
     pytest
 """
 import os
+import subprocess
 import sys
 import uuid
 from datetime import date
@@ -32,6 +33,7 @@ from datetime import date
 import pytest
 from pytest_postgresql import factories
 from pytest_postgresql.janitor import DatabaseJanitor
+from pytest_postgresql.executor import PostgreSQLExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 
@@ -44,7 +46,53 @@ os.environ.setdefault('ENABLE_OVERDUE_SCHEDULER', 'false')
 # see it.
 os.environ.setdefault('TESTING', '1')
 
-postgresql_proc = factories.postgresql_proc()
+
+_postgresql_executor_init = PostgreSQLExecutor.__init__
+
+
+def _windows_safe_postgresql_executor_init(self, *args, **kwargs):
+    _postgresql_executor_init(self, *args, **kwargs)
+    if os.name == 'nt':
+        self._envvars = {**os.environ, **self._envvars}
+
+
+PostgreSQLExecutor.__init__ = _windows_safe_postgresql_executor_init
+
+if os.name == 'nt':
+    PostgreSQLExecutor.BASE_PROC_START_COMMAND = (
+        '{executable} start -D "{datadir}" '
+        '-o "-F -p {port} -c log_destination=stderr -c logging_collector=off {postgres_options}" '
+        '-l "{logfile}" {startparams}'
+    )
+
+    def _windows_safe_postgresql_stop(self, sig=None, exp_sig=None):
+        subprocess.check_output([
+            self.executable, 'stop', '-D', self.datadir, '-m', 'fast'
+        ])
+        if self.process is not None:
+            self.process.wait(timeout=10)
+            self._clear_process()
+        return self
+
+    PostgreSQLExecutor.stop = _windows_safe_postgresql_stop
+
+
+def _postgresql_executable():
+    """Return an explicit PostgreSQL control binary when running on Windows."""
+    configured = os.getenv('POSTGRESQL_EXECUTABLE')
+    if configured:
+        return configured
+    if os.name != 'nt':
+        return None
+
+    for version in ('17', '18'):
+        executable = fr'C:\Program Files\PostgreSQL\{version}\bin\pg_ctl.exe'
+        if os.path.isfile(executable):
+            return fr'C:\PROGRA~1\POSTGR~1\{version}\bin\pg_ctl.exe'
+    return None
+
+
+postgresql_proc = factories.postgresql_proc(executable=_postgresql_executable())
 postgresql = factories.postgresql('postgresql_proc')
 
 

@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Campaigns — Jodala Microfinance{% endblock %}
+{% block page_title %}Campaigns{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <h4 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0">Bulk Campaigns</h4>
+  <p class="text-muted mb-0" style="font-size:13px">Broadcast an SMS or email to a filtered group of members and clients</p>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="jd-card mb-3">
+      <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-megaphone-fill" style="color:var(--brand-light)"></i>New Campaign</div></div>
+      <div class="jd-card-body">
+        {% if not sms_ready and not email_ready %}
+        <div class="alert alert-warning py-2 px-3" style="font-size:13px">
+          Neither SMS nor Email is configured yet. Set them up in <a href="{{ url_for('settings.index') }}">Settings &gt; Notifications</a> first.
+        </div>
+        {% endif %}
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Channel</label>
+          <select class="form-select form-select-sm" id="cChannel">
+            <option value="sms" {% if not sms_ready %}disabled{% endif %}>SMS {% if not sms_ready %}(not configured){% endif %}</option>
+            <option value="email" {% if not email_ready %}disabled{% endif %}>Email {% if not email_ready %}(not configured){% endif %}</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Audience</label>
+          <select class="form-select form-select-sm" id="cAudience">
+            <option value="both">Members & Clients</option>
+            <option value="members">Members only</option>
+            <option value="clients">Clients only</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Region</label>
+          <select class="form-select form-select-sm" id="cRegion">
+            <option value="">All regions</option>
+            {% for r in regions %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="mb-3 form-check">
+          <input type="checkbox" class="form-check-input" id="cOverdueOnly">
+          <label class="form-check-label small" for="cOverdueOnly">Only borrowers currently overdue on a loan installment</label>
+        </div>
+        <div class="mb-3" id="cSubjectWrap" style="display:none">
+          <label class="form-label small fw-semibold">Subject</label>
+          <input type="text" class="form-control form-control-sm" id="cSubject" value="Jodala Microfinance">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Message</label>
+          <textarea class="form-control form-control-sm" id="cMessage" rows="4" maxlength="640" placeholder="Type your message..."></textarea>
+          <div class="form-text" id="cCharCount" style="font-size:11px">0 characters</div>
+        </div>
+        <div class="d-flex align-items-center justify-content-between mb-3 p-2" style="background:var(--surface-2);border-radius:8px">
+          <span style="font-size:13px" id="cPreviewText">Checking recipients…</span>
+          <button class="btn btn-brand-outline btn-sm" onclick="previewCampaign()"><i class="bi bi-arrow-repeat me-1"></i>Refresh</button>
+        </div>
+        <button class="btn btn-brand w-100" id="cSendBtn" onclick="sendCampaign()">
+          <i class="bi bi-send-fill me-1"></i>Send Campaign
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="jd-card">
+      <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-clock-history" style="color:var(--brand-light)"></i>Recent Campaigns</div></div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead><tr><th>Sent</th><th>Channel</th><th>Audience</th><th>Recipients</th><th>Message</th></tr></thead>
+          <tbody id="cHistory"><tr><td colspan="5" class="text-center p-4 text-muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+function escapeHtml(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+
+document.getElementById('cChannel').addEventListener('change', e=>{
+  document.getElementById('cSubjectWrap').style.display = e.target.value==='email' ? 'block' : 'none';
+});
+document.getElementById('cMessage').addEventListener('input', e=>{
+  document.getElementById('cCharCount').textContent = e.target.value.length + ' characters';
+});
+['cAudience','cRegion','cOverdueOnly'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', previewCampaign);
+});
+
+async function previewCampaign() {
+  const el = document.getElementById('cPreviewText');
+  el.textContent = 'Checking recipients…';
+  try {
+    const data = await API.post('/campaigns/api/preview', {
+      audience_type: document.getElementById('cAudience').value,
+      region: document.getElementById('cRegion').value,
+      overdue_only: document.getElementById('cOverdueOnly').checked,
+    });
+    el.innerHTML = `<strong>${data.count}</strong> recipient(s) match` + (data.sample.length ? ` — e.g. ${data.sample.slice(0,3).map(escapeHtml).join(', ')}${data.count>3?'…':''}` : '');
+  } catch (e) {
+    el.textContent = 'Could not check recipients';
+  }
+}
+
+async function sendCampaign() {
+  const message = document.getElementById('cMessage').value.trim();
+  if (!message) { Toast.error('Message is required'); return; }
+  const channel = document.getElementById('cChannel').value;
+  if (!confirm(`Send this ${channel.toUpperCase()} to everyone matching the current filters? This can't be undone.`)) return;
+
+  const btn = document.getElementById('cSendBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending…';
+  try {
+    const data = await API.post('/campaigns/api', {
+      channel, audience_type: document.getElementById('cAudience').value,
+      region: document.getElementById('cRegion').value,
+      overdue_only: document.getElementById('cOverdueOnly').checked,
+      message, subject: document.getElementById('cSubject').value,
+    });
+    Toast.success(data.message);
+    document.getElementById('cMessage').value = '';
+    document.getElementById('cCharCount').textContent = '0 characters';
+    loadHistory();
+    previewCampaign();
+  } catch (e) {
+    Toast.error(e.message || 'Failed to send campaign');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send-fill me-1"></i>Send Campaign';
+  }
+}
+
+async function loadHistory() {
+  const tbody = document.getElementById('cHistory');
+  try {
+    const data = await API.get('/campaigns/api');
+    if (!data.campaigns.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-muted">No campaigns sent yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.campaigns.map(c => `
+      <tr>
+        <td style="font-size:12px;color:var(--text-muted)">${new Date(c.created_at).toLocaleString()}</td>
+        <td><span class="badge bg-secondary-subtle text-secondary-emphasis">${c.channel.toUpperCase()}</span></td>
+        <td style="font-size:13px">${escapeHtml(c.audience_type)}${c.region ? ' · '+escapeHtml(c.region) : ''}${c.overdue_only ? ' · overdue only' : ''}</td>
+        <td style="font-size:13px">${c.sent_count}/${c.recipient_count}${c.failed_count ? ` <span class="text-muted">(${c.failed_count} skipped)</span>` : ''}</td>
+        <td style="font-size:13px;max-width:280px" class="text-truncate">${escapeHtml(c.message)}</td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-danger">Failed to load history</td></tr>';
+  }
+}
+
+previewCampaign();
+loadHistory();
+</script>{% endblock %}

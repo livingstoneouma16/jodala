@@ -11,7 +11,7 @@
   <div class="col-md-4">
     <div class="jd-card h-100">
       <div class="jd-card-body text-center p-4">
-        <div style="width:64px;height:64px;background:var(--brand-pale);border-radius:16px;display:grid;place-items:center;margin:0 auto 16px;font-size:28px;color:var(--brand-mid)"><i class="bi bi-file-earmark-text-fill"></i></div>
+        <div style="width:64px;height:64px;background:var(--brand-pale);border-radius:16px;display:grid;place-items:center;margin:0 auto 16px;font-size:28px;color:var(--brand-ink)"><i class="bi bi-file-earmark-text-fill"></i></div>
         <h6 style="font-family:'Source Serif 4',serif;font-weight:600">Loan Agreement</h6>
         <p style="font-size:12px;color:var(--text-muted)">Generate a signed loan agreement PDF for any active or approved loan</p>
         <div class="mt-3">
@@ -24,7 +24,7 @@
   <div class="col-md-4">
     <div class="jd-card h-100">
       <div class="jd-card-body text-center p-4">
-        <div style="width:64px;height:64px;background:#FFF3CD;border-radius:16px;display:grid;place-items:center;margin:0 auto 16px;font-size:28px;color:var(--gold-dark)"><i class="bi bi-receipt-cutoff"></i></div>
+        <div style="width:64px;height:64px;background:#FFF3CD;border-radius:16px;display:grid;place-items:center;margin:0 auto 16px;font-size:28px;color:var(--warning-ink)"><i class="bi bi-receipt-cutoff"></i></div>
         <h6 style="font-family:'Source Serif 4',serif;font-weight:600">Payment Receipt</h6>
         <p style="font-size:12px;color:var(--text-muted)">Download a PDF receipt for any recorded repayment transaction</p>
         <div class="mt-3">
@@ -37,7 +37,7 @@
   <div class="col-md-4">
     <div class="jd-card h-100">
       <div class="jd-card-body text-center p-4">
-        <div style="width:64px;height:64px;background:#DBEAFE;border-radius:16px;display:grid;place-items:center;margin:0 auto 16px;font-size:28px;color:var(--info)"><i class="bi bi-file-earmark-bar-graph-fill"></i></div>
+        <div style="width:64px;height:64px;background:#DBEAFE;border-radius:16px;display:grid;place-items:center;margin:0 auto 16px;font-size:28px;color:var(--info-ink)"><i class="bi bi-file-earmark-bar-graph-fill"></i></div>
         <h6 style="font-family:'Source Serif 4',serif;font-weight:600">Excel Reports</h6>
         <p style="font-size:12px;color:var(--text-muted)">Export full loan or member data to Excel spreadsheets</p>
         <div class="mt-3 d-grid gap-2">
@@ -75,13 +75,13 @@ async function loadRecentLoans() {
       return;
     }
     tbody.innerHTML = data.loans.map(l => `<tr>
-      <td><span style="font-weight:600;font-size:12px;color:var(--brand-mid)">${escapeHtml(l.loan_number)}</span></td>
+      <td><span style="font-weight:600;font-size:12px;color:var(--brand-ink)">${escapeHtml(l.loan_number)}</span></td>
       <td style="font-size:13px">${escapeHtml(l.member_name)}</td>
       <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(l.product_name)}</td>
       <td style="font-weight:600">${fmtCurrency(l.principal_amount)}</td>
       <td>${statusPill(l.status)}</td>
       <td>
-        <a href="/documents/loan-agreement/${l.id}" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--brand-pale);border:1px solid var(--brand-light);color:var(--brand-dark)">
+        <a href="/documents/loan-agreement/${l.id}" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--brand-pale);border:1px solid var(--brand-light);color:var(--brand-ink)">
           <i class="bi bi-file-earmark-pdf me-1"></i>Agreement
         </a>
       </td>

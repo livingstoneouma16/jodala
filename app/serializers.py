@@ -117,6 +117,7 @@ def loan_public(row):
         'principal_amount': d['principal_amount'],
         'interest_rate': d['interest_rate'],
         'term': d['term'],
+        'total_interest': d['total_interest'],
         'total_repayable': d['total_repayable'],
         'outstanding_balance': d['outstanding_balance'],
         'total_paid': d['total_paid'],

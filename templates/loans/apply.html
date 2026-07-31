@@ -128,7 +128,7 @@
                   </div>
                 </div>
                 <div class="text-end">
-                  <div style="font-size:13px;font-weight:700;color:var(--brand-mid)">{{ p.interest_rate }}%</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--brand-ink)">{{ p.interest_rate }}%</div>
                   <div style="font-size:11px;color:var(--text-muted)">{{ p.interest_type }}</div>
                 </div>
               </div>
@@ -221,11 +221,11 @@ function calcPreview() {
       </div>
       <div class="d-flex justify-content-between py-1 border-bottom">
         <span style="color:var(--text-muted)">Total Repayable</span>
-        <span style="font-weight:700;font-size:14px;color:var(--brand-mid)">${fmtCurrency(totalRepayable)}</span>
+        <span style="font-weight:700;font-size:14px;color:var(--brand-ink)">${fmtCurrency(totalRepayable)}</span>
       </div>
       <div class="d-flex justify-content-between py-1">
         <span style="color:var(--text-muted)">${selectedProduct.freq.charAt(0).toUpperCase()+selectedProduct.freq.slice(1)} Installment</span>
-        <span style="font-weight:700;color:var(--brand-dark)">${fmtCurrency(installment)}</span>
+        <span style="font-weight:700;color:var(--brand-ink)">${fmtCurrency(installment)}</span>
       </div>
     </div>`;
 }

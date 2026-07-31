@@ -182,19 +182,18 @@ def notify(user_id, title, message, notification_type='info', related_type=None,
     """
     Central notification helper: always writes an in-app notification row.
 
-    Two separate email recipients can be reached from one call:
-      - The staff user (`user_id`), via their `users.email` on file --
-        automatic whenever notify_user_email=True (the default) and that
-        user has an email address. Sent as a plain notification email
-        built from `title`/`message`.
+    Two separate email audiences can be reached from one call:
+      - Every active staff user, automatically whenever
+        notify_user_email=True (the default). Each receives an individual
+        plain notification email built from `title`/`message`.
       - An optional customer-facing recipient (`email`), for a member,
         client, or other non-staff address -- used for the nicer branded
         HTML in `email_body_html` (e.g. "Dear Jane, your loan was
         approved..."). Pass `email`/`email_subject`/`email_body_html`
         together for this.
     If both happen to be the same address (e.g. creating a new staff
-    account emails that same person), only the customer-facing version is
-    sent once -- not both.
+    account email matches a staff email), only the customer-facing version
+    is sent once -- not both.
 
     A customer-facing SMS can be sent alongside (or instead of) the email
     by passing `phone` -- the member/client's phone number on file. Uses
@@ -205,11 +204,9 @@ def notify(user_id, title, message, notification_type='info', related_type=None,
     customer channel only (mirroring `email`) -- staff aren't texted.
 
     user_id may be None for system-wide events that aren't tied to a
-    dashboard user (e.g. a member/client's own confirmation email/SMS) --
-    in that case only the `email`/`phone` recipients are used, no
-    notification row is written and no staff email is sent.
+    dashboard user. In that case no notification row is written, but active
+    staff users still receive the email copy.
     """
-    staff_email = None
     if user_id is not None:
         execute(
             """INSERT INTO notifications (user_id, title, message, notification_type,
@@ -218,22 +215,24 @@ def notify(user_id, title, message, notification_type='info', related_type=None,
             (user_id, title, message, notification_type, related_type, related_id, utcnow())
         )
 
-        if notify_user_email:
-            user_row = get_db().execute(
-                "SELECT email, full_name FROM users WHERE id = %s", (user_id,)
-            ).fetchone()
-            if user_row and user_row['email']:
-                staff_email = user_row['email']
-
-    if staff_email and staff_email != email:
+    if notify_user_email:
         from core.mailer import send_email_async
-        greeting = (user_row['full_name'] if user_row and user_row['full_name'] else 'there')
-        send_email_async(
-            staff_email,
-            email_subject or title,
-            message,
-            f"<p>Dear {greeting},</p><p>{message}</p>"
-        )
+        staff_users = get_db().execute(
+            """SELECT email, full_name FROM users
+               WHERE is_active = 1 AND email IS NOT NULL AND TRIM(email) <> ''"""
+        ).fetchall()
+        customer_email = (email or '').strip().casefold()
+        for staff_user in staff_users:
+            staff_email = staff_user['email'].strip()
+            if staff_email.casefold() == customer_email:
+                continue
+            greeting = staff_user['full_name'] or 'there'
+            send_email_async(
+                staff_email,
+                email_subject or title,
+                message,
+                f"<p>Dear {greeting},</p><p>{message}</p>"
+            )
 
     if email:
         from core.mailer import send_email_async

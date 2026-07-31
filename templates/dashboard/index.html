@@ -8,10 +8,10 @@
   <!-- Welcome Bar -->
   <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div>
-      <h5 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0">
+      <h5 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0;font-size:15px">
         Good <span id="greetPart"></span>, {{ user.full_name.split()[0] if user else 'User' }} 👋
       </h5>
-      <p class="text-muted mb-0" style="font-size:11.5px" id="todayDate"></p>
+      <p class="text-muted mb-0" style="font-size:10px" id="todayDate"></p>
     </div>
     <div class="d-flex gap-2">
       <a href="{{ url_for('loans.apply_page') }}" class="btn btn-brand btn-sm">
@@ -24,7 +24,7 @@
   </div>
 
   <!-- Main Account Balance -->
-  <div class="row g-3 mb-3">
+  <div class="row g-2 mb-2">
     <div class="col-12">
       <div class="stat-card gold">
         <div class="stat-icon gold"><i class="bi bi-bank2"></i></div>
@@ -40,7 +40,7 @@
   </div>
 
   <!-- Stat Cards Row 1 -->
-  <div class="row g-3 mb-3">
+  <div class="row g-2 mb-2">
     <div class="col-12 col-sm-6 col-md-3">
       <div class="stat-card">
         <div class="stat-icon green"><i class="bi bi-people-fill"></i></div>
@@ -65,8 +65,8 @@
       <div class="stat-card gold">
         <div class="stat-icon gold"><i class="bi bi-graph-up-arrow"></i></div>
         <div class="stat-body">
-          <div class="stat-label">Loan Portfolio</div>
-          <div class="stat-value" id="statPortfolio">—</div>
+          <div class="stat-label outstanding-value">What is Owed</div>
+          <div class="stat-value outstanding-value" id="statPortfolio">—</div>
           <div class="stat-change"><span id="statDisbursed">—</span> disbursed total</div>
         </div>
       </div>
@@ -84,7 +84,7 @@
   </div>
 
   <!-- Stat Cards Row 2 -->
-  <div class="row g-3 mb-4">
+  <div class="row g-2 mb-3">
     <div class="col-12 col-sm-6 col-md-3">
       <div class="stat-card">
         <div class="stat-icon teal"><i class="bi bi-arrow-down-circle-fill"></i></div>
@@ -128,19 +128,19 @@
   </div>
 
   <!-- Charts + Due Today -->
-  <div class="row g-3 mb-3">
+  <div class="row g-2 mb-2">
     <!-- Loan Trend Chart -->
     <div class="col-12 col-lg-8">
       <div class="jd-card h-100">
         <div class="jd-card-header">
           <div class="jd-card-title"><i class="bi bi-bar-chart-fill" style="color:var(--brand-light)"></i>Loan Activity (12 Months)</div>
           <div class="d-flex gap-2">
-            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px"><span style="background:var(--brand-mid);width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Disbursed</span>
-            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:10px"><span style="background:#E9C46A;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Collected</span>
+            <span class="badge" style="background:var(--brand-pale);color:var(--brand-ink);font-size:9px"><span style="background:var(--brand-mid);width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Disbursed</span>
+            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:9px"><span style="background:#E9C46A;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Collected</span>
           </div>
         </div>
         <div class="jd-card-body">
-          <div class="chart-wrapper"><canvas id="loanTrendChart"></canvas></div>
+          <div class="chart-wrapper" style="height:165px"><canvas id="loanTrendChart"></canvas></div>
         </div>
       </div>
     </div>
@@ -152,7 +152,7 @@
           <div class="jd-card-title"><i class="bi bi-pie-chart-fill" style="color:var(--gold)"></i>Loan Status</div>
         </div>
         <div class="jd-card-body">
-          <div class="chart-wrapper" style="height:180px"><canvas id="statusChart"></canvas></div>
+          <div class="chart-wrapper" style="height:150px"><canvas id="statusChart"></canvas></div>
           <div id="statusLegend" class="mt-2"></div>
         </div>
       </div>
@@ -160,19 +160,19 @@
   </div>
 
   <!-- More Charts -->
-  <div class="row g-3 mb-3">
+  <div class="row g-2 mb-2">
     <!-- Income vs Expenses -->
     <div class="col-12 col-lg-6">
       <div class="jd-card h-100">
         <div class="jd-card-header">
           <div class="jd-card-title"><i class="bi bi-graph-up" style="color:var(--brand-light)"></i>Income vs Expenses (6 Months)</div>
           <div class="d-flex gap-2">
-            <span class="badge" style="background:#D1FAE5;color:#065F46;font-size:10px"><span style="background:#52B788;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Income</span>
-            <span class="badge" style="background:#FFE4E6;color:#991B1B;font-size:10px"><span style="background:#E63946;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Expenses</span>
+            <span class="badge" style="background:#DCE7F5;color:#1B3A63;font-size:9px"><span style="background:#3F79C9;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Income</span>
+            <span class="badge" style="background:#FFE4E6;color:#991B1B;font-size:9px"><span style="background:#E63946;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Expenses</span>
           </div>
         </div>
         <div class="jd-card-body">
-          <div class="chart-wrapper"><canvas id="incomeExpenseChart"></canvas></div>
+          <div class="chart-wrapper" style="height:165px"><canvas id="incomeExpenseChart"></canvas></div>
         </div>
       </div>
     </div>
@@ -183,19 +183,19 @@
         <div class="jd-card-header">
           <div class="jd-card-title"><i class="bi bi-person-lines-fill" style="color:var(--gold)"></i>Member Growth (6 Months)</div>
           <div class="d-flex gap-2">
-            <span class="badge" style="background:var(--brand-pale);color:var(--brand-dark);font-size:10px"><span style="background:var(--brand-mid);width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Members</span>
-            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:10px"><span style="background:#E9C46A;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px"></span>Clients</span>
+            <span class="badge" style="background:var(--brand-pale);color:var(--brand-ink);font-size:9px"><span style="background:var(--brand-mid);width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Members</span>
+            <span class="badge" style="background:#FFF3CD;color:#856404;font-size:9px"><span style="background:#E9C46A;width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px"></span>Clients</span>
           </div>
         </div>
         <div class="jd-card-body">
-          <div class="chart-wrapper"><canvas id="memberGrowthChart"></canvas></div>
+          <div class="chart-wrapper" style="height:165px"><canvas id="memberGrowthChart"></canvas></div>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Tables Row -->
-  <div class="row g-3">
+  <div class="row g-2">
     <!-- Due Today -->
     <div class="col-12 col-lg-6">
       <div class="jd-card h-100">
@@ -204,7 +204,7 @@
           <a href="{{ url_for('repayments.record_page') }}" class="btn btn-brand btn-sm"><i class="bi bi-plus me-1"></i>Record</a>
         </div>
         <div id="dueTodayList">
-          <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+          <div class="text-center p-3"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
         </div>
       </div>
     </div>
@@ -213,11 +213,11 @@
     <div class="col-12 col-lg-6">
       <div class="jd-card h-100">
         <div class="jd-card-header">
-          <div class="jd-card-title"><i class="bi bi-exclamation-triangle-fill" style="color:var(--danger)"></i>Overdue Loans</div>
+          <div class="jd-card-title"><i class="bi bi-exclamation-triangle-fill" style="color:var(--danger-ink)"></i>Overdue Loans</div>
           <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-brand-outline">View Report</a>
         </div>
         <div id="overdueList">
-          <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+          <div class="text-center p-3"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
         </div>
       </div>
     </div>
@@ -234,13 +234,39 @@ const h = new Date().getHours();
 document.getElementById('greetPart').textContent = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
 document.getElementById('todayDate').textContent = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
-// Theme-aware chart defaults
-const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-Chart.defaults.color = isDark ? '#7A9B85' : '#6B8070';
-Chart.defaults.borderColor = isDark ? '#2D4035' : '#E2E8E4';
+// Theme-aware chart defaults. These colours need more contrast than the card
+// background so axis labels and grid lines remain readable in dark mode.
+function setChartTheme() {
+  const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  Chart.defaults.color = isDark ? '#C4D5E8' : '#63728A';
+  Chart.defaults.borderColor = isDark ? '#4C6F95' : '#DCE3EC';
+}
+setChartTheme();
 Chart.defaults.font.family = 'Inter';
 
-let trendChart, statusChart;
+function getChartPalette() {
+  const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  if (isDark) {
+    return {
+      disbursedBar: 'rgba(90,155,234,.88)', collectedBar: 'rgba(233,196,106,.88)',
+      income: '#78B5F4', incomeFill: 'rgba(120,181,244,.20)',
+      expense: '#F28B93', expenseFill: 'rgba(242,139,147,.16)',
+      membersBar: 'rgba(90,155,234,.88)', clientsBar: 'rgba(233,196,106,.88)',
+      status: { active:'#5A9BEA', pending:'#E9C46A', approved:'#8FBEE8', completed:'#C4D5E8',
+                rejected:'#F28B93', disbursed:'#B59AF2', written_off:'#B9C7D6' }
+    };
+  }
+  return {
+    disbursedBar: 'rgba(27,58,99,.75)', collectedBar: 'rgba(233,196,106,.7)',
+    income: '#3F79C9', incomeFill: 'rgba(63,121,201,.15)',
+    expense: '#E63946', expenseFill: 'rgba(230,57,70,.1)',
+    membersBar: 'rgba(29,90,150,.7)', clientsBar: 'rgba(233,196,106,.7)',
+    status: { active:'#3F79C9', pending:'#E9C46A', approved:'#1B3A63', completed:'#0F2440',
+              rejected:'#E63946', disbursed:'#7C3AED', written_off:'#9CA3AF' }
+  };
+}
+
+let trendChart, statusChart, incomeExpenseChart, memberGrowthChart;
 
 async function loadStats(s) {
   try {
@@ -266,9 +292,11 @@ async function loadStats(s) {
 async function loadTrendChart(data) {
   try {
     data = data || await API.get('/dashboard/loan-trend');
+    trendChart?.destroy();
     const labels = data.map(d => d.month);
     const disbursed = data.map(d => d.disbursed);
     const collected = data.map(d => d.collected);
+    const palette = getChartPalette();
 
     const ctx = document.getElementById('loanTrendChart').getContext('2d');
     trendChart = new Chart(ctx, {
@@ -276,8 +304,8 @@ async function loadTrendChart(data) {
       data: {
         labels,
         datasets: [
-          { label: 'Disbursed', data: disbursed, backgroundColor: 'rgba(45,106,79,.7)', borderRadius: 4, borderSkipped: false },
-          { label: 'Collected', data: collected, backgroundColor: 'rgba(233,196,106,.7)', borderRadius: 4, borderSkipped: false }
+          { label: 'Disbursed', data: disbursed, backgroundColor: palette.disbursedBar, borderRadius: 4, borderSkipped: false },
+          { label: 'Collected', data: collected, backgroundColor: palette.collectedBar, borderRadius: 4, borderSkipped: false }
         ]
       },
       options: {
@@ -295,8 +323,8 @@ async function loadTrendChart(data) {
 async function loadStatusChart(data) {
   try {
     data = data || await API.get('/dashboard/loan-status-distribution');
-    const colors = { active:'#52B788', pending:'#E9C46A', approved:'#4895EF', completed:'#0F766E',
-                     rejected:'#E63946', disbursed:'#7C3AED', written_off:'#9CA3AF' };
+    statusChart?.destroy();
+    const colors = getChartPalette().status;
     const labels = data.map(d => d.status);
     const values = data.map(d => d.count);
     const bgs = labels.map(l => colors[l] || '#9CA3AF');
@@ -310,9 +338,9 @@ async function loadStatusChart(data) {
     });
 
     document.getElementById('statusLegend').innerHTML = data.slice(0,5).map(d =>
-      `<div class="d-flex justify-content-between align-items-center mb-1" style="font-size:11px">
+      `<div class="d-flex justify-content-between align-items-center mb-1" style="font-size:10px">
         <div class="d-flex align-items-center gap-1">
-          <span style="width:8px;height:8px;border-radius:50%;background:${colors[d.status] || '#9CA3AF'};display:inline-block"></span>
+          <span style="width:6px;height:6px;border-radius:50%;background:${colors[d.status] || '#9CA3AF'};display:inline-block"></span>
           <span style="text-transform:capitalize">${escapeHtml(d.status.replace('_',' '))}</span>
         </div>
         <span style="font-weight:600">${d.count}</span>
@@ -324,18 +352,20 @@ async function loadStatusChart(data) {
 async function loadIncomeExpenseChart(data) {
   try {
     data = data || await API.get('/dashboard/income-expense-trend');
+    incomeExpenseChart?.destroy();
     const labels = data.map(d => d.month);
     const income = data.map(d => d.income);
     const expenses = data.map(d => d.expenses);
+    const palette = getChartPalette();
 
     const ctx = document.getElementById('incomeExpenseChart').getContext('2d');
-    new Chart(ctx, {
+    incomeExpenseChart = new Chart(ctx, {
       type: 'line',
       data: {
         labels,
         datasets: [
-          { label: 'Income', data: income, borderColor: '#52B788', backgroundColor: 'rgba(82,183,136,.15)', fill: true, tension: 0.3 },
-          { label: 'Expenses', data: expenses, borderColor: '#E63946', backgroundColor: 'rgba(230,57,70,.1)', fill: true, tension: 0.3 }
+          { label: 'Income', data: income, borderColor: palette.income, backgroundColor: palette.incomeFill, fill: true, tension: 0.3 },
+          { label: 'Expenses', data: expenses, borderColor: palette.expense, backgroundColor: palette.expenseFill, fill: true, tension: 0.3 }
         ]
       },
       options: {
@@ -353,18 +383,20 @@ async function loadIncomeExpenseChart(data) {
 async function loadMemberGrowthChart(data) {
   try {
     data = data || await API.get('/dashboard/member-growth');
+    memberGrowthChart?.destroy();
     const labels = data.map(d => d.month);
     const members = data.map(d => d.members);
     const clients = data.map(d => d.clients);
+    const palette = getChartPalette();
 
     const ctx = document.getElementById('memberGrowthChart').getContext('2d');
-    new Chart(ctx, {
+    memberGrowthChart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels,
         datasets: [
-          { label: 'Members', data: members, backgroundColor: 'rgba(29,90,150,.7)', borderRadius: 4, borderSkipped: false },
-          { label: 'Clients', data: clients, backgroundColor: 'rgba(233,196,106,.7)', borderRadius: 4, borderSkipped: false }
+          { label: 'Members', data: members, backgroundColor: palette.membersBar, borderRadius: 4, borderSkipped: false },
+          { label: 'Clients', data: clients, backgroundColor: palette.clientsBar, borderRadius: 4, borderSkipped: false }
         ]
       },
       options: {
@@ -379,6 +411,16 @@ async function loadMemberGrowthChart(data) {
   } catch(e) {}
 }
 
+// Redraw charts after a live theme switch so their canvas text, grid lines,
+// and legend markers follow the newly selected theme as well.
+document.addEventListener('jd:themechange', () => {
+  setChartTheme();
+  loadTrendChart();
+  loadStatusChart();
+  loadIncomeExpenseChart();
+  loadMemberGrowthChart();
+});
+
 async function loadDueToday(data) {
   try {
     data = data || await API.get('/dashboard/due-today');
@@ -389,10 +431,10 @@ async function loadDueToday(data) {
     }
     el.innerHTML = '<div class="table-responsive"><table class="table table-borderless mb-0"><thead><tr><th>Loan</th><th>Borrower</th><th>Installment</th><th>Amount Due</th></tr></thead><tbody>' +
       data.map(d => `<tr>
-        <td><span style="font-weight:600;font-size:12px">${escapeHtml(d.loan_number)}</span></td>
-        <td style="font-size:13px">${escapeHtml(d.borrower)}</td>
+        <td><span style="font-weight:600;font-size:11px">${escapeHtml(d.loan_number)}</span></td>
+        <td style="font-size:12px">${escapeHtml(d.borrower)}</td>
         <td><span class="badge bg-secondary">#${d.installment}</span></td>
-        <td style="font-weight:600;color:var(--brand-mid)">${fmtCurrency(d.amount_due)}</td>
+        <td style="font-weight:600;color:var(--brand-ink)">${fmtCurrency(d.amount_due)}</td>
       </tr>`).join('') + '</tbody></table></div>';
   } catch(e) {}
 }
@@ -405,11 +447,11 @@ async function loadOverdue(data) {
       el.innerHTML = '<div class="empty-state"><i class="bi bi-check-circle text-success"></i><p>No overdue loans — great work!</p></div>';
       return;
     }
-    el.innerHTML = '<div class="table-responsive"><table class="table table-borderless mb-0"><thead><tr><th>Loan</th><th>Borrower</th><th>Outstanding</th><th>Days Overdue</th></tr></thead><tbody>' +
+    el.innerHTML = '<div class="table-responsive"><table class="table table-borderless mb-0"><thead><tr><th>Loan</th><th>Borrower</th><th class="outstanding-value">Outstanding</th><th>Days Overdue</th></tr></thead><tbody>' +
       data.map(d => `<tr>
-        <td><span style="font-weight:600;font-size:12px">${escapeHtml(d.loan_number)}</span></td>
-        <td style="font-size:13px">${escapeHtml(d.borrower)}</td>
-        <td style="font-weight:600">${fmtCurrency(d.outstanding)}</td>
+        <td><span style="font-weight:600;font-size:11px">${escapeHtml(d.loan_number)}</span></td>
+        <td style="font-size:12px">${escapeHtml(d.borrower)}</td>
+        <td class="outstanding-value">${fmtCurrency(d.outstanding)}</td>
         <td><span class="status-pill status-overdue">${d.overdue_days}d</span></td>
       </tr>`).join('') + '</tbody></table></div>';
   } catch(e) {}

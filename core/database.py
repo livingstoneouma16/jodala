@@ -10,7 +10,7 @@ Responsibilities:
     codebase was written against)
   * Own the schema (CREATE TABLE statements)
   * Run versioned migrations against a `schema_migrations` table
-  * Bootstrap first-run data (default admin user, default settings, chart of accounts)
+  * Bootstrap first-run reference data (default settings and chart of accounts)
 
 Nothing in here talks HTTP. Routes call get_db() and run SQL directly (using
 conn.execute(...), a convenience method sqlite3 connections have built in but
@@ -283,9 +283,15 @@ def get_company_branding():
     except (TypeError, ValueError):
         idle_timeout_minutes = 15
 
+    # company_logo used to be the raw base64 data URL, injected inline into
+    # every page's HTML -- for an uploaded photo/scan that meant several
+    # hundred KB to 1MB+ duplicated on *every* request. It's now just a
+    # small, cacheable URL pointing at settings.company_logo_image (core/
+    # routes/other_routes.py), which serves the decoded image with a
+    # Cache-Control header so the browser only fetches it once.
     data = {
         'company_name': branding.get('company_name') or 'Jodala Microfinance',
-        'company_logo': branding.get('logo_image') or '',
+        'company_logo': '/settings/api/company/logo' if branding.get('logo_image') else '',
         'idle_timeout_minutes': idle_timeout_minutes,
     }
     _branding_cache['data'] = data
@@ -695,20 +701,6 @@ def _migration_0001_initial_schema(conn):
 def _migration_0002_seed_defaults(conn):
     now = utcnow()
 
-    existing_admin = conn.execute(
-        "SELECT id FROM users WHERE username = %s", ('admin',)
-    ).fetchone()
-    if not existing_admin:
-        # Local import to avoid a circular import at module load time.
-        from core.auth import hash_password
-        conn.execute(
-            """INSERT INTO users (username, email, password_hash, full_name, role,
-                                   is_active, must_change_password, totp_enabled, created_at, updated_at)
-               VALUES (%s, %s, %s, %s, %s, 1, 1, 0, %s, %s)""",
-            ('admin', 'admin@jodala.local', hash_password('ChangeMe123!'),
-             'System Administrator', 'admin', now, now)
-        )
-
     default_settings = {
         'company_name': 'Jodala Microfinance',
         'company_email': 'jodalamicrofinance@gmail.com',
@@ -751,8 +743,24 @@ def _migration_0002_seed_defaults(conn):
                 (code, name, acc_type)
             )
 
+    # Seed the very first admin user so a fresh install has a way to log in
+    # at all. Uses the well-known default password 'ChangeMe123!' -- migration
+    # 0011 forces a password change on next login for any 'admin' account
+    # still on this default, so it's never usable past the first session.
+    from core.auth import hash_password
+    existing_admin = conn.execute("SELECT id FROM users WHERE username = 'admin'").fetchone()
+    if not existing_admin:
+        conn.execute(
+            """INSERT INTO users (username, email, password_hash, full_name, role,
+                   is_active, created_at, updated_at)
+               VALUES (%s, %s, %s, %s, %s, 1, %s, %s)""",
+            ('admin', 'admin@jodala.local', hash_password('ChangeMe123!'),
+             'Administrator', 'admin', now, now)
+        )
+
 
 def _migration_0003_clients_are_borrowers_not_businesses(conn):
+
     """The `clients` table originally modeled clients as businesses
     (business_name, contact_person, business_type, annual_revenue,
     registration_number). Clients are actually just non-member borrowers --
@@ -1234,11 +1242,84 @@ def _migration_0021_revert_to_gmail_smtp(conn):
             )
 
 
-MIGRATIONS = [
+def _migration_0022_webauthn_credentials(conn):
+    """Adds fingerprint/passkey login (WebAuthn/FIDO2). Each row is one
+    registered authenticator (a device's fingerprint sensor, Face ID,
+    Windows Hello, or a hardware security key) for one user -- a user can
+    register more than one device. Only the public key and a signature
+    counter are stored; the private key never leaves the user's device."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS webauthn_credentials (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        credential_id TEXT UNIQUE NOT NULL,
+        public_key TEXT NOT NULL,
+        sign_count INTEGER NOT NULL DEFAULT 0,
+        device_name TEXT NOT NULL DEFAULT 'Unnamed device',
+        transports TEXT,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT
+    )""")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id ON webauthn_credentials(user_id)"
+    )
 
+
+def _migration_0023_campaigns(conn):
+    """Bulk SMS/email broadcast to a filtered group of members/clients (e.g.
+    "everyone overdue in Nairobi region"), on top of the existing one-off
+    per-user reminders/receipts in core/sms.py and core/mailer.py. Each row
+    is one broadcast attempt -- the filter used and a delivery summary, not
+    the individual messages (those still land in the existing sms_log /
+    email_log tables per recipient, so a failed send is traceable there)."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS campaigns (
+        id SERIAL PRIMARY KEY,
+        channel TEXT NOT NULL,
+        audience_type TEXT NOT NULL,
+        region TEXT,
+        overdue_only INTEGER DEFAULT 0,
+        message TEXT NOT NULL,
+        subject TEXT,
+        recipient_count INTEGER DEFAULT 0,
+        sent_count INTEGER DEFAULT 0,
+        failed_count INTEGER DEFAULT 0,
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL
+    )""")
+
+
+def _migration_0024_backups(conn):
+    """Scheduled/on-demand database backups (core/backup.py). One row per
+    backup attempt -- filename, size, and whether it made it somewhere
+    durable (see core/backup.py's module docstring for why local-disk-only
+    isn't good enough on Render/Fly.io/most PaaS hosts)."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS backups (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        size_bytes INTEGER DEFAULT 0,
+        status TEXT NOT NULL,
+        storage TEXT NOT NULL DEFAULT 'local',
+        error TEXT,
+        triggered_by TEXT NOT NULL DEFAULT 'scheduled',
+        created_at TEXT NOT NULL
+    )""")
+
+
+def _migration_0025_disbursement_date_on_restructure(conn):
+    """Loan restructuring and extension (rescheduling) previously left
+    loans.disbursement_date untouched -- correct, since neither action
+    disburses new cash -- but there was no way to record/correct the
+    disbursement date as part of either action (e.g. fixing a data-entry
+    error found while restructuring), and no snapshot of what it was at
+    the time. Adds an editable disbursement_date on loans.extend, plus a
+    before/after snapshot on loan_restructures for the restructure case."""
+    conn.execute("ALTER TABLE loan_restructures ADD COLUMN IF NOT EXISTS old_disbursement_date TEXT")
+    conn.execute("ALTER TABLE loan_restructures ADD COLUMN IF NOT EXISTS new_disbursement_date TEXT")
+
+
+MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
-    (2, 'seed default admin/settings/accounts', _migration_0002_seed_defaults),
+    (2, 'seed default settings/accounts', _migration_0002_seed_defaults),
     (3, 'clients are individual borrowers, not businesses', _migration_0003_clients_are_borrowers_not_businesses),
     (4, 'add gender/date_of_birth to clients', _migration_0004_client_gender_dob),
     (5, 'add rollover_amount to loans for correct top-up disbursement', _migration_0005_loan_rollover_amount),
@@ -1260,6 +1341,10 @@ MIGRATIONS = [
      _migration_0020_repair_password_reset_tokens),
     (21, 'switch email delivery from Resend back to Gmail SMTP with an app password',
      _migration_0021_revert_to_gmail_smtp),
+    (22, 'add webauthn_credentials table for fingerprint/passkey login', _migration_0022_webauthn_credentials),
+    (23, 'add campaigns table for bulk SMS/email broadcasts', _migration_0023_campaigns),
+    (24, 'add backups table for scheduled/on-demand database backups', _migration_0024_backups),
+    (25, 'add old/new disbursement_date snapshot columns to loan_restructures', _migration_0025_disbursement_date_on_restructure),
 ]
 
 

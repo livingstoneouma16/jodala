@@ -662,6 +662,15 @@ def restructure_loan(loan_id):
     if new_repayment_frequency not in ('daily', 'weekly', 'monthly'):
         return jsonify({'error': "New repayment frequency must be 'daily', 'weekly' or 'monthly'"}), 400
 
+    new_disbursement_date = data.get('new_disbursement_date') or loan['disbursement_date']
+    if new_disbursement_date:
+        try:
+            parsed_disb_date = date.fromisoformat(new_disbursement_date)
+        except ValueError:
+            return jsonify({'error': 'new_disbursement_date must be YYYY-MM-DD'}), 400
+        if parsed_disb_date > date.today():
+            return jsonify({'error': 'Disbursement date cannot be in the future'}), 400
+
     # Same "true remaining principal" logic top-up uses: outstanding_balance
     # still includes unpaid interest, so it overstates what's actually owed
     # in principal. Sum each schedule row's unpaid principal instead.
@@ -729,24 +738,25 @@ def restructure_loan(loan_id):
         """UPDATE loans SET term = %s, interest_rate = %s, interest_type = %s,
                repayment_frequency = %s, total_interest = %s, total_repayable = %s,
                outstanding_balance = %s, total_paid = %s, expected_end_date = %s,
+               disbursement_date = %s,
                is_restructured = 1, restructure_count = COALESCE(restructure_count, 0) + 1,
                notes = %s, updated_at = %s
            WHERE id = %s""",
         (new_term, new_interest_rate, new_interest_type, new_repayment_frequency,
          new_total_interest, new_total_repayable, new_outstanding, new_total_paid,
-         new_expected_end_date, new_notes, now, loan_id)
+         new_expected_end_date, new_disbursement_date, new_notes, now, loan_id)
     )
 
     execute(
         """INSERT INTO loan_restructures (loan_id, reason, old_principal_outstanding, old_term,
                old_interest_rate, old_interest_type, old_repayment_frequency, old_expected_end_date,
-               old_schedule_snapshot, new_term, new_interest_rate, new_interest_type,
-               new_repayment_frequency, new_expected_end_date, restructured_by, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+               old_disbursement_date, old_schedule_snapshot, new_term, new_interest_rate, new_interest_type,
+               new_repayment_frequency, new_expected_end_date, new_disbursement_date, restructured_by, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (loan_id, reason, remaining_principal, loan['term'], loan['interest_rate'],
          loan['interest_type'], loan['repayment_frequency'], loan['expected_end_date'],
-         old_schedule_snapshot, new_term, new_interest_rate, new_interest_type,
-         new_repayment_frequency, new_expected_end_date, user['id'], now)
+         loan['disbursement_date'], old_schedule_snapshot, new_term, new_interest_rate, new_interest_type,
+         new_repayment_frequency, new_expected_end_date, new_disbursement_date, user['id'], now)
     )
 
     log_audit(
@@ -801,6 +811,16 @@ def extend_loan(loan_id):
     extension_periods = int(data.get('extension_periods', 1))
     new_term = loan['term'] + extension_periods
 
+    new_disbursement_date = loan['disbursement_date']
+    if data.get('new_disbursement_date'):
+        try:
+            parsed_disb_date = date.fromisoformat(data['new_disbursement_date'])
+        except ValueError:
+            return jsonify({'error': 'new_disbursement_date must be YYYY-MM-DD'}), 400
+        if parsed_disb_date > date.today():
+            return jsonify({'error': 'Disbursement date cannot be in the future'}), 400
+        new_disbursement_date = data['new_disbursement_date']
+
     new_end_date = None
     if loan['expected_end_date']:
         end_date = date.fromisoformat(loan['expected_end_date'])
@@ -812,10 +832,13 @@ def extend_loan(loan_id):
             new_end_date = end_date + timedelta(days=extension_periods)
 
     execute(
-        "UPDATE loans SET term = %s, expected_end_date = %s, updated_at = %s WHERE id = %s",
-        (new_term, new_end_date.isoformat() if new_end_date else loan['expected_end_date'], utcnow(), loan_id)
+        "UPDATE loans SET term = %s, expected_end_date = %s, disbursement_date = %s, updated_at = %s WHERE id = %s",
+        (new_term, new_end_date.isoformat() if new_end_date else loan['expected_end_date'],
+         new_disbursement_date, utcnow(), loan_id)
     )
-    log_audit('LOAN_EXTENDED', 'loan', loan_id)
+    log_audit('LOAN_EXTENDED', 'loan', loan_id,
+              old_values={'disbursement_date': loan['disbursement_date']},
+              new_values={'disbursement_date': new_disbursement_date})
 
     updated = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
     return jsonify({'message': f'Loan extended by {extension_periods} periods', 'loan': loan_public(updated)})
@@ -890,4 +913,4 @@ def delete_loan(loan_id):
 @login_required
 def detail(loan_id):
     loan = get_db().execute(_borrower_name_sql() + " WHERE loans.id = %s", (loan_id,)).fetchone()
-    return render_template('loans/detail.html', user=get_current_user(), loan=loan)
+    return render_template('loans/detail.html', user=get_current_user(), loan=loan, today=date.today().isoformat())

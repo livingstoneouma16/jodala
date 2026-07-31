@@ -12,6 +12,7 @@
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('regions',this)">Regions</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('notifications',this)">Notifications</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('mpesa',this)">M-Pesa</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('backups',this)">Backups</button></li>
 </ul>
 
 <!-- Company Settings -->
@@ -244,6 +245,35 @@
   </div></div></div>
 </div>
 
+<!-- Backups -->
+<div id="backupsSet" class="d-none">
+  <div class="jd-card">
+    <div class="jd-card-header d-flex justify-content-between align-items-center">
+      <div>
+        <div class="jd-card-title"><i class="bi bi-shield-lock" style="color:var(--brand-light)"></i>Database Backups</div>
+        <div class="text-muted" style="font-size:12px;margin-top:2px">Runs automatically once a day; you can also trigger one manually</div>
+      </div>
+      <button class="btn btn-brand btn-sm" id="runBackupBtn" onclick="runBackupNow()"><i class="bi bi-play-fill me-1"></i>Run Backup Now</button>
+    </div>
+    <div class="jd-card-body">
+      <div class="alert alert-warning" style="font-size:12.5px">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        If this app runs on Render, Railway, Fly.io, or a similar host, the local disk is <strong>ephemeral</strong> —
+        it's wiped on every deploy/restart. A backup only shown here as "Local" is not durable long-term storage;
+        download it or configure <code>S3_BACKUP_BUCKET</code> (see <code>core/backup.py</code>) for real off-server
+        storage. If your Postgres plan already includes managed backups, this is a convenient supplement, not a
+        replacement for that.
+      </div>
+      <div class="table-responsive">
+        <table class="table mb-0" style="font-size:12.5px">
+          <thead><tr><th style="padding-left:16px">When</th><th>Triggered By</th><th>Size</th><th>Storage</th><th>Status</th><th style="padding-right:16px"></th></tr></thead>
+          <tbody id="backupsBody"><tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Region Modal -->
 <div class="modal fade" id="regionModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -313,12 +343,13 @@ let editingRegion = null;
 function showSet(tab, el) {
   document.querySelectorAll('.nav-link').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['company','loanProducts','savingsProducts','regions','notifications','mpesa'].forEach(t=>document.getElementById(t+'Set').classList.toggle('d-none',t!==tab));
+  ['company','loanProducts','savingsProducts','regions','notifications','mpesa','backups'].forEach(t=>document.getElementById(t+'Set').classList.toggle('d-none',t!==tab));
   if (tab==='loanProducts') loadLoanProducts();
   else if (tab==='savingsProducts') loadSavingsProducts();
   else if (tab==='regions') loadRegions();
   else if (tab==='notifications') { loadNotificationSettings(); loadEmailLog(); loadSmsNotificationSettings(); loadSmsLog(); }
   else if (tab==='mpesa') { loadMpesaSettings(); loadMpesaLog(); }
+  else if (tab==='backups') loadBackups();
 }
 
 let pendingLogo = undefined; // undefined = unchanged, '' = removed, dataURL = new logo
@@ -969,6 +1000,44 @@ async function loadMpesaLog() {
         <td style="padding-right:16px">${escapeHtml(r.mpesa_receipt_number || r.result_desc || '')}</td>
       </tr>`).join('');
   } catch(e) { Toast.error(e.message); }
+}
+
+async function loadBackups() {
+  try {
+    const data = await API.get('/settings/api/backups');
+    const body = document.getElementById('backupsBody');
+    if (!data.backups.length) {
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-4">No backups yet — click "Run Backup Now" to create the first one</td></tr>`;
+      return;
+    }
+    const badge = s => s==='success' ? '<span class="badge bg-success">success</span>' : '<span class="badge bg-danger">failed</span>';
+    const fmtSize = b => b ? (b/1024/1024).toFixed(2)+' MB' : '—';
+    body.innerHTML = data.backups.map(b => `
+      <tr>
+        <td style="padding-left:16px;white-space:nowrap">${new Date(b.created_at).toLocaleString()}</td>
+        <td>${escapeHtml(b.triggered_by)}</td>
+        <td>${fmtSize(b.size_bytes)}</td>
+        <td style="text-transform:capitalize">${escapeHtml(b.storage)}</td>
+        <td>${badge(b.status)}${b.error ? ` <i class="bi bi-info-circle" title="${escapeHtml(b.error)}"></i>` : ''}</td>
+        <td style="padding-right:16px">${b.status==='success' && b.storage==='local' ? `<button class="btn btn-outline-secondary btn-sm" onclick="API.download('/settings/api/backups/${encodeURIComponent(b.filename)}/download','${escapeHtml(b.filename)}')"><i class="bi bi-download"></i></button>` : ''}</td>
+      </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function runBackupNow() {
+  const btn = document.getElementById('runBackupBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Running…';
+  try {
+    const data = await API.post('/settings/api/backups/run', {});
+    Toast.success(data.message);
+    loadBackups();
+  } catch(e) {
+    Toast.error(e.message || 'Backup failed');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Backup Now';
+  }
 }
 
 loadCompany();

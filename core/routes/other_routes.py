@@ -38,12 +38,90 @@ def get_company():
     return jsonify(settings)
 
 
+def _resize_logo_data_url(data_url, max_width=480, max_height=160, quality=82):
+    """Downscale + recompress an uploaded logo data URL so it doesn't bloat
+    every page load (logo_image is injected inline into base.html on every
+    request -- see core/database.py:get_company_branding). Returns the
+    original value unchanged if it isn't a data: URL or can't be decoded,
+    so non-image values (e.g. clearing the logo to '') pass through as-is."""
+    import base64
+    from PIL import Image as PILImage
+
+    if not data_url or not data_url.startswith('data:'):
+        return data_url
+
+    try:
+        header, b64data = data_url.split(',', 1)
+        raw = base64.b64decode(b64data)
+        pil_img = PILImage.open(io.BytesIO(raw))
+        pil_img.load()
+
+        # Preserve transparency where present (PNG logos), otherwise flatten
+        # onto white and export as JPEG -- JPEG compresses photos/scans far
+        # smaller than base64 PNG ever will.
+        has_alpha = pil_img.mode in ('RGBA', 'LA') or (pil_img.mode == 'P' and 'transparency' in pil_img.info)
+
+        width, height = pil_img.size
+        scale = min(max_width / width, max_height / height, 1)
+        if scale < 1:
+            pil_img = pil_img.resize((max(1, int(width * scale)), max(1, int(height * scale))), PILImage.LANCZOS)
+
+        out = io.BytesIO()
+        if has_alpha:
+            pil_img = pil_img.convert('RGBA')
+            pil_img.save(out, format='PNG', optimize=True)
+            mime = 'image/png'
+        else:
+            pil_img = pil_img.convert('RGB')
+            pil_img.save(out, format='JPEG', quality=quality, optimize=True)
+            mime = 'image/jpeg'
+
+        encoded = base64.b64encode(out.getvalue()).decode('ascii')
+        return f'data:{mime};base64,{encoded}'
+    except Exception:
+        # If we can't safely process it, fall back to the original value
+        # rather than losing the upload -- better an unoptimized logo than
+        # a broken one.
+        return data_url
+
+
+@settings_bp.route('/api/company/logo')
+def company_logo_image():
+    """Serve the company logo as a real image response instead of inlining
+    it as a base64 data URL in every page's HTML (see
+    core/database.py:get_company_branding, which is what used to bloat
+    every request by however large the uploaded logo was). Cached hard on
+    the client since logos change maybe a few times a year; a version-less
+    URL is fine to cache long because base.html/templates always reference
+    this same path and browsers will simply re-fetch after a hard refresh
+    or once the cache entry expires."""
+    import base64
+    row = get_db().execute("SELECT value FROM company_settings WHERE key = 'logo_image'").fetchone()
+    data_url = row['value'] if row else ''
+    if not data_url or not data_url.startswith('data:'):
+        return '', 404
+
+    try:
+        header, b64data = data_url.split(',', 1)
+        mime = header.split(';')[0].replace('data:', '') or 'image/png'
+        raw = base64.b64decode(b64data)
+    except Exception:
+        return '', 404
+
+    response = send_file(io.BytesIO(raw), mimetype=mime)
+    response.headers['Cache-Control'] = 'public, max-age=3600'
+    return response
+
+
 @settings_bp.route('/api/company', methods=['PUT'])
 @login_required
 @role_required('admin')
 def update_company():
     data = request.get_json()
     now = utcnow()
+
+    if 'logo_image' in data:
+        data['logo_image'] = _resize_logo_data_url(data['logo_image'])
 
     # 'main_account_opening_balance' isn't just another text setting -- it's
     # the headline cash figure that the Chart of Accounts / Trial Balance are
@@ -631,6 +709,40 @@ def delete_region(region_id):
     return jsonify({'message': 'Region deleted successfully'})
 
 
+# ==================== BACKUPS ====================
+
+@settings_bp.route('/api/backups', methods=['GET'])
+@login_required
+@role_required('admin')
+def list_backups():
+    from core.serializers import backup_public
+    rows = get_db().execute("SELECT * FROM backups ORDER BY created_at DESC LIMIT 30").fetchall()
+    return jsonify({'backups': [backup_public(b) for b in rows]})
+
+
+@settings_bp.route('/api/backups/run', methods=['POST'])
+@login_required
+@role_required('admin')
+def run_backup_now():
+    from core.backup import run_backup
+    result = run_backup(triggered_by=f"manual:{get_current_user()['username']}")
+    log_audit('RUN_BACKUP', 'backup', None, new_values=result)
+    if result['status'] != 'success':
+        return jsonify({'error': result.get('error') or 'Backup failed'}), 500
+    return jsonify({'message': 'Backup completed', **result})
+
+
+@settings_bp.route('/api/backups/<path:filename>/download', methods=['GET'])
+@login_required
+@role_required('admin')
+def download_backup(filename):
+    from core.backup import local_backup_path
+    path = local_backup_path(filename)
+    if not path:
+        return jsonify({'error': 'That backup is no longer on this instance\'s disk (ephemeral filesystem -- see Settings note), or it was uploaded to S3 only'}), 404
+    return send_file(path, as_attachment=True, download_name=os.path.basename(path))
+
+
 # ==================== NOTIFICATIONS ====================
 
 @notifications_bp.route('/')
@@ -1014,11 +1126,19 @@ def update_user(user_id):
         return jsonify({'error': 'User not found'}), 404
     data = request.get_json()
 
+    username = data.get('username', target['username'])
     full_name = data.get('full_name', target['full_name'])
     email = data.get('email', target['email'])
     phone = data.get('phone', target['phone'])
     role = target['role']
     is_active = target['is_active']
+
+    if username != target['username']:
+        clash = get_db().execute(
+            "SELECT id FROM users WHERE username = %s AND id != %s", (username, user_id)
+        ).fetchone()
+        if clash:
+            return jsonify({'error': 'Username already taken'}), 400
 
     if current['role'] == 'admin':
         role = data.get('role', role)
@@ -1034,14 +1154,14 @@ def update_user(user_id):
         # own password here already knows it, so clear the flag instead.
         force_change = 1 if current['id'] != user_id else 0
         execute(
-            "UPDATE users SET full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, password_hash=%s, "
+            "UPDATE users SET username=%s, full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, password_hash=%s, "
             "must_change_password=%s, updated_at=%s WHERE id=%s",
-            (full_name, email, phone, role, is_active, password_hash, force_change, utcnow(), user_id)
+            (username, full_name, email, phone, role, is_active, password_hash, force_change, utcnow(), user_id)
         )
     else:
         execute(
-            "UPDATE users SET full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, updated_at=%s WHERE id=%s",
-            (full_name, email, phone, role, is_active, utcnow(), user_id)
+            "UPDATE users SET username=%s, full_name=%s, email=%s, phone=%s, role=%s, is_active=%s, updated_at=%s WHERE id=%s",
+            (username, full_name, email, phone, role, is_active, utcnow(), user_id)
         )
 
     updated = get_db().execute("SELECT * FROM users WHERE id = %s", (user_id,)).fetchone()
