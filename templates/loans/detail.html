@@ -172,10 +172,10 @@
         <!-- Schedule -->
         <table class="table mb-0" id="scheduleTab">
           <thead><tr>
-            <th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Total Due</th><th>Paid</th><th>Balance</th><th>Status</th>
+            <th>#</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Total Due</th><th>Paid</th><th>Balance</th><th>Status</th><th></th>
           </tr></thead>
           <tbody id="scheduleTable">
-            <tr><td colspan="8" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>
+            <tr><td colspan="9" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>
           </tbody>
         </table>
         <!-- Repayments -->
@@ -296,6 +296,32 @@
     </div>
   </div>
 </div>
+<!-- Edit Due Date Modal -->
+<div class="modal fade" id="editDueDateModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Change Installment Due Date</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:12px;color:var(--text-muted)" class="mb-2">
+          Installment <strong id="editDueDateInstallmentNo"></strong> -- current due date <strong id="editDueDateCurrent"></strong>.
+        </p>
+        <label class="form-label" style="font-size:11.5px">New Due Date</label>
+        <input type="date" class="form-control form-control-sm mb-2" id="editDueDateInput" />
+        <label class="form-label" style="font-size:11.5px">Reason (optional)</label>
+        <textarea class="form-control form-control-sm" id="editDueDateReason" rows="2" placeholder="e.g. corrected data-entry error, borrower requested extension"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-brand" id="editDueDateBtn" onclick="saveInstallmentDueDate()">
+          <i class="bi bi-check-lg me-1"></i>Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- Restructure Modal -->
 <div class="modal fade" id="restructureModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -383,6 +409,7 @@ async function loadLoanData() {
     // Schedule
     const sch = loanData.schedule;
     const today = new Date().toISOString().split('T')[0];
+    const canEditDueDate = {{ 'true' if user and user.role in ('admin', 'loan_officer') else 'false' }};
     if (!sch.length) {
       document.getElementById('scheduleTable').innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="bi bi-calendar3"></i><p>No schedule generated yet</p></div></td></tr>';
     } else {
@@ -396,6 +423,11 @@ async function loadLoanData() {
           <td style="font-size:12px;color:var(--brand-light)">${fmtCurrency(s.total_paid)}</td>
           <td style="font-size:12px">${fmtCurrency(s.balance_after)}</td>
           <td>${statusPill(s.status)}</td>
+          <td>${(s.status === 'pending' || s.status === 'partial') && canEditDueDate ? `
+            <button class="btn btn-sm" style="padding:1px 6px;font-size:11px;background:var(--surface-2);border:1px solid var(--border)"
+                    title="Change due date" onclick="showEditDueDateModal(${s.id}, ${s.installment_number}, '${s.due_date}')">
+              <i class="bi bi-pencil"></i>
+            </button>` : ''}</td>
         </tr>`).join('');
     }
 
@@ -547,6 +579,36 @@ function showTopupModal() {
       setTimeout(() => window.location.href = `/loans/${data.loan.id}`, 1200);
     } catch(e) { Toast.error(e.message); }
   });
+}
+
+let _editDueDateScheduleId = null;
+
+function showEditDueDateModal(scheduleId, installmentNumber, currentDueDate) {
+  _editDueDateScheduleId = scheduleId;
+  document.getElementById('editDueDateInstallmentNo').textContent = `#${installmentNumber}`;
+  document.getElementById('editDueDateCurrent').textContent = fmtDate(currentDueDate);
+  document.getElementById('editDueDateInput').value = currentDueDate;
+  document.getElementById('editDueDateReason').value = '';
+  new bootstrap.Modal(document.getElementById('editDueDateModal')).show();
+}
+
+async function saveInstallmentDueDate() {
+  const newDueDate = document.getElementById('editDueDateInput').value;
+  const reason = document.getElementById('editDueDateReason').value.trim();
+  if (!newDueDate) { Toast.warning('Pick a new due date'); return; }
+
+  const btn = document.getElementById('editDueDateBtn');
+  setLoading(btn, true);
+  try {
+    await API.patch(`/loans/api/{{ loan.id }}/schedule/${_editDueDateScheduleId}/due-date`, {
+      due_date: newDueDate, reason
+    });
+    Toast.success('Due date updated');
+    bootstrap.Modal.getInstance(document.getElementById('editDueDateModal')).hide();
+    setTimeout(() => location.reload(), 800);
+  } catch(e) {
+    Toast.error(e.message); setLoading(btn, false);
+  }
 }
 
 function showRestructureModal() {
