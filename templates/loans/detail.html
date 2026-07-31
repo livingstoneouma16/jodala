@@ -29,6 +29,7 @@
     <button class="btn btn-info btn-sm" onclick="showExtendModal()"><i class="bi bi-calendar-plus me-1"></i>Extend</button>
     {% if user and user.role in ('admin', 'loan_officer') %}
     <button class="btn btn-sm" style="background:#7c3aed;border:1px solid #6d28d9;color:#fff" onclick="showRestructureModal()"><i class="bi bi-arrow-repeat me-1"></i>Restructure</button>
+    <button class="btn btn-sm" style="background:#0f766e;border:1px solid #0d5f59;color:#fff" onclick="showPushScheduleModal()"><i class="bi bi-calendar-week me-1"></i>Push Schedule</button>
     {% endif %}
     {% if user and user.role == 'admin' %}
     <button class="btn btn-danger btn-sm" onclick="showWriteOffModal()"><i class="bi bi-x-octagon me-1"></i>Write Off</button>
@@ -296,6 +297,36 @@
     </div>
   </div>
 </div>
+<!-- Push Schedule Modal -->
+<div class="modal fade" id="pushScheduleModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Push Schedule</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info" style="font-size:12px">
+          <i class="bi bi-info-circle me-1"></i>
+          Shifts every unpaid installment's due date by a fixed number of days.
+          Amounts stay exactly the same -- this only moves dates, unlike Restructure
+          (which re-amortizes) or Extend (which adds periods).
+        </div>
+        <label class="form-label">Reason <span class="text-danger">*</span></label>
+        <textarea class="form-control mb-2" id="pushScheduleReason" rows="2" placeholder="Why is the schedule being pushed?"></textarea>
+        <label class="form-label" style="font-size:11.5px">Days to push</label>
+        <input type="number" class="form-control form-control-sm" id="pushScheduleDays" value="30" />
+        <div style="font-size:11px;color:var(--text-muted)" class="mt-1">Use a negative number to pull dates earlier.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm" style="background:#0f766e;border:1px solid #0d5f59;color:#fff" id="pushScheduleBtn" onclick="pushSchedule()">
+          <i class="bi bi-calendar-week me-1"></i>Push Dates
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- Restructure Modal -->
 <div class="modal fade" id="restructureModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -547,6 +578,29 @@ function showTopupModal() {
       setTimeout(() => window.location.href = `/loans/${data.loan.id}`, 1200);
     } catch(e) { Toast.error(e.message); }
   });
+}
+
+function showPushScheduleModal() {
+  document.getElementById('pushScheduleReason').value = '';
+  document.getElementById('pushScheduleDays').value = 30;
+  new bootstrap.Modal(document.getElementById('pushScheduleModal')).show();
+}
+
+async function pushSchedule() {
+  const reason = document.getElementById('pushScheduleReason').value.trim();
+  if (!reason) { Toast.warning('Please provide a reason for pushing the schedule'); return; }
+  const days = parseInt(document.getElementById('pushScheduleDays').value);
+  if (!days) { Toast.warning('Enter a non-zero number of days'); return; }
+
+  const btn = document.getElementById('pushScheduleBtn');
+  setLoading(btn, true);
+  try {
+    await API.post('/loans/api/{{ loan.id }}/push-schedule', { days, reason });
+    Toast.success('Schedule pushed');
+    setTimeout(() => location.reload(), 1200);
+  } catch(e) {
+    Toast.error(e.message); setLoading(btn, false);
+  }
 }
 
 function showRestructureModal() {
