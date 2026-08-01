@@ -49,6 +49,24 @@
         </div>
         <div class="mb-3">
           <label class="form-label small fw-semibold">Message</label>
+          <div class="d-flex gap-2 mb-2">
+            <select class="form-select form-select-sm" id="cTemplatePicker" onchange="applyCampaignTemplate()" style="flex:1">
+              <option value="">Use a quick template…</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-brand-outline" onclick="toggleAiDraftPanel()" style="white-space:nowrap">
+              <i class="bi bi-stars me-1"></i>Draft with AI
+            </button>
+          </div>
+          <div id="cAiDraftPanel" style="display:none;background:var(--surface-2);border-radius:8px" class="mb-2 p-2">
+            <div class="d-flex gap-2">
+              <input type="text" class="form-control form-control-sm" id="cAiPrompt"
+                     placeholder="e.g. Remind clients politely that late fees apply after 7 days">
+              <button type="button" class="btn btn-sm btn-brand" id="cAiDraftBtn" onclick="draftCampaignMessage()" style="white-space:nowrap">
+                <i class="bi bi-magic me-1"></i>Generate
+              </button>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted)" class="mt-1">Describe what you want to say; the AI will write it, using {name} as a per-recipient placeholder.</div>
+          </div>
           <textarea class="form-control form-control-sm" id="cMessage" rows="4" maxlength="640" placeholder="Type your message..."></textarea>
           <div class="form-text" id="cCharCount" style="font-size:11px">0 characters</div>
         </div>
@@ -184,6 +202,63 @@ async function loadHistory() {
   }
 }
 
+async function loadTemplates() {
+  const sel = document.getElementById('cTemplatePicker');
+  try {
+    const data = await API.get('/campaigns/api/templates');
+    data.templates.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.key; opt.textContent = t.label;
+      sel.appendChild(opt);
+    });
+  } catch (e) { /* templates are a nice-to-have; fail quietly */ }
+}
+
+async function applyCampaignTemplate() {
+  const key = document.getElementById('cTemplatePicker').value;
+  if (!key) return;
+  const channel = document.getElementById('cChannel').value;
+  try {
+    const data = await API.get(`/campaigns/api/templates/${key}?channel=${channel}`);
+    document.getElementById('cMessage').value = data.message;
+    document.getElementById('cCharCount').textContent = data.message.length + ' characters';
+    if (data.subject) document.getElementById('cSubject').value = data.subject;
+  } catch (e) {
+    Toast.error(e.message || 'Failed to load template');
+  }
+}
+
+function toggleAiDraftPanel() {
+  const panel = document.getElementById('cAiDraftPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (panel.style.display === 'block') document.getElementById('cAiPrompt').focus();
+}
+
+async function draftCampaignMessage() {
+  const prompt = document.getElementById('cAiPrompt').value.trim();
+  if (!prompt) { Toast.warning('Describe what you want the message to say'); return; }
+
+  const btn = document.getElementById('cAiDraftBtn');
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/campaigns/api/draft', {
+      prompt,
+      channel: document.getElementById('cChannel').value,
+      audience_type: document.getElementById('cAudience').value,
+    });
+    document.getElementById('cMessage').value = data.message;
+    document.getElementById('cCharCount').textContent = data.message.length + ' characters';
+    if (data.subject) document.getElementById('cSubject').value = data.subject;
+    Toast.success('Draft generated -- review before sending');
+  } catch (e) {
+    Toast.error(e.message || 'Failed to generate draft');
+  } finally {
+    setLoading(btn, false);
+    btn.innerHTML = '<i class="bi bi-magic me-1"></i>Generate';
+  }
+}
+
 previewCampaign();
 loadHistory();
+loadTemplates();
 </script>{% endblock %}

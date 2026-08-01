@@ -17,7 +17,9 @@ lands in the existing sms_log/email_log tables. The `campaigns` table
 targeted, the message, and how many sends succeeded/failed.
 """
 from datetime import date
+import os
 
+import requests
 from flask import Blueprint, request, jsonify, render_template
 
 from core.database import get_db, execute, utcnow
@@ -67,6 +69,131 @@ def _resolve_recipients(audience_type, region, overdue_only):
         recipients += _fetch('clients', 'client_id')
 
     return recipients
+
+
+CAMPAIGN_TEMPLATES = {
+    'overdue_reminder': {
+        'label': 'Overdue payment reminder',
+        'sms': "Hi {name}, this is a reminder from Jodala Microfinance that your loan installment is overdue. Please make a payment as soon as possible to avoid penalties. Contact us if you need assistance.",
+        'email_subject': "Overdue Loan Installment Reminder",
+        'email': "Dear {name},\n\nThis is a reminder that your loan installment with Jodala Microfinance is currently overdue. Please make a payment as soon as possible to avoid additional penalties.\n\nIf you're facing difficulties or need to discuss your repayment plan, please contact us -- we're happy to help.\n\nThank you,\nJodala Microfinance",
+    },
+    'welcome': {
+        'label': 'Welcome message',
+        'sms': "Welcome to Jodala Microfinance, {name}! We're glad to have you with us. Reach out anytime if you have questions about your account.",
+        'email_subject': "Welcome to Jodala Microfinance",
+        'email': "Dear {name},\n\nWelcome to Jodala Microfinance! We're glad to have you as part of our community.\n\nIf you have any questions about your account, loans, or savings, don't hesitate to reach out.\n\nWarm regards,\nJodala Microfinance",
+    },
+    'payment_confirmation': {
+        'label': 'General payment thank-you',
+        'sms': "Hi {name}, thank you for your recent payment to Jodala Microfinance. We appreciate your continued trust in us.",
+        'email_subject': "Thank You for Your Payment",
+        'email': "Dear {name},\n\nThank you for your recent payment. We appreciate your continued partnership with Jodala Microfinance.\n\nIf you have any questions about your account, feel free to reach out.\n\nBest regards,\nJodala Microfinance",
+    },
+    'holiday_greeting': {
+        'label': 'Holiday / seasonal greeting',
+        'sms': "Season's greetings from all of us at Jodala Microfinance, {name}! Wishing you a joyful holiday season.",
+        'email_subject': "Season's Greetings from Jodala Microfinance",
+        'email': "Dear {name},\n\nAs the year draws to a close, we want to thank you for being a valued member of the Jodala Microfinance family.\n\nWishing you and your loved ones a joyful holiday season.\n\nWarm regards,\nJodala Microfinance",
+    },
+    'new_product': {
+        'label': 'New product / service announcement',
+        'sms': "Hi {name}, Jodala Microfinance now offers new savings and loan products. Visit your nearest branch or contact us to learn more.",
+        'email_subject': "New Products Now Available",
+        'email': "Dear {name},\n\nWe're excited to let you know that Jodala Microfinance now offers new savings and loan products designed to serve you better.\n\nVisit your nearest branch or contact us to learn more about what's available.\n\nBest regards,\nJodala Microfinance",
+    },
+}
+
+
+@campaigns_bp.route('/api/templates', methods=['GET'])
+@login_required
+def list_campaign_templates():
+    return jsonify({
+        'templates': [{'key': k, 'label': v['label']} for k, v in CAMPAIGN_TEMPLATES.items()]
+    })
+
+
+@campaigns_bp.route('/api/templates/<key>', methods=['GET'])
+@login_required
+def get_campaign_template(key):
+    channel = request.args.get('channel', 'sms')
+    tpl = CAMPAIGN_TEMPLATES.get(key)
+    if not tpl:
+        return jsonify({'error': 'Unknown template'}), 404
+    if channel == 'email':
+        return jsonify({'message': tpl['email'], 'subject': tpl['email_subject']})
+    return jsonify({'message': tpl['sms']})
+
+
+@campaigns_bp.route('/api/draft', methods=['POST'])
+@login_required
+@role_required('admin', 'loan_officer')
+def draft_campaign_message():
+    """Generate a custom campaign message with the Anthropic API, based on a
+    short prompt describing what the sender wants to say. Requires
+    ANTHROPIC_API_KEY to be set in the environment."""
+    api_key = os.getenv('ANTHROPIC_API_KEY')
+    if not api_key:
+        return jsonify({'error': 'AI drafting is not configured -- set ANTHROPIC_API_KEY on the server'}), 400
+
+    data = request.get_json() or {}
+    prompt = (data.get('prompt') or '').strip()
+    channel = data.get('channel', 'sms')
+    audience_type = data.get('audience_type', 'both')
+
+    if not prompt:
+        return jsonify({'error': 'Describe what the message should say'}), 400
+
+    audience_desc = {
+        'members': 'registered members', 'clients': 'non-member client borrowers', 'both': 'members and clients'
+    }.get(audience_type, 'members and clients')
+
+    length_hint = (
+        "Keep it under 300 characters, plain text, no markdown, no subject line -- this is a single SMS."
+        if channel == 'sms' else
+        "Write a short, warm email body (3-6 short paragraphs), plain text, no markdown. "
+        "Also provide a separate one-line subject."
+    )
+
+    system_prompt = (
+        "You draft short outbound messages for a microfinance institution called Jodala Microfinance, "
+        f"to be sent to {audience_desc}. Use the placeholder {{name}} wherever the recipient's name should "
+        "go -- it will be substituted per-recipient at send time. Be professional, warm, and concise. "
+        "Never invent specific loan amounts, dates, or figures that weren't given to you. " + length_hint
+    )
+
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-sonnet-4-6",
+                "max_tokens": 500,
+                "system": system_prompt,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=20,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        text = "".join(block.get('text', '') for block in result.get('content', []) if block.get('type') == 'text').strip()
+        if not text:
+            return jsonify({'error': 'AI returned an empty draft -- try rephrasing your prompt'}), 502
+
+        subject = None
+        if channel == 'email':
+            lines = text.split('\n', 1)
+            if lines[0].lower().startswith('subject:'):
+                subject = lines[0].split(':', 1)[1].strip()
+                text = lines[1].strip() if len(lines) > 1 else text
+
+        return jsonify({'message': text, 'subject': subject})
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'AI drafting failed: {e}'}), 502
 
 
 @campaigns_bp.route('/')
