@@ -191,6 +191,9 @@ def draft_campaign_message():
                 subject = lines[0].split(':', 1)[1].strip()
                 text = lines[1].strip() if len(lines) > 1 else text
 
+        if '{name}' not in text:
+            text = f"Hi {{name}}, " + text[0].lower() + text[1:] if channel == 'sms' else f"Dear {{name}},\n\n{text}"
+
         return jsonify({'message': text, 'subject': subject})
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'AI drafting failed: {e}'}), 502
@@ -268,16 +271,17 @@ def send_campaign():
 
     sent, failed = 0, 0
     for r in recipients:
+        personalized = message.replace('{name}', r['name'] or 'there')
         if channel == 'sms':
             if r['phone']:
-                send_sms_async(r['phone'], message)
+                send_sms_async(r['phone'], personalized)
                 sent += 1
             else:
                 failed += 1
         else:
             if r['email']:
-                body_html = f"<p>{message}</p>"
-                send_email_async(r['email'], subject, message, body_html)
+                body_html = f"<p>{personalized}</p>"
+                send_email_async(r['email'], subject, personalized, body_html)
                 sent += 1
             else:
                 failed += 1
