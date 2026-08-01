@@ -120,7 +120,11 @@ def create_client():
         sms_message=(
             f"Welcome to Jodala Microfinance, {first_name}! Your client number is "
             f"{client['client_number']}. Thank you for choosing us."
-        )
+        ),
+        ai_event_type='client_registered',
+        ai_facts={
+            'client_name': f"{first_name} {last_name}", 'client_number': client['client_number'],
+        }
     )
 
     return jsonify({'message': 'Client registered', 'client': client_public(client)}), 201

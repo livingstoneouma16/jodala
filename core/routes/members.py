@@ -117,7 +117,11 @@ def create_member():
         sms_message=(
             f"Welcome to Jodala Microfinance, {first_name}! Your member number is "
             f"{member['member_number']}. Thank you for joining us."
-        )
+        ),
+        ai_event_type='member_registered',
+        ai_facts={
+            'member_name': f"{first_name} {last_name}", 'member_number': member['member_number'],
+        }
     )
 
     return jsonify({'message': 'Member registered successfully', 'member': member_public(member)}), 201

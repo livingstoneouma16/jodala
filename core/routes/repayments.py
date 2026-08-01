@@ -215,7 +215,14 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
             f"Jodala Microfinance: Payment of {format_currency(amount)} received for loan "
             f"{loan['loan_number']} (receipt {repayment['receipt_number']}). "
             f"Balance: {format_currency(new_outstanding)}. Thank you."
-        )
+        ),
+        ai_event_type='repayment_recorded',
+        ai_facts={
+            'borrower_name': borrower_name, 'loan_number': loan['loan_number'],
+            'amount_paid': format_currency(amount),
+            'receipt_number': repayment['receipt_number'],
+            'remaining_balance': format_currency(new_outstanding),
+        }
     )
 
     return repayment, new_outstanding

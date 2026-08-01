@@ -28,7 +28,7 @@ def _borrower_contact(loan_row):
 
 
 def _notify_loan_parties(loan, title, message, notification_type, email_subject,
-                         email_body_html, sms_message=None):
+                         email_body_html, sms_message=None, ai_event_type=None, ai_facts=None):
     """Notify every active staff user and the loan's member or client."""
     borrower_name, borrower_email, borrower_phone = _borrower_contact(loan)
     staff_users = get_db().execute(
@@ -38,14 +38,16 @@ def _notify_loan_parties(loan, title, message, notification_type, email_subject,
     for staff_user in staff_users:
         notify(
             staff_user['id'], title, message,
-            notification_type=notification_type, related_type='loan', related_id=loan['id']
+            notification_type=notification_type, related_type='loan', related_id=loan['id'],
+            ai_event_type=ai_event_type, ai_facts=ai_facts
         )
 
     notify(
         None, title, message,
         notification_type=notification_type, related_type='loan', related_id=loan['id'],
         email=borrower_email, email_subject=email_subject, email_body_html=email_body_html,
-        phone=borrower_phone, sms_message=sms_message
+        phone=borrower_phone, sms_message=sms_message,
+        ai_event_type=ai_event_type, ai_facts=ai_facts
     )
 
 loans_bp = Blueprint('loans', __name__)
@@ -214,7 +216,12 @@ def create_loan():
             f"for <strong>{format_currency(loan['principal_amount'])}</strong>.</p>"
             f"<p>We will notify you when it has been reviewed.</p>"
         ),
-        f"Jodala Microfinance: We received your loan application {loan['loan_number']}."
+        f"Jodala Microfinance: We received your loan application {loan['loan_number']}.",
+        ai_event_type='loan_application_submitted',
+        ai_facts={
+            'borrower_name': borrower_name, 'loan_number': loan['loan_number'],
+            'principal_amount': format_currency(loan['principal_amount']),
+        }
     )
 
     return jsonify({'message': 'Loan application submitted', 'loan': loan_public(loan)}), 201
@@ -293,7 +300,12 @@ def approve_loan(loan_id):
             f"Jodala Microfinance: Your loan {loan['loan_number']} for "
             f"{format_currency(loan['principal_amount'])} has been approved. "
             f"It will be disbursed shortly."
-        )
+        ),
+        ai_event_type='loan_approved',
+        ai_facts={
+            'borrower_name': borrower_name, 'loan_number': loan['loan_number'],
+            'principal_amount': format_currency(loan['principal_amount']),
+        }
     )
     return jsonify({'message': 'Loan approved', 'loan': loan_public(updated)})
 
@@ -334,7 +346,12 @@ def reject_loan(loan_id):
             f"Jodala Microfinance: Your loan application {loan['loan_number']} was not approved."
             + (f" Reason: {reason}" if reason else "")
             + " Contact us with any questions."
-        )
+        ),
+        ai_event_type='loan_rejected',
+        ai_facts={
+            'borrower_name': borrower_name, 'loan_number': loan['loan_number'],
+            'reason': reason or None,
+        }
     )
     return jsonify({'message': 'Loan rejected'})
 
@@ -445,7 +462,15 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
             f"Jodala Microfinance: {format_currency(amount_disbursed)} has been disbursed for "
             f"loan {loan['loan_number']}{receipt_note}. First repayment due "
             f"{first_repayment.isoformat()}."
-        )
+        ),
+        ai_event_type='loan_disbursed',
+        ai_facts={
+            'borrower_name': borrower_name, 'loan_number': loan['loan_number'],
+            'amount_disbursed': format_currency(amount_disbursed),
+            'disbursement_date': disbursement_date.isoformat(),
+            'first_repayment_date': first_repayment.isoformat(),
+            'mpesa_receipt': mpesa_receipt or None,
+        }
     )
     return updated
 
@@ -498,7 +523,13 @@ def send_overdue_reminders():
                 f"Jodala Microfinance: Loan {loan['loan_number']} has {overdue_total['cnt']} "
                 f"overdue installment(s) totalling {format_currency(overdue_total['amt'])}. "
                 f"Please pay as soon as possible to avoid penalties."
-            )
+            ),
+            ai_event_type='loan_overdue_reminder',
+            ai_facts={
+                'borrower_name': borrower_name, 'loan_number': loan['loan_number'],
+                'overdue_installment_count': overdue_total['cnt'],
+                'overdue_amount': format_currency(overdue_total['amt']),
+            }
         )
         sent += 1
     return {'loans_checked': len(loan_ids), 'reminders_sent': sent, 'skipped_no_contact': skipped}
