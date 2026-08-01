@@ -730,7 +730,7 @@ a:hover { color: var(--brand-light); }
 .status-pending, .status-suspended
   { background: var(--warning-bg); color: var(--gold-dark); }
 .status-disbursed { background: var(--surface-2); color: var(--brand-mid); }
-.status-rejected, .status-overdue, .status-written_off
+.status-rejected, .status-overdue, .status-written_off, .status-inactive
   { background: var(--danger-bg); color: var(--danger); }
 
 [data-bs-theme="dark"] .status-active,
@@ -740,7 +740,8 @@ a:hover { color: var(--brand-light); }
 [data-bs-theme="dark"] .status-suspended { color: #E9C46A; }
 [data-bs-theme="dark"] .status-rejected,
 [data-bs-theme="dark"] .status-overdue,
-[data-bs-theme="dark"] .status-written_off { color: #E8A9A4; }
+[data-bs-theme="dark"] .status-written_off,
+[data-bs-theme="dark"] .status-inactive { color: #E8A9A4; }
 [data-bs-theme="dark"] .status-disbursed { color: var(--brand-light); }
 
 /* ── CARDS ────────────────────────────────────────────── */
