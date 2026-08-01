@@ -1,4 +1,5 @@
 import os
+import hashlib
 import logging
 from datetime import datetime
 from flask import Flask
@@ -62,6 +63,12 @@ def create_app():
     # Configuration
     app.config['ENV_NAME'] = os.getenv('APP_ENV', 'development').strip().lower()
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+    try:
+        _css_path = os.path.join(app.static_folder, 'css', 'main.css')
+        with open(_css_path, 'rb') as _f:
+            app.config['ASSET_VERSION'] = hashlib.md5(_f.read()).hexdigest()[:10]
+    except OSError:
+        app.config['ASSET_VERSION'] = '1'
     app.config['DATABASE_URL'] = resolve_db_url()
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key')
 

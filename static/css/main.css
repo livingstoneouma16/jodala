@@ -726,22 +726,23 @@ a:hover { color: var(--brand-light); }
   pointer-events: none;
 }
 .status-active, .status-approved, .status-completed
-  { background: var(--brand-pale); color: var(--brand-mid); }
+  { background: #DFF3E3; color: #1E7A34; }
 .status-pending, .status-suspended
-  { background: var(--warning-bg); color: var(--gold-dark); }
+  { background: #FBF0D9; color: #93701E; }
 .status-disbursed { background: var(--surface-2); color: var(--brand-mid); }
-.status-rejected, .status-overdue, .status-written_off, .status-inactive
-  { background: var(--danger-bg); color: var(--danger); }
+.status-rejected, .status-overdue, .status-written_off, .status-inactive, .status-blacklisted
+  { background: #F8DEDD; color: #A02525; }
 
 [data-bs-theme="dark"] .status-active,
 [data-bs-theme="dark"] .status-approved,
-[data-bs-theme="dark"] .status-completed { color: var(--brand-light); }
+[data-bs-theme="dark"] .status-completed { background: rgba(46,160,67,.16); color: #6FDB8A; }
 [data-bs-theme="dark"] .status-pending,
-[data-bs-theme="dark"] .status-suspended { color: #E9C46A; }
+[data-bs-theme="dark"] .status-suspended { background: rgba(147,112,30,.20); color: #E9C46A; }
 [data-bs-theme="dark"] .status-rejected,
 [data-bs-theme="dark"] .status-overdue,
 [data-bs-theme="dark"] .status-written_off,
-[data-bs-theme="dark"] .status-inactive { color: #E8A9A4; }
+[data-bs-theme="dark"] .status-inactive,
+[data-bs-theme="dark"] .status-blacklisted { background: rgba(160,37,37,.22); color: #E8A9A4; }
 [data-bs-theme="dark"] .status-disbursed { color: var(--brand-light); }
 
 /* ── CARDS ────────────────────────────────────────────── */
