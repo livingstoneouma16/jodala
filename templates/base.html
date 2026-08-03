@@ -101,6 +101,9 @@
     <a href="{{ url_for('campaigns.index') }}" class="nav-link-item {% if request.endpoint and 'campaigns' in request.endpoint %}active{% endif %}">
       <i class="bi bi-megaphone-fill"></i><span>Campaigns</span>
     </a>
+    <a href="{{ url_for('collections.index') }}" class="nav-link-item {% if request.endpoint and 'collections' in request.endpoint %}active{% endif %}">
+      <i class="bi bi-list-check"></i><span>Collections</span>
+    </a>
     <a href="{{ url_for('users.index') }}" class="nav-link-item {% if request.endpoint and 'users' in request.endpoint %}active{% endif %}">
       <i class="bi bi-shield-lock-fill"></i><span>Users</span>
     </a>

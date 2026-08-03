@@ -725,9 +725,9 @@ a:hover { color: var(--brand-light); }
   opacity: .35;
   pointer-events: none;
 }
-.status-active, .status-approved, .status-completed
+.status-active, .status-approved, .status-completed, .status-resolved
   { background: #DFF3E3; color: #1E7A34; }
-.status-pending, .status-suspended
+.status-pending, .status-suspended, .status-open
   { background: #FBF0D9; color: #93701E; }
 .status-disbursed { background: var(--surface-2); color: var(--brand-mid); }
 .status-rejected, .status-overdue, .status-written_off, .status-inactive, .status-blacklisted
@@ -735,9 +735,11 @@ a:hover { color: var(--brand-light); }
 
 [data-bs-theme="dark"] .status-active,
 [data-bs-theme="dark"] .status-approved,
-[data-bs-theme="dark"] .status-completed { background: rgba(46,160,67,.16); color: #6FDB8A; }
+[data-bs-theme="dark"] .status-completed,
+[data-bs-theme="dark"] .status-resolved { background: rgba(46,160,67,.16); color: #6FDB8A; }
 [data-bs-theme="dark"] .status-pending,
-[data-bs-theme="dark"] .status-suspended { background: rgba(147,112,30,.20); color: #E9C46A; }
+[data-bs-theme="dark"] .status-suspended,
+[data-bs-theme="dark"] .status-open { background: rgba(147,112,30,.20); color: #E9C46A; }
 [data-bs-theme="dark"] .status-rejected,
 [data-bs-theme="dark"] .status-overdue,
 [data-bs-theme="dark"] .status-written_off,

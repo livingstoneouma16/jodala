@@ -1316,6 +1316,36 @@ def _migration_0025_disbursement_date_on_restructure(conn):
     conn.execute("ALTER TABLE loan_restructures ADD COLUMN IF NOT EXISTS new_disbursement_date TEXT")
 
 
+def _migration_0026_collection_tasks(conn):
+    """Automated collections escalation ladder on top of the existing daily
+    overdue-reminder SMS/email (send_overdue_reminders, core/scheduler.py).
+    That job just re-notifies every day a loan is overdue; it doesn't track
+    progression or give staff anything to act on. This adds a lightweight
+    task queue: as a loan's overdue age crosses configured day thresholds
+    (see COLLECTION_LADDER in core/collections.py), a task is auto-created
+    for a human step (phone call, field visit, write-off recommendation) --
+    one open task per (loan, stage) so re-running the daily job doesn't
+    spam duplicates, and stages don't regenerate once actioned."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS collection_tasks (
+        id SERIAL PRIMARY KEY,
+        loan_id INTEGER NOT NULL REFERENCES loans(id),
+        stage TEXT NOT NULL,
+        days_overdue_at_creation INTEGER NOT NULL,
+        outstanding_at_creation NUMERIC(14,2) NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        assigned_to INTEGER REFERENCES users(id),
+        notes TEXT,
+        resolved_by INTEGER REFERENCES users(id),
+        resolved_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(loan_id, stage)
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_tasks_status ON collection_tasks(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_tasks_loan ON collection_tasks(loan_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_tasks_assigned ON collection_tasks(assigned_to, status)")
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1345,6 +1375,7 @@ MIGRATIONS = [
     (23, 'add campaigns table for bulk SMS/email broadcasts', _migration_0023_campaigns),
     (24, 'add backups table for scheduled/on-demand database backups', _migration_0024_backups),
     (25, 'add old/new disbursement_date snapshot columns to loan_restructures', _migration_0025_disbursement_date_on_restructure),
+    (26, 'add collection_tasks table for automated collections escalation ladder', _migration_0026_collection_tasks),
 ]
 
 

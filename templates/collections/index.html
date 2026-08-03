@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Collections — Jodala Microfinance{% endblock %}
+{% block page_title %}Collections{% endblock %}
+{% block content %}
+<div class="mb-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
+  <div>
+    <h4 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0">Collections</h4>
+    <p class="text-muted mb-0" style="font-size:13px">Escalation tasks for loans that stay overdue past each stage of the ladder below</p>
+  </div>
+  {% if user.role == 'admin' %}
+  <button class="btn btn-sm btn-brand-outline" id="runNowBtn" onclick="runEscalationNow()">
+    <i class="bi bi-arrow-clockwise me-1"></i>Check for new tasks now
+  </button>
+  {% endif %}
+</div>
+
+<div class="jd-card mb-3">
+  <div class="jd-card-body py-2">
+    <div class="d-flex gap-3 flex-wrap" style="font-size:12px">
+      {% for rung in ladder %}
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge" style="background:var(--surface-2);color:var(--brand-mid)">Day {{ rung.min_days }}+</span>
+        <span>{{ rung.label }}</span>
+      </div>
+      {% if not loop.last %}<i class="bi bi-arrow-right text-muted"></i>{% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="jd-card">
+  <div class="jd-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div class="jd-card-title"><i class="bi bi-list-check" style="color:var(--brand-light)"></i>Tasks</div>
+    <div class="d-flex gap-2">
+      <select class="form-select form-select-sm" id="fStatus" style="width:auto" onchange="loadTasks()">
+        <option value="open" selected>Open</option>
+        <option value="resolved">Resolved</option>
+        <option value="all">All</option>
+      </select>
+      <select class="form-select form-select-sm" id="fStage" style="width:auto" onchange="loadTasks()">
+        <option value="">All stages</option>
+        {% for rung in ladder %}
+        <option value="{{ rung.stage }}">{{ rung.label }}</option>
+        {% endfor %}
+      </select>
+      <div class="form-check form-check-inline mb-0 ms-1">
+        <input class="form-check-input" type="checkbox" id="fMine" onchange="loadTasks()">
+        <label class="form-check-label" for="fMine" style="font-size:12px">My tasks</label>
+      </div>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead><tr>
+        <th>Loan</th><th>Borrower</th><th>Stage</th><th>Days Overdue</th><th>Outstanding</th>
+        <th>Assigned To</th><th>Status</th><th>Notes</th><th></th>
+      </tr></thead>
+      <tbody id="taskTable"><tr><td colspan="9" class="text-center p-4 text-muted">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Resolve/Assign Modal -->
+<div class="modal fade" id="taskModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Update Task</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2" style="font-size:13px" id="taskModalSummary"></p>
+        <label class="form-label small fw-semibold">Assign To</label>
+        <select class="form-select form-select-sm mb-3" id="tAssignedTo">
+          <option value="">Unassigned</option>
+        </select>
+        <label class="form-label small fw-semibold">Notes</label>
+        <textarea class="form-control form-control-sm mb-3" id="tNotes" rows="3" placeholder="What happened when you followed up?"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-brand" id="tSaveBtn" onclick="saveTask()"><i class="bi bi-check-lg me-1"></i>Save</button>
+        <button class="btn btn-sm btn-success" id="tResolveBtn" onclick="saveTask('resolved')"><i class="bi bi-check-circle-fill me-1"></i>Mark Resolved</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+function escapeHtml(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+const STAGE_LABELS = {{ ladder | tojson }}.reduce((m,r)=>{m[r.stage]=r.label; return m;}, {});
+
+let _activeTaskId = null;
+let _usersLoaded = false;
+
+async function loadUsersIntoSelect() {
+  if (_usersLoaded) return;
+  try {
+    const data = await API.get('/collections/api/assignable-staff');
+    const sel = document.getElementById('tAssignedTo');
+    (data.staff || []).forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id; opt.textContent = u.full_name;
+      sel.appendChild(opt);
+    });
+    _usersLoaded = true;
+  } catch (e) { /* assignment dropdown is a nice-to-have; fail quietly */ }
+}
+
+async function loadTasks() {
+  const status = document.getElementById('fStatus').value;
+  const stage = document.getElementById('fStage').value;
+  const mine = document.getElementById('fMine').checked;
+  const tbody = document.getElementById('taskTable');
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center p-4 text-muted">Loading…</td></tr>';
+
+  const params = new URLSearchParams({status});
+  if (stage) params.set('stage', stage);
+  if (mine) params.set('mine', '1');
+
+  try {
+    const data = await API.get(`/collections/api?${params.toString()}`);
+    if (!data.tasks.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center p-4 text-muted">No tasks match these filters</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.tasks.map(t => `
+      <tr>
+        <td><a href="/loans/${t.loan_id}">${escapeHtml(t.loan?.loan_number || ('#' + t.loan_id))}</a></td>
+        <td>${escapeHtml(t.loan?.member_name || 'N/A')}</td>
+        <td><span class="badge" style="background:var(--surface-2);color:var(--brand-mid)">${escapeHtml(STAGE_LABELS[t.stage] || t.stage)}</span></td>
+        <td>${t.days_overdue_at_creation}</td>
+        <td>${fmtCurrency(t.outstanding_at_creation)}</td>
+        <td>${escapeHtml(t.assigned_to_name || '—')}</td>
+        <td>${statusPill(t.status)}</td>
+        <td style="max-width:220px;font-size:12px" class="text-truncate" title="${escapeHtml(t.notes || '')}">${escapeHtml(t.notes || '—')}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-secondary" onclick='openTaskModal(${JSON.stringify(t)})'>
+            <i class="bi bi-pencil"></i>
+          </button>
+        </td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center p-4 text-danger">${escapeHtml(e.message || 'Failed to load tasks')}</td></tr>`;
+  }
+}
+
+async function openTaskModal(task) {
+  _activeTaskId = task.id;
+  await loadUsersIntoSelect();
+  document.getElementById('taskModalSummary').textContent =
+    `${task.loan?.loan_number || ('Loan #' + task.loan_id)} — ${STAGE_LABELS[task.stage] || task.stage} (${task.days_overdue_at_creation} days overdue)`;
+  document.getElementById('tAssignedTo').value = task.assigned_to || '';
+  document.getElementById('tNotes').value = task.notes || '';
+  document.getElementById('tResolveBtn').style.display = task.status === 'resolved' ? 'none' : 'inline-block';
+  new bootstrap.Modal(document.getElementById('taskModal')).show();
+}
+
+async function saveTask(newStatus) {
+  const btn = newStatus === 'resolved' ? document.getElementById('tResolveBtn') : document.getElementById('tSaveBtn');
+  setLoading(btn, true);
+  try {
+    const payload = {
+      assigned_to: document.getElementById('tAssignedTo').value || null,
+      notes: document.getElementById('tNotes').value,
+    };
+    if (newStatus) payload.status = newStatus;
+    await API.patch(`/collections/api/${_activeTaskId}`, payload);
+    Toast.success('Task updated');
+    bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide();
+    loadTasks();
+  } catch (e) {
+    Toast.error(e.message || 'Failed to update task');
+  } finally {
+    setLoading(btn, false);
+    btn.innerHTML = newStatus === 'resolved'
+      ? '<i class="bi bi-check-circle-fill me-1"></i>Mark Resolved'
+      : '<i class="bi bi-check-lg me-1"></i>Save';
+  }
+}
+
+async function runEscalationNow() {
+  const btn = document.getElementById('runNowBtn');
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/collections/api/run', {});
+    Toast.success(`Checked ${data.loans_checked} loan(s) — ${data.tasks_created} new task(s) created`);
+    loadTasks();
+  } catch (e) {
+    Toast.error(e.message || 'Failed to run escalation check');
+  } finally {
+    setLoading(btn, false);
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Check for new tasks now';
+  }
+}
+
+loadTasks();
+</script>{% endblock %}

@@ -19,9 +19,12 @@ app, since it uses the same app factory / DB / mailer.
 """
 from core import create_app
 from core.routes.loans import send_overdue_reminders
+from core.collections import run_collections_escalation
 
 if __name__ == '__main__':
     app = create_app()
     with app.app_context():
         result = send_overdue_reminders()
         print(f"Overdue reminders: {result}")
+        escalation_result = run_collections_escalation()
+        print(f"Collections escalation: {escalation_result}")

@@ -48,6 +48,7 @@ def start_scheduler(app):
         # own app context (there's no request in flight to piggyback on).
         with app.app_context():
             from core.routes.loans import send_overdue_reminders
+            from core.collections import run_collections_escalation
             try:
                 result = send_overdue_reminders()
                 logger.info('Overdue reminders (scheduled): %s', result)
@@ -56,6 +57,11 @@ def start_scheduler(app):
                 # take down the scheduler thread -- it'll just try again at
                 # the next scheduled time tomorrow.
                 logger.exception('Scheduled overdue-reminder run failed')
+            try:
+                escalation_result = run_collections_escalation()
+                logger.info('Collections escalation (scheduled): %s', escalation_result)
+            except Exception:
+                logger.exception('Scheduled collections escalation run failed')
 
     _scheduler = BackgroundScheduler(daemon=True, timezone=os.getenv('SCHEDULER_TIMEZONE', 'UTC'))
     _scheduler.add_job(
