@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Portfolio Import — Jodala Microfinance{% endblock %}
+{% block page_title %}Portfolio Import{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <h4 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0">Bulk Loan Import</h4>
+  <p class="text-muted mb-0" style="font-size:13px">Migrate an existing loan portfolio in from a CSV export of your previous system</p>
+</div>
+
+<div class="jd-card mb-3" id="uploadCard">
+  <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-file-earmark-arrow-up" style="color:var(--brand-light)"></i>1. Upload CSV</div></div>
+  <div class="jd-card-body">
+    <p style="font-size:13px" class="mb-2">
+      Each row is one loan. Required columns: <code>product_code, principal_amount, interest_rate,
+      interest_type, term, repayment_frequency, disbursement_date, first_repayment_date</code>.
+      Identify the borrower with <code>member_number</code> or <code>client_number</code> if they're
+      already registered, or with <code>first_name, last_name, phone</code> to create a new client
+      record automatically. To bring in a loan that's already partly paid, add
+      <code>installments_paid</code> (marks that many installments paid in order) and optionally
+      <code>total_paid</code> if the exact amount differs from a clean per-installment split.
+    </p>
+    <a href="{{ url_for('portfolio_import.download_template') }}" class="d-inline-block mb-3" style="font-size:12px">
+      <i class="bi bi-download me-1"></i>Download a starter CSV template
+    </a>
+    <div class="d-flex align-items-center gap-2">
+      <input type="file" id="csvFile" accept=".csv" class="d-none" onchange="onFileChosen(this)" />
+      <button type="button" class="btn btn-brand-outline btn-sm" onclick="document.getElementById('csvFile').click()">
+        <i class="bi bi-folder2-open me-1"></i>Choose CSV File
+      </button>
+      <span id="chosenFileName" class="text-muted" style="font-size:12px"></span>
+    </div>
+    <div class="mt-3">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="postToLedger" checked>
+        <label class="form-check-label" for="postToLedger" style="font-size:13px">
+          Post each loan's outstanding balance to the accounting ledger as an opening balance
+        </label>
+      </div>
+      <div class="text-muted" style="font-size:11.5px;margin-left:24px">
+        Debits Loans Receivable, credits Retained Earnings, for the currently-outstanding amount only.
+        Never touches Cash — that money already moved in your old system. Uncheck this to import loan
+        records only, with no accounting entries.
+      </div>
+    </div>
+    <button type="button" class="btn btn-brand mt-3" id="previewBtn" onclick="uploadForPreview()" disabled>
+      <i class="bi bi-eye me-1"></i>Preview Import
+    </button>
+  </div>
+</div>
+
+<div class="jd-card mb-3" id="previewCard" style="display:none">
+  <div class="jd-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div class="jd-card-title"><i class="bi bi-list-check" style="color:var(--brand-light)"></i>2. Review</div>
+    <div id="previewSummary" style="font-size:13px"></div>
+  </div>
+  <div class="table-responsive" style="max-height:420px;overflow-y:auto">
+    <table class="table table-hover align-middle mb-0" style="font-size:12px">
+      <thead><tr>
+        <th>Row</th><th>Borrower</th><th>Product</th><th>Principal</th><th>Term</th><th>Status</th>
+      </tr></thead>
+      <tbody id="previewTable"></tbody>
+    </table>
+  </div>
+  <div class="jd-card-body d-flex gap-2">
+    <button type="button" class="btn btn-secondary btn-sm" onclick="resetImport()">Start Over</button>
+    <button type="button" class="btn btn-brand btn-sm" id="commitBtn" onclick="commitImport()">
+      <i class="bi bi-check-circle-fill me-1"></i>Import Valid Rows
+    </button>
+  </div>
+</div>
+
+<div class="jd-card" id="resultCard" style="display:none">
+  <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-check2-circle" style="color:var(--brand-light)"></i>3. Result</div></div>
+  <div class="jd-card-body" id="resultBody"></div>
+</div>
+{% endblock %}
+{% block extra_js %}<script>
+function escapeHtml(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+
+let _chosenFile = null;
+let _previewRows = null;
+
+function onFileChosen(input) {
+  _chosenFile = input.files && input.files[0];
+  document.getElementById('chosenFileName').textContent = _chosenFile ? _chosenFile.name : '';
+  document.getElementById('previewBtn').disabled = !_chosenFile;
+}
+
+async function uploadForPreview() {
+  if (!_chosenFile) return;
+  const btn = document.getElementById('previewBtn');
+  setLoading(btn, true);
+  try {
+    const formData = new FormData();
+    formData.append('file', _chosenFile);
+    const resp = await fetch('/portfolio-import/api/preview', { method: 'POST', body: formData });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Preview failed');
+
+    _previewRows = data.rows;
+    renderPreview(data);
+    document.getElementById('previewCard').style.display = 'block';
+    document.getElementById('previewCard').scrollIntoView({behavior: 'smooth'});
+  } catch (e) {
+    Toast.error(e.message || 'Failed to preview file');
+  } finally {
+    setLoading(btn, false);
+    btn.innerHTML = '<i class="bi bi-eye me-1"></i>Preview Import';
+  }
+}
+
+function renderPreview(data) {
+  document.getElementById('previewSummary').innerHTML =
+    `<span style="color:#1E7A34">${data.valid_count} valid</span>` +
+    (data.invalid_count ? ` &middot; <span style="color:#A02525">${data.invalid_count} with errors</span>` : '') +
+    ` &middot; ${data.total_rows} total`;
+
+  document.getElementById('previewTable').innerHTML = data.rows.map(r => `
+    <tr>
+      <td>${r.row_number}</td>
+      <td>${escapeHtml(r.borrower_display || '—')}${r.is_new_borrower ? ' <span class="badge" style="background:var(--surface-2);color:var(--brand-mid);font-size:10px">new</span>' : ''}</td>
+      <td>${escapeHtml(r.product_name || r.data.product_code || '—')}</td>
+      <td>${escapeHtml(r.data.principal_amount || '—')}</td>
+      <td>${escapeHtml(r.data.term || '—')}</td>
+      <td>${r.errors.length
+          ? `<span title="${escapeHtml(r.errors.join('; '))}" style="color:#A02525;cursor:help"><i class="bi bi-exclamation-triangle-fill me-1"></i>${r.errors.length} error(s)</span>`
+          : '<span style="color:#1E7A34"><i class="bi bi-check-circle-fill me-1"></i>OK</span>'}
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('commitBtn').disabled = data.valid_count === 0;
+}
+
+async function commitImport() {
+  if (!_previewRows) return;
+  const validCount = _previewRows.filter(r => !r.errors.length).length;
+  if (!confirm(`Import ${validCount} valid loan(s)? Rows with errors will be skipped. This can't be undone.`)) return;
+
+  const btn = document.getElementById('commitBtn');
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/portfolio-import/api/commit', {
+      rows: _previewRows,
+      post_to_ledger: document.getElementById('postToLedger').checked,
+      filename: _chosenFile ? _chosenFile.name : 'import.csv',
+    });
+
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('resultBody').innerHTML = `
+      <p style="font-size:14px">
+        <span style="color:#1E7A34;font-weight:600">${data.imported_count} loan(s) imported</span>
+        ${data.failed_count ? ` &middot; <span style="color:#A02525;font-weight:600">${data.failed_count} skipped</span>` : ''}
+      </p>
+      ${data.failed_count ? `
+        <div style="font-size:12px" class="text-muted">
+          Failed rows: ${data.results.filter(r=>!r.success).map(r=>`#${r.row_number}`).join(', ')}.
+          Fix these in your CSV and re-upload just those rows.
+        </div>` : ''}
+      <a href="/loans" class="btn btn-brand-outline btn-sm mt-3"><i class="bi bi-arrow-right me-1"></i>View Loans</a>
+    `;
+    document.getElementById('resultCard').scrollIntoView({behavior: 'smooth'});
+    Toast.success(`${data.imported_count} loan(s) imported`);
+  } catch (e) {
+    Toast.error(e.message || 'Import failed');
+  } finally {
+    setLoading(btn, false);
+    btn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Import Valid Rows';
+  }
+}
+
+function resetImport() {
+  _chosenFile = null;
+  _previewRows = null;
+  document.getElementById('csvFile').value = '';
+  document.getElementById('chosenFileName').textContent = '';
+  document.getElementById('previewBtn').disabled = true;
+  document.getElementById('previewCard').style.display = 'none';
+  document.getElementById('resultCard').style.display = 'none';
+}
+</script>{% endblock %}

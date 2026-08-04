@@ -13,6 +13,7 @@
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('collections',this)">Collections</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('members',this)">Members &amp; Clients</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('regional',this)">Regional</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showRep('portfoliosrc',this)">Portfolio Source</button></li>
 </ul>
 
 <!-- Loans Report -->
@@ -185,6 +186,37 @@
     </table></div>
   </div>
 </div>
+
+<!-- Portfolio Source Report -->
+<div id="portfoliosrcRep" class="d-none">
+  <div class="jd-card mb-3"><div class="jd-card-body">
+    <div class="d-flex gap-2 align-items-center">
+      <button class="btn btn-brand" onclick="loadPortfolioSourceReport()"><i class="bi bi-search me-1"></i>Generate</button>
+      <span class="text-muted" style="font-size:12px">Imported loans (via Portfolio Import) vs loans originated directly in this app</span>
+    </div>
+  </div></div>
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-6">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-file-earmark-arrow-up" style="color:var(--brand-light)"></i>Imported</div></div>
+        <div class="jd-card-body" id="psImportedStats"></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="jd-card h-100">
+        <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-pencil-square" style="color:var(--brand-ink)"></i>Originated Here</div></div>
+        <div class="jd-card-body" id="psOriginatedStats"></div>
+      </div>
+    </div>
+  </div>
+  <div class="data-table-wrapper">
+    <div class="data-table-header"><div class="data-table-title">Import Batches</div></div>
+    <div class="table-responsive"><table class="table mb-0">
+      <thead><tr><th>Date</th><th>File</th><th>Imported By</th><th>Rows</th><th>Imported</th><th>Failed</th><th>Posted to Ledger</th></tr></thead>
+      <tbody id="psBatchTable"><tr><td colspan="7" class="text-center p-4 text-muted">Click Generate</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
 {% endblock %}
 {% block extra_js %}<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js') }}"></script>
 <script>
@@ -222,7 +254,7 @@ setReportChartTheme();
 function showRep(tab, el) {
   document.querySelectorAll('.nav-link').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['loans','arrears','collections','members','regional'].forEach(t=>document.getElementById(t+'Rep').classList.toggle('d-none',t!==tab));
+  ['loans','arrears','collections','members','regional','portfoliosrc'].forEach(t=>document.getElementById(t+'Rep').classList.toggle('d-none',t!==tab));
 }
 
 async function loadLoanReport() {
@@ -435,6 +467,46 @@ async function loadRegionalReport() {
       <td style="font-size:13px;color:${r.arrears_amount>0?'var(--danger-ink)':'var(--text-muted)'}">${fmtCurrency(r.arrears_amount)}</td>
       <td><span class="status-pill ${r.par_pct>20?'status-rejected':r.par_pct>5?'status-overdue':'status-active'}">${r.par_pct}%</span></td>
       <td style="font-size:13px">${r.collection_rate_pct}%</td>
+    </tr>`).join('');
+  } catch(e) { Toast.error(e.message); }
+}
+
+function _psStatBlock(stats) {
+  const statusRows = Object.entries(stats.by_status || {})
+    .map(([s,c]) => `<div class="d-flex justify-content-between" style="font-size:12px"><span>${statusPill(s)}</span><span>${c}</span></div>`)
+    .join('');
+  return `
+    <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:13px">Loans</span><span style="font-weight:600">${stats.count}</span></div>
+    <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:13px">Principal</span><span style="font-weight:600">${fmtCurrency(stats.total_principal)}</span></div>
+    <div class="d-flex justify-content-between mb-2"><span class="text-muted" style="font-size:13px">Outstanding</span><span class="outstanding-value">${fmtCurrency(stats.total_outstanding)}</span></div>
+    <div class="d-flex justify-content-between mb-3"><span class="text-muted" style="font-size:13px">Collected</span><span style="color:var(--brand-light);font-weight:600">${fmtCurrency(stats.total_collected)}</span></div>
+    <hr class="my-2" />
+    ${statusRows || '<div class="text-muted" style="font-size:12px">No loans in this bucket</div>'}
+  `;
+}
+
+async function loadPortfolioSourceReport() {
+  document.getElementById('psImportedStats').innerHTML = '<span class="spinner-border spinner-border-sm spinner-brand"></span>';
+  document.getElementById('psOriginatedStats').innerHTML = '<span class="spinner-border spinner-border-sm spinner-brand"></span>';
+  document.getElementById('psBatchTable').innerHTML = '<tr><td colspan="7" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  try {
+    const data = await API.get('/reports/api/portfolio-source-report');
+    document.getElementById('psImportedStats').innerHTML = _psStatBlock(data.imported);
+    document.getElementById('psOriginatedStats').innerHTML = _psStatBlock(data.originated);
+
+    const tbody = document.getElementById('psBatchTable');
+    if (!data.batches.length) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="bi bi-file-earmark-arrow-up"></i><p>No imports yet</p></div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.batches.map(b => `<tr>
+      <td style="font-size:13px">${fmtDate(b.created_at)}</td>
+      <td style="font-size:13px">${escapeHtml(b.filename)}</td>
+      <td style="font-size:13px">${escapeHtml(b.created_by_name || '—')}</td>
+      <td style="font-size:13px">${b.total_rows}</td>
+      <td style="font-size:13px;color:var(--brand-light);font-weight:600">${b.imported_count}</td>
+      <td style="font-size:13px;color:${b.failed_count>0?'var(--danger-ink)':'var(--text-muted)'}">${b.failed_count}</td>
+      <td style="font-size:13px">${b.post_to_ledger ? '<i class="bi bi-check-circle-fill" style="color:var(--brand-light)"></i>' : '<i class="bi bi-dash-circle text-muted"></i>'}</td>
     </tr>`).join('');
   } catch(e) { Toast.error(e.message); }
 }

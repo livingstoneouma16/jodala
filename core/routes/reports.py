@@ -134,6 +134,43 @@ def loan_report():
     })
 
 
+@reports_bp.route('/api/portfolio-source-report')
+@login_required
+def portfolio_source_report():
+    """Imported (via Portfolio Import) vs originated-in-app breakdown --
+    the is_imported flag exists on every loan (migration 27) but nothing
+    surfaced it anywhere until now. Useful right after a migration to spot-
+    check the imported book, and afterwards to see how much of the active
+    portfolio still traces back to the old system vs new business written
+    directly in this app."""
+    loans = get_db().execute(_loan_join_sql()).fetchall()
+
+    def _bucket(rows):
+        return {
+            'count': len(rows),
+            'total_principal': round(sum(l['principal_amount'] for l in rows), 2),
+            'total_outstanding': round(sum(l['outstanding_balance'] for l in rows), 2),
+            'total_collected': round(sum(l['total_paid'] for l in rows), 2),
+            'by_status': {s: sum(1 for l in rows if l['status'] == s) for s in
+                          {l['status'] for l in rows}},
+        }
+
+    imported = [l for l in loans if l['is_imported']]
+    originated = [l for l in loans if not l['is_imported']]
+
+    batches = get_db().execute(
+        """SELECT b.*, u.full_name AS created_by_name
+           FROM loan_import_batches b LEFT JOIN users u ON u.id = b.created_by
+           ORDER BY b.created_at DESC"""
+    ).fetchall()
+
+    return jsonify({
+        'imported': _bucket(imported),
+        'originated': _bucket(originated),
+        'batches': [dict(b) for b in batches],
+    })
+
+
 @reports_bp.route('/api/arrears-report')
 @login_required
 def arrears_report():

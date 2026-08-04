@@ -107,6 +107,9 @@
     <a href="{{ url_for('users.index') }}" class="nav-link-item {% if request.endpoint and 'users' in request.endpoint %}active{% endif %}">
       <i class="bi bi-shield-lock-fill"></i><span>Users</span>
     </a>
+    <a href="{{ url_for('portfolio_import.index') }}" class="nav-link-item {% if request.endpoint and 'portfolio_import' in request.endpoint %}active{% endif %}">
+      <i class="bi bi-file-earmark-arrow-up-fill"></i><span>Portfolio Import</span>
+    </a>
     <a href="{{ url_for('settings.index') }}" class="nav-link-item {% if request.endpoint and 'settings' in request.endpoint %}active{% endif %}">
       <i class="bi bi-gear-fill"></i><span>Settings</span>
     </a>

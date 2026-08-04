@@ -1346,6 +1346,33 @@ def _migration_0026_collection_tasks(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_collection_tasks_assigned ON collection_tasks(assigned_to, status)")
 
 
+def _migration_0027_loan_portfolio_import(conn):
+    """Bulk CSV import for migrating an existing loan portfolio in (see
+    core/portfolio_import.py). Each row in loan_import_batches is one CSV
+    upload -- who ran it, when, and a pass/fail count -- so a bad import
+    can be traced and its loans identified afterwards.
+
+    is_imported/import_batch_id on loans distinguish an imported loan from
+    one that went through the normal application/approval/disbursement
+    flow in this app: imported loans skip the borrower-facing "your loan
+    was approved/disbursed" notifications (misleading for a loan that's
+    been running for months elsewhere), and the loan detail page uses this
+    to show an "Imported" badge instead of the usual status history."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS loan_import_batches (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        total_rows INTEGER DEFAULT 0,
+        imported_count INTEGER DEFAULT 0,
+        failed_count INTEGER DEFAULT 0,
+        post_to_ledger INTEGER DEFAULT 1,
+        error_report TEXT,
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL
+    )""")
+    conn.execute("ALTER TABLE loans ADD COLUMN IF NOT EXISTS is_imported INTEGER DEFAULT 0")
+    conn.execute("ALTER TABLE loans ADD COLUMN IF NOT EXISTS import_batch_id INTEGER REFERENCES loan_import_batches(id)")
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1376,6 +1403,7 @@ MIGRATIONS = [
     (24, 'add backups table for scheduled/on-demand database backups', _migration_0024_backups),
     (25, 'add old/new disbursement_date snapshot columns to loan_restructures', _migration_0025_disbursement_date_on_restructure),
     (26, 'add collection_tasks table for automated collections escalation ladder', _migration_0026_collection_tasks),
+    (27, 'add loan_import_batches and loans.is_imported for bulk CSV portfolio import', _migration_0027_loan_portfolio_import),
 ]
 
 
