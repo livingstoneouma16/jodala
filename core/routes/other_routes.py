@@ -184,11 +184,11 @@ def get_notification_settings():
         'email_notifications_enabled': cfg['enabled'],
         'notification_recipient_ids': get_notification_recipient_ids(),
         'session_idle_timeout_minutes': int(idle_row['value']) if idle_row and idle_row['value'] else 15,
-        'at_username': sms_cfg['username'],
+        'textsms_partner_id': sms_cfg['partner_id'],
         # Never echo the real API key back to the browser -- just tell the
         # UI whether one is already set.
-        'at_api_key_set': bool(sms_cfg['api_key']),
-        'at_sender_id': sms_cfg['sender_id'],
+        'textsms_api_key_set': bool(sms_cfg['api_key']),
+        'textsms_sender_id': sms_cfg['sender_id'],
         'sms_notifications_enabled': sms_cfg['enabled'],
     })
 
@@ -218,16 +218,16 @@ def update_notification_settings():
     if data.get('gmail_app_password'):
         _set('gmail_app_password', data['gmail_app_password'].strip())
 
-    if 'at_username' in data:
-        _set('at_username', (data.get('at_username') or '').strip())
-    if 'at_sender_id' in data:
-        _set('at_sender_id', (data.get('at_sender_id') or '').strip())
+    if 'textsms_partner_id' in data:
+        _set('textsms_partner_id', (data.get('textsms_partner_id') or '').strip())
+    if 'textsms_sender_id' in data:
+        _set('textsms_sender_id', (data.get('textsms_sender_id') or '').strip())
     if 'sms_notifications_enabled' in data:
         _set('sms_notifications_enabled', '1' if data.get('sms_notifications_enabled') else '0')
     # Only overwrite the stored API key if a new one was actually typed in --
     # an empty string here means "leave it unchanged", not "clear it".
-    if data.get('at_api_key'):
-        _set('at_api_key', data['at_api_key'].strip())
+    if data.get('textsms_api_key'):
+        _set('textsms_api_key', data['textsms_api_key'].strip())
 
     if 'notification_recipient_ids' in data:
         ids = data.get('notification_recipient_ids') or []
@@ -295,7 +295,7 @@ def send_test_sms():
     from core.sms import send_sms, is_configured
     user = get_current_user()
     if not is_configured():
-        return jsonify({'error': "Africa's Talking username and API key must be set first"}), 400
+        return jsonify({'error': "TextSMS API key and Partner ID must be set first"}), 400
     to = (request.get_json() or {}).get('to') or user.get('phone')
     if not to:
         return jsonify({'error': 'Enter a phone number to send the test to'}), 400

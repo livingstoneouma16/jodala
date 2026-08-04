@@ -90,7 +90,7 @@
     </div>
   </div></div>
 
-  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-chat-dots" style="color:var(--brand-light)"></i>SMS Notifications (Africa's Talking)</div>
+  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-chat-dots" style="color:var(--brand-light)"></i>SMS Notifications (TextSMS)</div>
     <div class="text-muted" style="font-size:12px;margin-top:2px">Texts members and clients directly for loan approvals, disbursements, repayments, savings deposits/withdrawals, overdue reminders, and new registrations</div></div>
   <div class="jd-card-body">
     <div class="row g-4" id="smsNotifForm">
@@ -98,9 +98,9 @@
     </div>
     <div class="alert alert-warning mt-3" style="font-size:12.5px">
       <i class="bi bi-info-circle me-1"></i>
-      Create an account at <a href="https://africastalking.com" target="_blank" rel="noopener">africastalking.com</a>
-      and grab your Username and API Key from the dashboard. A free sandbox account works for testing but
-      won't actually deliver to real phones — use a live app + a purchased/registered Sender ID to send real SMS.
+      Create an account at <a href="https://sms.textsms.co.ke" target="_blank" rel="noopener">sms.textsms.co.ke</a>
+      and grab your API Key and Partner ID from the dashboard. Use a purchased/registered Shortcode / Sender ID
+      to send real SMS.
     </div>
     <hr class="my-4" />
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -794,13 +794,13 @@ async function loadSmsNotificationSettings() {
   try {
     const data = await API.get('/settings/api/notifications');
     document.getElementById('smsNotifForm').innerHTML = `
-      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Africa's Talking Username</label>
-        <input type="text" class="form-control" id="nAtUsername" placeholder="sandbox" value="${escapeHtml(data.at_username||'')}" /></div>
-      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Sender ID / Short Code (optional)</label>
-        <input type="text" class="form-control" id="nAtSenderId" value="${escapeHtml(data.at_sender_id||'')}" /></div>
+      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">TextSMS Partner ID</label>
+        <input type="text" class="form-control" id="nTextSmsPartnerId" value="${escapeHtml(data.textsms_partner_id||'')}" /></div>
+      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Sender ID / Shortcode (optional)</label>
+        <input type="text" class="form-control" id="nTextSmsSenderId" value="${escapeHtml(data.textsms_sender_id||'')}" /></div>
       <div class="col-md-4"><label class="form-label" style="font-size:12.5px">API Key</label>
-        <input type="password" class="form-control" id="nAtApiKey" placeholder="${data.at_api_key_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'Paste API key'}" />
-        <div class="text-muted mt-1" style="font-size:11.5px">${data.at_api_key_set ? 'A key is already saved. Leave blank to keep it.' : "From Africa's Talking dashboard. Not yet configured."}</div></div>
+        <input type="password" class="form-control" id="nTextSmsApiKey" placeholder="${data.textsms_api_key_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'Paste API key'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.textsms_api_key_set ? 'A key is already saved. Leave blank to keep it.' : "From TextSMS dashboard. Not yet configured."}</div></div>
       <div class="col-md-6 d-flex align-items-end">
         <div class="form-check form-switch">
           <input class="form-check-input" type="checkbox" id="nSmsEnabled" ${data.sms_notifications_enabled ? 'checked' : ''} />
@@ -815,12 +815,12 @@ async function saveSmsNotificationSettings() {
   setLoading(btn, true);
   try {
     const body = {
-      at_username: document.getElementById('nAtUsername').value,
-      at_sender_id: document.getElementById('nAtSenderId').value,
+      textsms_partner_id: document.getElementById('nTextSmsPartnerId').value,
+      textsms_sender_id: document.getElementById('nTextSmsSenderId').value,
       sms_notifications_enabled: document.getElementById('nSmsEnabled').checked,
     };
-    const key = document.getElementById('nAtApiKey').value;
-    if (key) body.at_api_key = key;
+    const key = document.getElementById('nTextSmsApiKey').value;
+    if (key) body.textsms_api_key = key;
     await API.put('/settings/api/notifications', body);
     Toast.success('SMS notification settings saved');
     loadSmsNotificationSettings();

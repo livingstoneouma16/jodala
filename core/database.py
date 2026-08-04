@@ -1162,7 +1162,7 @@ def _migration_0018_notification_recipients_and_idle_timeout(conn):
 
 
 def _migration_0019_sms_notifications(conn):
-    """Adds SMS delivery (via Africa's Talking, core/sms.py) alongside the
+    """Adds SMS delivery (via TextSMS, core/sms.py) alongside the
     existing email/in-app notifications, plus the sms_log table so every
     send attempt is auditable the same way email_log already is.
     sms_notifications_enabled defaults to '0' (off) so nothing starts
@@ -1178,9 +1178,9 @@ def _migration_0019_sms_notifications(conn):
     )""")
     now = utcnow()
     defaults = {
-        'at_username': '',
-        'at_api_key': '',
-        'at_sender_id': '',
+        'textsms_api_key': '',
+        'textsms_partner_id': '',
+        'textsms_sender_id': '',
         'sms_notifications_enabled': '0',
     }
     for key, value in defaults.items():
@@ -1393,7 +1393,7 @@ MIGRATIONS = [
     (16, 'add password_reset_tokens table for self-service login-page password reset', _migration_0016_password_reset_tokens),
     (17, 'add user_roles table so admins can grant a user more than one role', _migration_0017_user_additional_roles),
     (18, 'add notification recipient selection and session idle timeout settings', _migration_0018_notification_recipients_and_idle_timeout),
-    (19, "add SMS notifications (Africa's Talking) and sms_log table", _migration_0019_sms_notifications),
+    (19, "add SMS notifications (TextSMS) and sms_log table", _migration_0019_sms_notifications),
     (20, 'repair password_reset_tokens if missing despite migration 16 being recorded as applied',
      _migration_0020_repair_password_reset_tokens),
     (21, 'switch email delivery from Resend back to Gmail SMTP with an app password',

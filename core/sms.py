@@ -1,24 +1,24 @@
 """
-SMS sending via Africa's Talking.
+SMS sending via TextSMS (sms.textsms.co.ke).
 
-Africa's Talking is used (rather than Twilio or another global provider)
-because it has direct, low-cost local routes to Safaricom/Airtel/Telkom
-numbers in Kenya -- where this app's members and clients are -- and pairs
-naturally with the M-Pesa integration already in core/mpesa.py.
+TextSMS is used (rather than Twilio or another global provider) because it
+has direct, low-cost local routes to Safaricom/Airtel/Telkom numbers in
+Kenya -- where this app's members and clients are -- and pairs naturally
+with the M-Pesa integration already in core/mpesa.py.
 
 Setup:
-  1. Create an account at https://africastalking.com (a free sandbox
-     account works for testing -- sandbox messages aren't actually
-     delivered to real phones but the API behaves identically).
-  2. Grab the Username and API Key from the dashboard.
+  1. Create an account at https://sms.textsms.co.ke.
+  2. Grab the API Key and Partner ID from the dashboard.
   3. Set them either in Settings > Notifications, or via env vars (see
-     below). Optionally set a registered Sender ID / Short Code; leave
-     blank to send from Africa's Talking's shared alphanumeric ID.
+     below). Optionally set a registered Sender ID / Shortcode; leave
+     blank to send from TextSMS's default shared shortcode.
 
 Credentials can come from either source, checked in this order:
-  1. The `company_settings` DB table (keys: at_username, at_api_key,
-     at_sender_id) -- set from the Settings > Notifications page in-app.
-  2. Environment variables (.env): AT_USERNAME, AT_API_KEY, AT_SENDER_ID.
+  1. The `company_settings` DB table (keys: textsms_api_key,
+     textsms_partner_id, textsms_sender_id) -- set from the Settings >
+     Notifications page in-app.
+  2. Environment variables (.env): TEXTSMS_API_KEY, TEXTSMS_PARTNER_ID,
+     TEXTSMS_SENDER_ID.
 
 DB settings take precedence so an admin can configure/rotate credentials
 without redeploying.
@@ -37,9 +37,8 @@ from core.database import get_db, execute, utcnow
 
 logger = logging.getLogger('jodala.sms')
 
-# Africa's Talking live endpoint. Sandbox apps (username 'sandbox') are
-# routed automatically by AT based on the username, not the URL.
-AT_URL = 'https://api.africastalking.com/version1/messaging'
+# TextSMS live endpoint.
+TEXTSMS_URL = 'https://sms.textsms.co.ke/api/services/sendsms/'
 
 
 def _setting(key, default=None):
@@ -55,18 +54,18 @@ def _setting(key, default=None):
 
 
 def get_sms_config():
-    """Resolve Africa's Talking credentials: DB settings first, then env vars."""
-    username = _setting('at_username') or os.getenv('AT_USERNAME')
-    api_key = _setting('at_api_key') or os.getenv('AT_API_KEY')
-    sender_id = _setting('at_sender_id') or os.getenv('AT_SENDER_ID') or ''
+    """Resolve TextSMS credentials: DB settings first, then env vars."""
+    api_key = _setting('textsms_api_key') or os.getenv('TEXTSMS_API_KEY')
+    partner_id = _setting('textsms_partner_id') or os.getenv('TEXTSMS_PARTNER_ID')
+    sender_id = _setting('textsms_sender_id') or os.getenv('TEXTSMS_SENDER_ID') or ''
     db_enabled = _setting('sms_notifications_enabled')
     if db_enabled is not None:
         enabled = db_enabled == '1'
     else:
         enabled = (os.getenv('SMS_NOTIFICATIONS_ENABLED', 'false') or '').strip().lower() in ('1', 'true', 'yes')
     return {
-        'username': (username or '').strip(),
         'api_key': (api_key or '').strip(),
+        'partner_id': (partner_id or '').strip(),
         'sender_id': (sender_id or '').strip(),
         'enabled': enabled,
     }
@@ -74,7 +73,7 @@ def get_sms_config():
 
 def is_configured():
     cfg = get_sms_config()
-    return bool(cfg['username'] and cfg['api_key'])
+    return bool(cfg['api_key'] and cfg['partner_id'])
 
 
 def _log_attempt(to_phone, message, status, error=None):
@@ -95,66 +94,64 @@ def _log_attempt(to_phone, message, status, error=None):
 
 def normalize_phone(phone):
     """Normalize a Kenyan phone number to the 2547XXXXXXXX / 2541XXXXXXXX
-    format Africa's Talking expects. Returns None if it doesn't look like
-    a usable number."""
+    format TextSMS expects. Returns None if it doesn't look like a usable
+    number."""
     if not phone:
         return None
     digits = ''.join(c for c in phone if c.isdigit() or c == '+')
     digits = digits.lstrip('+')
     if digits.startswith('254') and len(digits) == 12:
-        return f'+{digits}'
+        return digits
     if digits.startswith('0') and len(digits) == 10:
-        return f'+254{digits[1:]}'
+        return f'254{digits[1:]}'
     if digits.startswith('7') and len(digits) == 9:
-        return f'+254{digits}'
+        return f'254{digits}'
     if digits.startswith('1') and len(digits) == 9:
-        return f'+254{digits}'
+        return f'254{digits}'
     if digits.startswith('254'):
-        return f'+{digits}'
+        return digits
     return None
 
 
 def _try_send(cfg, to_phone, message):
-    """POST to Africa's Talking. Returns (success, error)."""
-    headers = {
-        'apiKey': cfg['api_key'],
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json',
-    }
+    """POST to TextSMS. Returns (success, error). TextSMS numbers are sent
+    without the leading '+' (e.g. 2547XXXXXXXX)."""
+    headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
     payload = {
-        'username': cfg['username'],
-        'to': to_phone,
+        'apikey': cfg['api_key'],
+        'partnerID': cfg['partner_id'],
+        'mobile': to_phone,
         'message': message,
+        'shortcode': cfg['sender_id'] or 'TextSMS',
     }
-    if cfg['sender_id']:
-        payload['from'] = cfg['sender_id']
 
     try:
-        resp = requests.post(AT_URL, data=payload, headers=headers, timeout=15)
+        resp = requests.post(TEXTSMS_URL, json=payload, headers=headers, timeout=15)
     except requests.RequestException as e:
-        return False, f'Could not reach Africa\'s Talking: {e}'
+        return False, f'Could not reach TextSMS: {e}'
 
-    if resp.status_code != 201:
-        return False, f'Africa\'s Talking returned HTTP {resp.status_code}: {resp.text[:200]}'
+    if resp.status_code != 200:
+        return False, f'TextSMS returned HTTP {resp.status_code}: {resp.text[:200]}'
 
     try:
         data = resp.json()
-        recipients = data.get('SMSMessageData', {}).get('Recipients', [])
     except ValueError:
-        return False, f'Unexpected response from Africa\'s Talking: {resp.text[:200]}'
+        return False, f'Unexpected response from TextSMS: {resp.text[:200]}'
 
-    if not recipients:
-        return False, 'Africa\'s Talking accepted the request but returned no recipient status'
+    responses = data.get('responses') if isinstance(data, dict) else None
+    if not responses:
+        return False, f'TextSMS accepted the request but returned no recipient status: {resp.text[:200]}'
 
-    status = recipients[0].get('status', '')
-    if status.lower() == 'success':
+    result = responses[0]
+    # TextSMS uses response-code 200 for a successfully queued message.
+    if str(result.get('respose-code', result.get('response-code', ''))) == '200':
         return True, None
-    return False, recipients[0].get('status', 'Unknown failure') or 'Unknown failure'
+    return False, result.get('response-description') or 'Unknown failure'
 
 
 def send_sms(to_phone, message):
     """
-    Send a single SMS via Africa's Talking. Returns (success: bool, error: str|None).
+    Send a single SMS via TextSMS. Returns (success: bool, error: str|None).
     Never raises -- callers should not have a notification failure break the
     calling request. Every attempt is logged (see sms_log table / server log).
     """
@@ -168,10 +165,10 @@ def send_sms(to_phone, message):
         logger.info("Skipped SMS to %s: SMS notifications disabled in Settings", normalized)
         _log_attempt(normalized, message, 'skipped', 'SMS notifications disabled')
         return False, 'SMS notifications disabled'
-    if not cfg['username'] or not cfg['api_key']:
-        logger.warning("Skipped SMS to %s: Africa's Talking credentials not configured", normalized)
-        _log_attempt(normalized, message, 'skipped', "Africa's Talking username / API key not configured")
-        return False, "Africa's Talking username / API key not configured"
+    if not cfg['api_key'] or not cfg['partner_id']:
+        logger.warning("Skipped SMS to %s: TextSMS credentials not configured", normalized)
+        _log_attempt(normalized, message, 'skipped', "TextSMS API key / Partner ID not configured")
+        return False, "TextSMS API key / Partner ID not configured"
 
     ok, error = _try_send(cfg, normalized, message)
 
