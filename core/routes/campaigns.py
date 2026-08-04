@@ -285,6 +285,16 @@ def draft_campaign_message():
             text = f"Hi {{name}}, " + text[0].lower() + text[1:] if channel == 'sms' else f"Dear {{name}},\n\n{text}"
 
         return jsonify({'message': text, 'subject': subject})
+    except requests.exceptions.HTTPError as e:
+        # Surface the Anthropic API's actual error message instead of a generic
+        # "400 Bad Request" so misconfiguration (bad model name, bad key, etc.)
+        # is diagnosable from the UI/logs.
+        detail = None
+        try:
+            detail = e.response.json().get('error', {}).get('message')
+        except Exception:
+            pass
+        return jsonify({'error': f'AI drafting failed: {detail or e}'}), 502
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'AI drafting failed: {e}'}), 502
 
