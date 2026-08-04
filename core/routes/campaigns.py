@@ -261,7 +261,7 @@ def draft_campaign_message():
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-sonnet-4-6",
+                "model": "claude-sonnet-5",
                 "max_tokens": 500,
                 "system": system_prompt,
                 "messages": [{"role": "user", "content": prompt}],
