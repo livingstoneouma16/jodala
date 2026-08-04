@@ -89,20 +89,18 @@ plenty) and set `RATELIMIT_STORAGE_URI=redis://<host>:6379/0`.
 
 ## 5. Backups
 
-The entire application state lives in the PostgreSQL database
-(`DATABASE_URL`). There is **no automated backup built into the app** --
-managed Postgres from Render/Railway/Fly/RDS/etc. typically includes
-automated daily backups/point-in-time-recovery out of the box (check your
-provider's plan), but if you're running Postgres yourself, set one up:
+The app schedules a `pg_dump` backup every day by default at 02:00 in
+`SCHEDULER_TIMEZONE` (UTC unless changed). The Docker image includes the
+PostgreSQL client tools required for this. For a non-container deployment,
+install the PostgreSQL client package so `pg_dump` is on `PATH`.
 
-```bash
-# Simple daily cron example (adjust connection details/destination):
-0 2 * * * pg_dump "$DATABASE_URL" | gzip > /backups/jodala-$(date +\%F).sql.gz
-```
-
-Then ship `/backups` somewhere off the host (S3-compatible object storage,
-rsync to another machine, etc.) and periodically actually test restoring
-one -- an untested backup isn't a backup.
+Local backup files are only a short-term convenience: most PaaS filesystems
+are ephemeral, so a deploy or restart can remove them. Use your managed
+Postgres provider's backups as the primary recovery mechanism and test a
+restore periodically. To retain app-generated backups remotely, configure
+`S3_BACKUP_BUCKET`, the usual AWS credentials/region, and install the
+optional `boto3` package in the deployment environment. Set
+`ENABLE_BACKUP_SCHEDULER=false` only if another scheduler handles backups.
 
 ## 6. M-Pesa production checklist
 
@@ -258,9 +256,9 @@ postgresql redis-server`) or use managed instances and point
 - Log in as the default admin (`admin` / whatever was seeded) -- you'll be
   **required** to set a new password before you can do anything else, and
   should turn on 2FA for the account afterwards under Settings > Profile.
-- Set up the daily backup cron from step 5.
-- Set `send_overdue_reminders.py` to actually run on a schedule (cron, or a
-  platform's scheduled-job feature) -- it exists but doesn't run itself.
+- Confirm the built-in reminder and backup jobs log successful runs at their
+  configured times; use external scheduling only after disabling the matching
+  in-process job.
 - Watch `GET /health` from an uptime monitor (UptimeRobot, Better Uptime,
   your platform's built-in one, etc.).
 

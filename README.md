@@ -10,6 +10,9 @@ A complete, production-ready microfinance loan management system built with Flas
 # 1. Install dependencies
 pip install -r requirements.txt
 
+# Optional: copy .env.example to .env and update placeholders before connecting
+# to shared services.
+
 # 2. Create the database (once)
 createdb jodala
 # ...or set DATABASE_URL to point at an existing PostgreSQL database.

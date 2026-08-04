@@ -1,20 +1,22 @@
-.git/
-.gitignore
+# Python bytecode and test output
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
 .coverage
 htmlcov/
+
+# Virtual environments
 .venv/
 venv/
+
+# Local configuration and data
 .env
 .env.*
 !.env.example
 !.env.production.example
 backups/
-tests/
-DEPLOYMENT.md
-README.md
+
+# Operating system files
 .DS_Store
 Thumbs.db

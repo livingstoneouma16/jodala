@@ -88,7 +88,7 @@ def create_app():
             raise RuntimeError(
                 f"Refusing to start with APP_ENV=production while using the default "
                 f"development value for: {', '.join(insecure)}. Set real random secrets "
-                f"in the environment (see .env.example)."
+                f"in the environment (see .env.production.example)."
             )
     # Explicitly set the rate-limiter storage backend. Without this,
     # flask-limiter falls back to an in-memory store and prints a

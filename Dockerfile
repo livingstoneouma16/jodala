@@ -9,7 +9,7 @@
 # or the `postgres` service in docker-compose.yml. There's no local volume
 # to manage; every deploy is stateless as far as this container is concerned.
 
-FROM python:3.12-slim AS base
+FROM python:3.13-slim AS base
 
 # Keep image layers small and predictable; don't write .pyc files into the
 # image, and flush stdout/stderr immediately so logs show up in real time
@@ -21,14 +21,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # System deps needed to build `cryptography` and `pillow` wheels on slim,
-# plus gosu (a minimal, purpose-built su/sudo replacement) used by
-# entrypoint.sh to drop from root to the app user before exec'ing the real
-# process. libpq-dev isn't required: psycopg2-binary ships libpq statically
-# bundled in its wheel.
+# PostgreSQL client tools for scheduled backups, plus gosu (a minimal,
+# purpose-built su/sudo replacement) used by entrypoint.sh to drop from root
+# to the app user before exec'ing the real process. libpq-dev isn't required:
+# psycopg2-binary ships libpq statically bundled in its wheel.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
     libjpeg62-turbo-dev \
+    postgresql-client \
     zlib1g-dev \
     gosu \
     && rm -rf /var/lib/apt/lists/*

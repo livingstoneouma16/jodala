@@ -2,7 +2,7 @@
 Stand-alone script to email overdue-loan reminders.
 
 As of core/scheduler.py, this now runs automatically once a day *inside*
-the web process itself (see app.py / ENABLE_OVERDUE_REMINDER_HOUR env vars
+the web process itself (see app.py / OVERDUE_REMINDER_HOUR env vars
 in .env.example) -- you no longer need to schedule anything externally for
 this to happen.
 
