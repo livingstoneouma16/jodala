@@ -13,20 +13,24 @@ when the form was opened.
 Each individual message still goes through send_sms_async/send_email_async
 (same as everywhere else in the app), so per-recipient delivery status
 lands in the existing sms_log/email_log tables. The `campaigns` table
-(migration 23) only records the broadcast-level summary: who was
-targeted, the message, and how many sends succeeded/failed.
+(migration 23) records the broadcast-level summary: who matched the
+filters, how many messages were queued, and how many records were skipped.
+Individual delivery outcomes remain in the per-channel logs.
 """
 from datetime import date
+import hashlib
+import html
 import os
 
 import requests
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, current_app, request, jsonify, render_template
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from core.database import get_db, execute, utcnow
 from core.auth import login_required, role_required, get_current_user
 from core.serializers import campaign_public
 from core.utils import paginate, log_audit
-from core.sms import send_sms_async, is_configured as sms_configured
+from core.sms import normalize_phone, send_sms_async, is_configured as sms_configured
 from core.mailer import send_email_async, is_configured as email_configured
 
 campaigns_bp = Blueprint('campaigns', __name__)
@@ -69,6 +73,92 @@ def _resolve_recipients(audience_type, region, overdue_only):
         recipients += _fetch('clients', 'client_id')
 
     return recipients
+
+
+def _campaign_limit():
+    try:
+        return min(max(int(os.getenv('CAMPAIGN_MAX_RECIPIENTS', '250')), 1), 500)
+    except ValueError:
+        return 250
+
+
+def _prepare_recipients(recipients, channel):
+    deliverable = []
+    seen_contacts = set()
+    missing_contact_count = 0
+    duplicate_contact_count = 0
+
+    for recipient in recipients:
+        if channel == 'sms':
+            contact = normalize_phone(recipient['phone'])
+        else:
+            email = (recipient['email'] or '').strip().lower()
+            contact = email if '@' in email else None
+
+        if not contact:
+            missing_contact_count += 1
+            continue
+        if contact in seen_contacts:
+            duplicate_contact_count += 1
+            continue
+
+        seen_contacts.add(contact)
+        deliverable.append({**recipient, 'contact': contact})
+
+    return deliverable, {
+        'matched_count': len(recipients),
+        'deliverable_count': len(deliverable),
+        'missing_contact_count': missing_contact_count,
+        'duplicate_contact_count': duplicate_contact_count,
+    }
+
+
+def _recipient_fingerprint(recipients):
+    values = sorted(
+        f"{recipient['type']}:{recipient['id']}:{recipient['contact']}"
+        for recipient in recipients
+    )
+    return hashlib.sha256('\n'.join(values).encode()).hexdigest()
+
+
+def _preview_serializer():
+    return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='campaign-preview')
+
+
+def _create_preview_token(channel, audience_type, region, overdue_only, recipients):
+    return _preview_serializer().dumps({
+        'channel': channel,
+        'audience_type': audience_type,
+        'region': region,
+        'overdue_only': overdue_only,
+        'recipient_count': len(recipients),
+        'recipient_fingerprint': _recipient_fingerprint(recipients),
+        'user_id': get_current_user()['id'],
+    })
+
+
+def _validate_preview_token(token, channel, audience_type, region, overdue_only, recipients):
+    if not token:
+        return 'Refresh the recipient preview before sending the campaign', 400
+    try:
+        preview = _preview_serializer().loads(token, max_age=15 * 60)
+    except SignatureExpired:
+        return 'The recipient preview expired. Refresh it before sending the campaign', 409
+    except BadSignature:
+        return 'The recipient preview is invalid. Refresh it before sending the campaign', 400
+
+    expected = {
+        'channel': channel,
+        'audience_type': audience_type,
+        'region': region,
+        'overdue_only': overdue_only,
+        'recipient_count': len(recipients),
+        'recipient_fingerprint': _recipient_fingerprint(recipients),
+        'user_id': get_current_user()['id'],
+    }
+    if preview != expected:
+        return 'The recipient list changed. Refresh the preview and confirm the campaign again', 409
+    return None
 
 
 CAMPAIGN_TEMPLATES = {
@@ -217,12 +307,27 @@ def preview_recipients():
     filters would currently reach -- lets the sender confirm before
     committing to an actual send."""
     data = request.get_json() or {}
-    recipients = _resolve_recipients(
-        data.get('audience_type', 'both'), data.get('region') or None, bool(data.get('overdue_only'))
-    )
+    channel = data.get('channel', 'sms')
+    audience_type = data.get('audience_type', 'both')
+    region = data.get('region') or None
+    overdue_only = bool(data.get('overdue_only'))
+    if channel not in ('sms', 'email'):
+        return jsonify({'error': 'channel must be "sms" or "email"'}), 400
+    if audience_type not in ('members', 'clients', 'both'):
+        return jsonify({'error': 'Invalid audience_type'}), 400
+
+    recipients = _resolve_recipients(audience_type, region, overdue_only)
+    deliverable, summary = _prepare_recipients(recipients, channel)
+    max_recipient_count = _campaign_limit()
     return jsonify({
-        'count': len(recipients),
-        'sample': [r['name'] for r in recipients[:8]],
+        **summary,
+        'count': summary['deliverable_count'],
+        'sample': [recipient['name'] for recipient in deliverable[:8]],
+        'max_recipient_count': max_recipient_count,
+        'over_limit': summary['deliverable_count'] > max_recipient_count,
+        'preview_token': _create_preview_token(
+            channel, audience_type, region, overdue_only, deliverable
+        ),
     })
 
 
@@ -259,6 +364,11 @@ def send_campaign():
         return jsonify({'error': 'Message is required'}), 400
     if audience_type not in ('members', 'clients', 'both'):
         return jsonify({'error': 'Invalid audience_type'}), 400
+    max_message_length = 640 if channel == 'sms' else 5000
+    if len(message) > max_message_length:
+        return jsonify({'error': f'{channel.upper()} messages are limited to {max_message_length} characters'}), 400
+    if channel == 'email' and len(subject) > 200:
+        return jsonify({'error': 'Email subjects are limited to 200 characters'}), 400
 
     if channel == 'sms' and not sms_configured():
         return jsonify({'error': 'SMS is not configured -- set it up in Settings > Notifications first'}), 400
@@ -266,38 +376,54 @@ def send_campaign():
         return jsonify({'error': 'Email is not configured -- set it up in Settings > Notifications first'}), 400
 
     recipients = _resolve_recipients(audience_type, region, overdue_only)
-    if not recipients:
-        return jsonify({'error': 'No recipients match those filters'}), 400
+    deliverable, summary = _prepare_recipients(recipients, channel)
+    if not deliverable:
+        return jsonify({'error': f'No recipients have a usable {channel} contact'}), 400
+    max_recipient_count = _campaign_limit()
+    if summary['deliverable_count'] > max_recipient_count:
+        return jsonify({
+            'error': f'This campaign has {summary["deliverable_count"]} deliverable recipients, exceeding the configured limit of {max_recipient_count}'
+        }), 400
+    preview_error = _validate_preview_token(
+        data.get('preview_token'), channel, audience_type, region, overdue_only, deliverable
+    )
+    if preview_error:
+        return jsonify({'error': preview_error[0]}), preview_error[1]
 
-    sent, failed = 0, 0
-    for r in recipients:
+    queued = 0
+    for r in deliverable:
         personalized = message.replace('{name}', r['name'] or 'there')
         if channel == 'sms':
-            if r['phone']:
-                send_sms_async(r['phone'], personalized)
-                sent += 1
-            else:
-                failed += 1
+            send_sms_async(r['contact'], personalized)
         else:
-            if r['email']:
-                body_html = f"<p>{personalized}</p>"
-                send_email_async(r['email'], subject, personalized, body_html)
-                sent += 1
-            else:
-                failed += 1
+            body_html = '<p>' + html.escape(personalized).replace('\n', '<br>') + '</p>'
+            send_email_async(r['contact'], subject, personalized, body_html)
+        queued += 1
+
+    skipped = summary['missing_contact_count'] + summary['duplicate_contact_count']
 
     cur = execute(
         """INSERT INTO campaigns (channel, audience_type, region, overdue_only, message, subject,
                                    recipient_count, sent_count, failed_count, created_by, created_at)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (channel, audience_type, region, 1 if overdue_only else 0, message, subject,
-         len(recipients), sent, failed, get_current_user()['id'], utcnow())
+         summary['matched_count'], queued, skipped, get_current_user()['id'], utcnow())
     )
     campaign_id = cur.lastrowid
     log_audit('SEND_CAMPAIGN', 'campaign', campaign_id,
-              new_values={'channel': channel, 'recipients': len(recipients), 'sent': sent, 'failed': failed})
+              new_values={
+                  'channel': channel,
+                  'matched': summary['matched_count'],
+                  'queued': queued,
+                  'missing_contact': summary['missing_contact_count'],
+                  'duplicate_contact': summary['duplicate_contact_count'],
+              })
 
     return jsonify({
-        'message': f'Campaign queued for {sent} recipient(s)' + (f', {failed} skipped (no {channel} contact on file)' if failed else ''),
-        'recipient_count': len(recipients), 'sent_count': sent, 'failed_count': failed,
+        'message': f'Campaign queued for {queued} recipient(s)' + (f', {skipped} skipped' if skipped else ''),
+        'recipient_count': summary['matched_count'],
+        'queued_count': queued,
+        'skipped_count': skipped,
+        'missing_contact_count': summary['missing_contact_count'],
+        'duplicate_contact_count': summary['duplicate_contact_count'],
     })

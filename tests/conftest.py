@@ -214,6 +214,7 @@ def client(app, db_conn, monkeypatch):
     import core.routes.dashboard as dashboard_routes
     import core.routes.reports as reports_routes
     import core.routes.mpesa as mpesa_routes
+    import core.routes.campaigns as campaigns_routes
 
     def _fake_get_db():
         return db_conn
@@ -223,7 +224,7 @@ def client(app, db_conn, monkeypatch):
         sms_module, mailer_module, mpesa_module,
         auth_routes, members_routes, loans_routes, repayments_routes,
         savings_routes, clients_routes, accounting_routes, other_routes,
-        dashboard_routes, reports_routes, mpesa_routes,
+        dashboard_routes, reports_routes, mpesa_routes, campaigns_routes,
     )
     for mod in modules_with_get_db:
         if hasattr(mod, 'get_db'):
@@ -235,6 +236,7 @@ def client(app, db_conn, monkeypatch):
         sent_emails.append({'to': to_email, 'subject': subject, 'body': body_text})
 
     monkeypatch.setattr('core.mailer.send_email_async', _fake_send_email_async)
+    monkeypatch.setattr(campaigns_routes, 'send_email_async', _fake_send_email_async)
 
     # core.sms.send_sms_async fires a real background thread in production
     # (core/sms.py) so each async send gets its own connection from the
@@ -252,6 +254,7 @@ def client(app, db_conn, monkeypatch):
         sent_sms.append({'to': to_phone, 'message': message})
 
     monkeypatch.setattr('core.sms.send_sms_async', _fake_send_sms_async)
+    monkeypatch.setattr(campaigns_routes, 'send_sms_async', _fake_send_sms_async)
 
     test_client = app.test_client()
     test_client.sent_emails = sent_emails

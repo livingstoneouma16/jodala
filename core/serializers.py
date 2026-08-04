@@ -340,6 +340,8 @@ def campaign_public(row):
         'recipient_count': d['recipient_count'],
         'sent_count': d['sent_count'],
         'failed_count': d['failed_count'],
+        'queued_count': d['sent_count'],
+        'skipped_count': d['failed_count'],
         'created_at': d['created_at'],
     }
 

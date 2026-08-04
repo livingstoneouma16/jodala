@@ -67,7 +67,7 @@
             </div>
             <div style="font-size:11px;color:var(--text-muted)" class="mt-1">Describe what you want to say; the AI will write it, using {name} as a per-recipient placeholder.</div>
           </div>
-          <textarea class="form-control form-control-sm" id="cMessage" rows="4" maxlength="640" placeholder="Type your message..."></textarea>
+          <textarea class="form-control form-control-sm" id="cMessage" rows="4" maxlength="5000" placeholder="Type your message..."></textarea>
           <div class="form-text" id="cCharCount" style="font-size:11px">0 characters</div>
         </div>
         <div class="d-flex align-items-center justify-content-between mb-3 p-2" style="background:var(--surface-2);border-radius:8px">
@@ -86,7 +86,7 @@
       <div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-clock-history" style="color:var(--brand-light)"></i>Recent Campaigns</div></div>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-          <thead><tr><th>Sent</th><th>Channel</th><th>Audience</th><th>Recipients</th><th>Message</th></tr></thead>
+          <thead><tr><th>Created</th><th>Channel</th><th>Audience</th><th>Queued</th><th>Message</th></tr></thead>
           <tbody id="cHistory"><tr><td colspan="5" class="text-center p-4 text-muted">Loading…</td></tr></tbody>
         </table>
       </div>
@@ -119,27 +119,68 @@
 {% block extra_js %}<script>
 function escapeHtml(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
 
-document.getElementById('cChannel').addEventListener('change', e=>{
-  document.getElementById('cSubjectWrap').style.display = e.target.value==='email' ? 'block' : 'none';
-});
-document.getElementById('cMessage').addEventListener('input', e=>{
-  document.getElementById('cCharCount').textContent = e.target.value.length + ' characters';
-});
+let campaignPreview = null;
+let confirmedPreviewToken = null;
+let previewRequestId = 0;
+
+function updateMessageCounter() {
+  const message = document.getElementById('cMessage').value;
+  const isSms = document.getElementById('cChannel').value === 'sms';
+  if (!isSms) {
+    document.getElementById('cCharCount').textContent = `${message.length} of 5,000 characters`;
+    return;
+  }
+  const segments = message.length === 0 ? 0 : (message.length <= 160 ? 1 : Math.ceil(message.length / 153));
+  document.getElementById('cCharCount').textContent =
+    `${message.length} of 640 characters${segments ? ` (${segments} SMS segment${segments === 1 ? '' : 's'})` : ''}`;
+}
+
+function updateChannelUi() {
+  const isSms = document.getElementById('cChannel').value === 'sms';
+  document.getElementById('cSubjectWrap').style.display = isSms ? 'none' : 'block';
+  document.getElementById('cMessage').maxLength = isSms ? 640 : 5000;
+  updateMessageCounter();
+  previewCampaign();
+}
+
+document.getElementById('cChannel').addEventListener('change', updateChannelUi);
+document.getElementById('cMessage').addEventListener('input', updateMessageCounter);
 ['cAudience','cRegion','cOverdueOnly'].forEach(id=>{
   document.getElementById(id).addEventListener('change', previewCampaign);
 });
 
 async function previewCampaign() {
   const el = document.getElementById('cPreviewText');
+  const sendButton = document.getElementById('cSendBtn');
+  const requestId = ++previewRequestId;
+  campaignPreview = null;
+  sendButton.disabled = true;
   el.textContent = 'Checking recipients…';
   try {
     const data = await API.post('/campaigns/api/preview', {
+      channel: document.getElementById('cChannel').value,
       audience_type: document.getElementById('cAudience').value,
       region: document.getElementById('cRegion').value,
       overdue_only: document.getElementById('cOverdueOnly').checked,
     });
+    if (requestId !== previewRequestId) return;
     el.innerHTML = `<strong>${data.count}</strong> recipient(s) match` + (data.sample.length ? ` — e.g. ${data.sample.slice(0,3).map(escapeHtml).join(', ')}${data.count>3?'…':''}` : '');
+    campaignPreview = data;
+    const skipped = data.missing_contact_count + data.duplicate_contact_count;
+    const details = [
+      `${data.deliverable_count} ready to receive`,
+      skipped ? `${skipped} skipped` : '',
+      data.duplicate_contact_count ? `${data.duplicate_contact_count} duplicate contact${data.duplicate_contact_count === 1 ? '' : 's'} suppressed` : '',
+    ].filter(Boolean);
+    el.innerHTML = `<strong>${data.matched_count}</strong> match${data.matched_count === 1 ? '' : 'es'} &middot; ${details.map(escapeHtml).join(' &middot; ')}`;
+    if (data.over_limit) {
+      el.innerHTML += `<br><span class="text-danger">Campaign limit is ${data.max_recipient_count} deliverable recipients.</span>`;
+    } else if (data.sample.length) {
+      el.innerHTML += `<br><span class="text-muted">e.g. ${data.sample.slice(0, 3).map(escapeHtml).join(', ')}</span>`;
+    }
+    sendButton.disabled = data.deliverable_count === 0 || data.over_limit;
   } catch (e) {
+    if (requestId !== previewRequestId) return;
     el.textContent = 'Could not check recipients';
   }
 }
@@ -148,8 +189,22 @@ function sendCampaign() {
   const message = document.getElementById('cMessage').value.trim();
   if (!message) { Toast.error('Message is required'); return; }
   const channel = document.getElementById('cChannel').value;
+  if (!campaignPreview) {
+    Toast.warning('Wait for the recipient preview before sending');
+    previewCampaign();
+    return;
+  }
+  if (campaignPreview.over_limit) {
+    Toast.error(`This campaign exceeds the ${campaignPreview.max_recipient_count}-recipient limit`);
+    return;
+  }
+  confirmedPreviewToken = campaignPreview.preview_token;
   document.getElementById('sendCampaignSummary').textContent =
     `Send this ${channel.toUpperCase()} to everyone matching the current filters?`;
+  const skipped = campaignPreview.missing_contact_count + campaignPreview.duplicate_contact_count;
+  document.getElementById('sendCampaignSummary').textContent =
+    `Queue this ${channel.toUpperCase()} for ${campaignPreview.deliverable_count} recipient(s)` +
+    (skipped ? `; ${skipped} matching record(s) will be skipped.` : '.');
   new bootstrap.Modal(document.getElementById('sendCampaignModal')).show();
 }
 
@@ -157,6 +212,11 @@ async function confirmSendCampaign() {
   const message = document.getElementById('cMessage').value.trim();
   if (!message) { Toast.error('Message is required'); return; }
   const channel = document.getElementById('cChannel').value;
+  if (!campaignPreview || campaignPreview.preview_token !== confirmedPreviewToken) {
+    bootstrap.Modal.getInstance(document.getElementById('sendCampaignModal')).hide();
+    Toast.warning('The audience changed. Review the refreshed preview before sending.');
+    return;
+  }
 
   const btn = document.getElementById('confirmSendBtn');
   setLoading(btn, true);
@@ -166,11 +226,13 @@ async function confirmSendCampaign() {
       region: document.getElementById('cRegion').value,
       overdue_only: document.getElementById('cOverdueOnly').checked,
       message, subject: document.getElementById('cSubject').value,
+      preview_token: confirmedPreviewToken,
     });
     bootstrap.Modal.getInstance(document.getElementById('sendCampaignModal')).hide();
     Toast.success(data.message);
+    confirmedPreviewToken = null;
     document.getElementById('cMessage').value = '';
-    document.getElementById('cCharCount').textContent = '0 characters';
+    updateMessageCounter();
     loadHistory();
     previewCampaign();
   } catch (e) {
@@ -186,7 +248,7 @@ async function loadHistory() {
   try {
     const data = await API.get('/campaigns/api');
     if (!data.campaigns.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-muted">No campaigns sent yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-muted">No campaigns queued yet</td></tr>';
       return;
     }
     tbody.innerHTML = data.campaigns.map(c => `
@@ -194,7 +256,7 @@ async function loadHistory() {
         <td style="font-size:12px;color:var(--text-muted)">${new Date(c.created_at).toLocaleString()}</td>
         <td><span class="badge bg-secondary-subtle text-secondary-emphasis">${c.channel.toUpperCase()}</span></td>
         <td style="font-size:13px">${escapeHtml(c.audience_type)}${c.region ? ' · '+escapeHtml(c.region) : ''}${c.overdue_only ? ' · overdue only' : ''}</td>
-        <td style="font-size:13px">${c.sent_count}/${c.recipient_count}${c.failed_count ? ` <span class="text-muted">(${c.failed_count} skipped)</span>` : ''}</td>
+        <td style="font-size:13px">${c.queued_count}/${c.recipient_count}${c.skipped_count ? ` <span class="text-muted">(${c.skipped_count} skipped)</span>` : ''}</td>
         <td style="font-size:13px;max-width:280px" class="text-truncate">${escapeHtml(c.message)}</td>
       </tr>`).join('');
   } catch (e) {
@@ -221,7 +283,7 @@ async function applyCampaignTemplate() {
   try {
     const data = await API.get(`/campaigns/api/templates/${key}?channel=${channel}`);
     document.getElementById('cMessage').value = data.message;
-    document.getElementById('cCharCount').textContent = data.message.length + ' characters';
+    updateMessageCounter();
     if (data.subject) document.getElementById('cSubject').value = data.subject;
   } catch (e) {
     Toast.error(e.message || 'Failed to load template');
@@ -258,7 +320,7 @@ async function draftCampaignMessage() {
   }
 }
 
-previewCampaign();
+updateChannelUi();
 loadHistory();
 loadTemplates();
 </script>{% endblock %}
