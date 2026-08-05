@@ -217,11 +217,6 @@ def _create_transaction(account_id, txn_type, amount, method, user_id, reference
                     f"<p>New balance: <strong>{format_currency(balance_after)}</strong></p>"
                     f"<p>Thank you for banking with us.</p>"
                 ),
-                phone=member['phone'],
-                sms_message=(
-                    f"Jodala Microfinance: {action_word} of {format_currency(amount)} on account "
-                    f"{txn['account_number']}. New balance: {format_currency(balance_after)}."
-                ),
                 ai_event_type='savings_transaction',
                 ai_facts={
                     'member_name': member_name, 'action': action_word.lower(),

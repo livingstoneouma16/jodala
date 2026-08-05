@@ -216,7 +216,7 @@ def create_loan():
             f"for <strong>{format_currency(loan['principal_amount'])}</strong>.</p>"
             f"<p>We will notify you when it has been reviewed.</p>"
         ),
-        f"Jodala Microfinance: We received your loan application {loan['loan_number']}.",
+        None,
         ai_event_type='loan_application_submitted',
         ai_facts={
             'borrower_name': borrower_name, 'loan_number': loan['loan_number'],
@@ -296,11 +296,7 @@ def approve_loan(loan_id):
             f"<strong>approved</strong>. It will be disbursed shortly.</p>"
             f"<p>Thank you for banking with us.</p>"
         ),
-        (
-            f"Jodala Microfinance: Your loan {loan['loan_number']} for "
-            f"{format_currency(loan['principal_amount'])} has been approved. "
-            f"It will be disbursed shortly."
-        ),
+        None,
         ai_event_type='loan_approved',
         ai_facts={
             'borrower_name': borrower_name, 'loan_number': loan['loan_number'],
@@ -342,11 +338,7 @@ def reject_loan(loan_id):
             + (f"<br>Reason: {reason}</p>" if reason else "</p>")
             + "<p>Please contact us if you have any questions.</p>"
         ),
-        (
-            f"Jodala Microfinance: Your loan application {loan['loan_number']} was not approved."
-            + (f" Reason: {reason}" if reason else "")
-            + " Contact us with any questions."
-        ),
+        None,
         ai_event_type='loan_rejected',
         ai_facts={
             'borrower_name': borrower_name, 'loan_number': loan['loan_number'],

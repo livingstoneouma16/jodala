@@ -113,11 +113,6 @@ def create_member():
             f"<p>Your member number is <strong>{member['member_number']}</strong>.</p>"
             f"<p>Thank you for joining us.</p>"
         ),
-        phone=member['phone'],
-        sms_message=(
-            f"Welcome to Jodala Microfinance, {first_name}! Your member number is "
-            f"{member['member_number']}. Thank you for joining us."
-        ),
         ai_event_type='member_registered',
         ai_facts={
             'member_name': f"{first_name} {last_name}", 'member_number': member['member_number'],
