@@ -30,18 +30,32 @@
             <option value="both">Members & Clients</option>
             <option value="members">Members only</option>
             <option value="clients">Clients only</option>
+            <option value="selected">Selected people…</option>
           </select>
         </div>
-        <div class="mb-3">
-          <label class="form-label small fw-semibold">Region</label>
-          <select class="form-select form-select-sm" id="cRegion">
-            <option value="">All regions</option>
-            {% for r in regions %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
-          </select>
+        <div id="cFilterFields">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Region</label>
+            <select class="form-select form-select-sm" id="cRegion">
+              <option value="">All regions</option>
+              {% for r in regions %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="cOverdueOnly">
+            <label class="form-check-label small" for="cOverdueOnly">Only borrowers currently overdue on a loan installment</label>
+          </div>
         </div>
-        <div class="mb-3 form-check">
-          <input type="checkbox" class="form-check-input" id="cOverdueOnly">
-          <label class="form-check-label small" for="cOverdueOnly">Only borrowers currently overdue on a loan installment</label>
+        <div class="mb-3" id="cSelectedFields" style="display:none">
+          <label class="form-label small fw-semibold">Members / Clients</label>
+          <div class="position-relative">
+            <input type="text" class="form-control form-control-sm" id="cRecipientSearch"
+                   placeholder="Search by name or phone…" autocomplete="off">
+            <div id="cRecipientResults" class="list-group position-absolute w-100 shadow-sm"
+                 style="display:none;z-index:20;max-height:220px;overflow-y:auto"></div>
+          </div>
+          <div id="cSelectedList" class="d-flex flex-wrap gap-1 mt-2"></div>
+          <div class="form-text" style="font-size:11px" id="cSelectedCount">No one selected yet</div>
         </div>
         <div class="mb-3" id="cSubjectWrap" style="display:none">
           <label class="form-label small fw-semibold">Subject</label>
@@ -122,6 +136,80 @@ function escapeHtml(s){const d=document.createElement('div');d.textContent=s==nu
 let campaignPreview = null;
 let confirmedPreviewToken = null;
 let previewRequestId = 0;
+let selectedRecipients = []; // [{type, id, name, phone, email, status}]
+let recipientSearchRequestId = 0;
+let recipientSearchDebounce = null;
+
+function recipientKey(r) { return `${r.type}:${r.id}`; }
+
+function updateAudienceUi() {
+  const isSelected = document.getElementById('cAudience').value === 'selected';
+  document.getElementById('cFilterFields').style.display = isSelected ? 'none' : 'block';
+  document.getElementById('cSelectedFields').style.display = isSelected ? 'block' : 'none';
+  previewCampaign();
+}
+
+function renderSelectedRecipients() {
+  const wrap = document.getElementById('cSelectedList');
+  const count = document.getElementById('cSelectedCount');
+  wrap.innerHTML = selectedRecipients.map(r => `
+    <span class="badge bg-secondary-subtle text-secondary-emphasis d-inline-flex align-items-center gap-1" style="font-size:12px">
+      ${escapeHtml(r.name)} <span class="text-muted" style="font-size:10px">(${r.type === 'members' ? 'Member' : 'Client'})</span>
+      <button type="button" class="btn-close btn-close-sm" style="font-size:8px" onclick="removeSelectedRecipient('${recipientKey(r)}')"></button>
+    </span>`).join('');
+  count.textContent = selectedRecipients.length
+    ? `${selectedRecipients.length} selected`
+    : 'No one selected yet';
+  previewCampaign();
+}
+
+function removeSelectedRecipient(key) {
+  selectedRecipients = selectedRecipients.filter(r => recipientKey(r) !== key);
+  renderSelectedRecipients();
+}
+
+function addSelectedRecipient(r) {
+  if (!selectedRecipients.some(existing => recipientKey(existing) === recipientKey(r))) {
+    selectedRecipients.push(r);
+  }
+  document.getElementById('cRecipientSearch').value = '';
+  document.getElementById('cRecipientResults').style.display = 'none';
+  renderSelectedRecipients();
+}
+
+async function searchRecipients() {
+  const q = document.getElementById('cRecipientSearch').value.trim();
+  const resultsEl = document.getElementById('cRecipientResults');
+  const requestId = ++recipientSearchRequestId;
+  if (q.length < 2) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+  try {
+    const data = await API.get(`/campaigns/api/search-recipients?q=${encodeURIComponent(q)}&audience_type=both`);
+    if (requestId !== recipientSearchRequestId) return;
+    if (!data.results.length) {
+      resultsEl.innerHTML = '<div class="list-group-item small text-muted">No matches</div>';
+    } else {
+      resultsEl.innerHTML = data.results.map(r => `
+        <button type="button" class="list-group-item list-group-item-action small py-1"
+                onclick='addSelectedRecipient(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
+          ${escapeHtml(r.name)} <span class="text-muted">— ${r.type === 'members' ? 'Member' : 'Client'}${r.phone ? ' · ' + escapeHtml(r.phone) : ''}</span>
+        </button>`).join('');
+    }
+    resultsEl.style.display = 'block';
+  } catch (e) {
+    if (requestId !== recipientSearchRequestId) return;
+    resultsEl.style.display = 'none';
+  }
+}
+
+document.getElementById('cRecipientSearch').addEventListener('input', () => {
+  clearTimeout(recipientSearchDebounce);
+  recipientSearchDebounce = setTimeout(searchRecipients, 250);
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#cSelectedFields')) {
+    document.getElementById('cRecipientResults').style.display = 'none';
+  }
+});
 
 function updateMessageCounter() {
   const message = document.getElementById('cMessage').value;
@@ -145,9 +233,25 @@ function updateChannelUi() {
 
 document.getElementById('cChannel').addEventListener('change', updateChannelUi);
 document.getElementById('cMessage').addEventListener('input', updateMessageCounter);
-['cAudience','cRegion','cOverdueOnly'].forEach(id=>{
+document.getElementById('cAudience').addEventListener('change', updateAudienceUi);
+['cRegion','cOverdueOnly'].forEach(id=>{
   document.getElementById(id).addEventListener('change', previewCampaign);
 });
+
+function buildAudiencePayload() {
+  const audience_type = document.getElementById('cAudience').value;
+  if (audience_type === 'selected') {
+    return {
+      audience_type,
+      recipient_ids: selectedRecipients.map(r => ({ type: r.type, id: r.id })),
+    };
+  }
+  return {
+    audience_type,
+    region: document.getElementById('cRegion').value,
+    overdue_only: document.getElementById('cOverdueOnly').checked,
+  };
+}
 
 async function previewCampaign() {
   const el = document.getElementById('cPreviewText');
@@ -155,13 +259,18 @@ async function previewCampaign() {
   const requestId = ++previewRequestId;
   campaignPreview = null;
   sendButton.disabled = true;
+
+  const audience_type = document.getElementById('cAudience').value;
+  if (audience_type === 'selected' && selectedRecipients.length === 0) {
+    el.textContent = 'Search and select at least one person above';
+    return;
+  }
+
   el.textContent = 'Checking recipients…';
   try {
     const data = await API.post('/campaigns/api/preview', {
       channel: document.getElementById('cChannel').value,
-      audience_type: document.getElementById('cAudience').value,
-      region: document.getElementById('cRegion').value,
-      overdue_only: document.getElementById('cOverdueOnly').checked,
+      ...buildAudiencePayload(),
     });
     if (requestId !== previewRequestId) return;
     el.innerHTML = `<strong>${data.count}</strong> recipient(s) match` + (data.sample.length ? ` — e.g. ${data.sample.slice(0,3).map(escapeHtml).join(', ')}${data.count>3?'…':''}` : '');
@@ -189,6 +298,7 @@ function sendCampaign() {
   const message = document.getElementById('cMessage').value.trim();
   if (!message) { Toast.error('Message is required'); return; }
   const channel = document.getElementById('cChannel').value;
+  const isSelected = document.getElementById('cAudience').value === 'selected';
   if (!campaignPreview) {
     Toast.warning('Wait for the recipient preview before sending');
     previewCampaign();
@@ -199,11 +309,11 @@ function sendCampaign() {
     return;
   }
   confirmedPreviewToken = campaignPreview.preview_token;
-  document.getElementById('sendCampaignSummary').textContent =
-    `Send this ${channel.toUpperCase()} to everyone matching the current filters?`;
   const skipped = campaignPreview.missing_contact_count + campaignPreview.duplicate_contact_count;
   document.getElementById('sendCampaignSummary').textContent =
-    `Queue this ${channel.toUpperCase()} for ${campaignPreview.deliverable_count} recipient(s)` +
+    (isSelected
+      ? `Queue this ${channel.toUpperCase()} for the ${campaignPreview.deliverable_count} selected recipient(s)`
+      : `Queue this ${channel.toUpperCase()} for ${campaignPreview.deliverable_count} recipient(s) matching the current filters`) +
     (skipped ? `; ${skipped} matching record(s) will be skipped.` : '.');
   new bootstrap.Modal(document.getElementById('sendCampaignModal')).show();
 }
@@ -222,9 +332,7 @@ async function confirmSendCampaign() {
   setLoading(btn, true);
   try {
     const data = await API.post('/campaigns/api', {
-      channel, audience_type: document.getElementById('cAudience').value,
-      region: document.getElementById('cRegion').value,
-      overdue_only: document.getElementById('cOverdueOnly').checked,
+      channel, ...buildAudiencePayload(),
       message, subject: document.getElementById('cSubject').value,
       preview_token: confirmedPreviewToken,
     });
@@ -233,6 +341,10 @@ async function confirmSendCampaign() {
     confirmedPreviewToken = null;
     document.getElementById('cMessage').value = '';
     updateMessageCounter();
+    if (document.getElementById('cAudience').value === 'selected') {
+      selectedRecipients = [];
+      renderSelectedRecipients();
+    }
     loadHistory();
     previewCampaign();
   } catch (e) {
@@ -255,7 +367,7 @@ async function loadHistory() {
       <tr>
         <td style="font-size:12px;color:var(--text-muted)">${new Date(c.created_at).toLocaleString()}</td>
         <td><span class="badge bg-secondary-subtle text-secondary-emphasis">${c.channel.toUpperCase()}</span></td>
-        <td style="font-size:13px">${escapeHtml(c.audience_type)}${c.region ? ' · '+escapeHtml(c.region) : ''}${c.overdue_only ? ' · overdue only' : ''}</td>
+        <td style="font-size:13px">${c.audience_type === 'selected' ? `${c.selected_count != null ? c.selected_count : c.recipient_count} selected` : escapeHtml(c.audience_type)}${c.region ? ' · '+escapeHtml(c.region) : ''}${c.overdue_only ? ' · overdue only' : ''}</td>
         <td style="font-size:13px">${c.queued_count}/${c.recipient_count}${c.skipped_count ? ` <span class="text-muted">(${c.skipped_count} skipped)</span>` : ''}</td>
         <td style="font-size:13px;max-width:280px" class="text-truncate">${escapeHtml(c.message)}</td>
       </tr>`).join('');
@@ -321,6 +433,7 @@ async function draftCampaignMessage() {
 }
 
 updateChannelUi();
+updateAudienceUi();
 loadHistory();
 loadTemplates();
 </script>{% endblock %}
