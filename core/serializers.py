@@ -6,6 +6,7 @@ SQLAlchemy model.to_dict() methods produced. Routes SELECT the columns
 they need (joining in related names like member_name/product_name
 directly in SQL) and pass the resulting row dict through these.
 """
+import json
 
 
 def member_full_name(row):
@@ -329,6 +330,12 @@ def campaign_public(row):
     if row is None:
         return None
     d = dict(row)
+    recipient_ids = None
+    if d.get('recipient_ids'):
+        try:
+            recipient_ids = json.loads(d['recipient_ids'])
+        except (TypeError, ValueError):
+            recipient_ids = None
     return {
         'id': d['id'],
         'channel': d['channel'],
@@ -342,6 +349,7 @@ def campaign_public(row):
         'failed_count': d['failed_count'],
         'queued_count': d['sent_count'],
         'skipped_count': d['failed_count'],
+        'selected_count': len(recipient_ids) if recipient_ids is not None else None,
         'created_at': d['created_at'],
     }
 

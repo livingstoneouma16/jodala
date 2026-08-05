@@ -1373,6 +1373,15 @@ def _migration_0027_loan_portfolio_import(conn):
     conn.execute("ALTER TABLE loans ADD COLUMN IF NOT EXISTS import_batch_id INTEGER REFERENCES loan_import_batches(id)")
 
 
+def _migration_0028_campaign_selected_recipients(conn):
+    """Lets a campaign target a hand-picked list of members/clients instead
+    of only a filter (region/overdue). audience_type gains a new value,
+    'selected', and recipient_ids stores the JSON-encoded list of
+    {type, id} the sender picked, so campaign history shows exactly who
+    was chosen rather than just a filter description."""
+    conn.execute("ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS recipient_ids TEXT")
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1404,6 +1413,7 @@ MIGRATIONS = [
     (25, 'add old/new disbursement_date snapshot columns to loan_restructures', _migration_0025_disbursement_date_on_restructure),
     (26, 'add collection_tasks table for automated collections escalation ladder', _migration_0026_collection_tasks),
     (27, 'add loan_import_batches and loans.is_imported for bulk CSV portfolio import', _migration_0027_loan_portfolio_import),
+    (28, "add campaigns.recipient_ids for hand-picked ('selected') campaign audiences", _migration_0028_campaign_selected_recipients),
 ]
 
 

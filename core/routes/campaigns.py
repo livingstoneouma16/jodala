@@ -20,6 +20,7 @@ Individual delivery outcomes remain in the per-channel logs.
 from datetime import date
 import hashlib
 import html
+import json
 import os
 
 import requests
@@ -36,10 +37,50 @@ from core.mailer import send_email_async, is_configured as email_configured
 campaigns_bp = Blueprint('campaigns', __name__)
 
 
-def _resolve_recipients(audience_type, region, overdue_only):
-    """Returns a list of dicts: {name, phone, email, id, type}. audience_type
-    is 'members', 'clients', or 'both'. overdue_only restricts to
-    borrowers with at least one currently-overdue loan installment."""
+def _fetch_by_ids(table, ids):
+    """Look up specific members/clients by id, regardless of status/region --
+    a hand-picked recipient was chosen deliberately, so it isn't silently
+    dropped by the same active/region/overdue filters used for broad
+    audiences."""
+    if not ids:
+        return []
+    db = get_db()
+    placeholders = ','.join(['%s'] * len(ids))
+    rows = db.execute(
+        f"SELECT id, first_name, last_name, phone, email FROM {table} WHERE id IN ({placeholders})",
+        tuple(ids)
+    ).fetchall()
+    return [
+        {
+            'id': r['id'], 'type': table,
+            'name': f"{r['first_name']} {r['last_name']}".strip(),
+            'phone': r['phone'], 'email': r['email'],
+        }
+        for r in rows
+    ]
+
+
+def _resolve_recipients(audience_type, region, overdue_only, recipient_ids=None):
+    """Returns a list of dicts: {name, phone, email, id, type}.
+
+    audience_type is 'members', 'clients', 'both' (broad, filter-based
+    audiences matched by region/overdue_only), or 'selected' (an explicit,
+    hand-picked list of members/clients passed in recipient_ids as a list
+    of {'type': 'members'|'clients', 'id': ...} dicts -- region and
+    overdue_only are ignored in that case since the sender already chose
+    exactly who should receive it).
+    """
+    if audience_type == 'selected':
+        ids_by_table = {'members': [], 'clients': []}
+        for entry in (recipient_ids or []):
+            table = entry.get('type')
+            if table in ids_by_table:
+                ids_by_table[table].append(entry.get('id'))
+        recipients = []
+        for table, ids in ids_by_table.items():
+            recipients += _fetch_by_ids(table, ids)
+        return recipients
+
     db = get_db()
     recipients = []
 
@@ -121,23 +162,57 @@ def _recipient_fingerprint(recipients):
     return hashlib.sha256('\n'.join(values).encode()).hexdigest()
 
 
+def _selection_fingerprint(recipient_ids):
+    """Fingerprints the sender's raw hand-picked selection (not the
+    resolved recipient rows) so the preview token also catches the case
+    where the sender changes *who they picked* between preview and send,
+    even if that change happens not to alter the deliverable count."""
+    if not recipient_ids:
+        return None
+    values = sorted(f"{e.get('type')}:{e.get('id')}" for e in recipient_ids)
+    return hashlib.sha256('\n'.join(values).encode()).hexdigest()
+
+
+def _parse_recipient_ids(raw):
+    """Validates the client-supplied selection list: must be a list of
+    {'type': 'members'|'clients', 'id': int}. Returns (list, error) --
+    error is a (message, status) tuple on bad input."""
+    if not isinstance(raw, list):
+        return None, ('recipient_ids must be a list', 400)
+    if not raw:
+        return None, ('Select at least one member or client', 400)
+    if len(raw) > 500:
+        return None, ('Too many recipients selected', 400)
+    parsed = []
+    for entry in raw:
+        if not isinstance(entry, dict) or entry.get('type') not in ('members', 'clients'):
+            return None, ('Each selected recipient needs a valid type', 400)
+        try:
+            rid = int(entry.get('id'))
+        except (TypeError, ValueError):
+            return None, ('Each selected recipient needs a valid id', 400)
+        parsed.append({'type': entry['type'], 'id': rid})
+    return parsed, None
+
+
 def _preview_serializer():
     return URLSafeTimedSerializer(current_app.config['SECRET_KEY'], salt='campaign-preview')
 
 
-def _create_preview_token(channel, audience_type, region, overdue_only, recipients):
+def _create_preview_token(channel, audience_type, region, overdue_only, recipients, recipient_ids=None):
     return _preview_serializer().dumps({
         'channel': channel,
         'audience_type': audience_type,
         'region': region,
         'overdue_only': overdue_only,
+        'recipient_ids_fingerprint': _selection_fingerprint(recipient_ids),
         'recipient_count': len(recipients),
         'recipient_fingerprint': _recipient_fingerprint(recipients),
         'user_id': get_current_user()['id'],
     })
 
 
-def _validate_preview_token(token, channel, audience_type, region, overdue_only, recipients):
+def _validate_preview_token(token, channel, audience_type, region, overdue_only, recipients, recipient_ids=None):
     if not token:
         return 'Refresh the recipient preview before sending the campaign', 400
     try:
@@ -152,6 +227,7 @@ def _validate_preview_token(token, channel, audience_type, region, overdue_only,
         'audience_type': audience_type,
         'region': region,
         'overdue_only': overdue_only,
+        'recipient_ids_fingerprint': _selection_fingerprint(recipient_ids),
         'recipient_count': len(recipients),
         'recipient_fingerprint': _recipient_fingerprint(recipients),
         'user_id': get_current_user()['id'],
@@ -235,7 +311,8 @@ def draft_campaign_message():
         return jsonify({'error': 'Describe what the message should say'}), 400
 
     audience_desc = {
-        'members': 'registered members', 'clients': 'non-member client borrowers', 'both': 'members and clients'
+        'members': 'registered members', 'clients': 'non-member client borrowers', 'both': 'members and clients',
+        'selected': 'a hand-picked group of members and/or clients',
     }.get(audience_type, 'members and clients')
 
     length_hint = (
@@ -310,6 +387,47 @@ def index():
     )
 
 
+@campaigns_bp.route('/api/search-recipients', methods=['GET'])
+@login_required
+def search_recipients():
+    """Looks up members/clients by name or phone so the sender can hand-pick
+    specific recipients for the 'selected' audience mode, instead of only
+    broadcasting to everyone matching a region/status filter."""
+    q = (request.args.get('q') or '').strip()
+    audience_type = request.args.get('audience_type', 'both')
+    if audience_type not in ('members', 'clients', 'both'):
+        return jsonify({'error': 'Invalid audience_type'}), 400
+    if len(q) < 2:
+        return jsonify({'results': []})
+
+    db = get_db()
+    like = f"%{q}%"
+    results = []
+
+    def _search(table):
+        rows = db.execute(
+            f"""SELECT id, first_name, last_name, phone, email, status FROM {table}
+                WHERE (first_name || ' ' || last_name) ILIKE %s OR phone ILIKE %s
+                ORDER BY first_name, last_name LIMIT 15""",
+            (like, like)
+        ).fetchall()
+        return [
+            {
+                'id': r['id'], 'type': table,
+                'name': f"{r['first_name']} {r['last_name']}".strip(),
+                'phone': r['phone'], 'email': r['email'], 'status': r['status'],
+            }
+            for r in rows
+        ]
+
+    if audience_type in ('members', 'both'):
+        results += _search('members')
+    if audience_type in ('clients', 'both'):
+        results += _search('clients')
+
+    return jsonify({'results': results[:20]})
+
+
 @campaigns_bp.route('/api/preview', methods=['POST'])
 @login_required
 def preview_recipients():
@@ -323,10 +441,16 @@ def preview_recipients():
     overdue_only = bool(data.get('overdue_only'))
     if channel not in ('sms', 'email'):
         return jsonify({'error': 'channel must be "sms" or "email"'}), 400
-    if audience_type not in ('members', 'clients', 'both'):
+    if audience_type not in ('members', 'clients', 'both', 'selected'):
         return jsonify({'error': 'Invalid audience_type'}), 400
 
-    recipients = _resolve_recipients(audience_type, region, overdue_only)
+    recipient_ids = None
+    if audience_type == 'selected':
+        recipient_ids, err = _parse_recipient_ids(data.get('recipient_ids'))
+        if err:
+            return jsonify({'error': err[0]}), err[1]
+
+    recipients = _resolve_recipients(audience_type, region, overdue_only, recipient_ids)
     deliverable, summary = _prepare_recipients(recipients, channel)
     max_recipient_count = _campaign_limit()
     return jsonify({
@@ -336,7 +460,7 @@ def preview_recipients():
         'max_recipient_count': max_recipient_count,
         'over_limit': summary['deliverable_count'] > max_recipient_count,
         'preview_token': _create_preview_token(
-            channel, audience_type, region, overdue_only, deliverable
+            channel, audience_type, region, overdue_only, deliverable, recipient_ids
         ),
     })
 
@@ -372,7 +496,7 @@ def send_campaign():
         return jsonify({'error': 'channel must be "sms" or "email"'}), 400
     if not message:
         return jsonify({'error': 'Message is required'}), 400
-    if audience_type not in ('members', 'clients', 'both'):
+    if audience_type not in ('members', 'clients', 'both', 'selected'):
         return jsonify({'error': 'Invalid audience_type'}), 400
     max_message_length = 640 if channel == 'sms' else 5000
     if len(message) > max_message_length:
@@ -385,7 +509,13 @@ def send_campaign():
     if channel == 'email' and not email_configured():
         return jsonify({'error': 'Email is not configured -- set it up in Settings > Notifications first'}), 400
 
-    recipients = _resolve_recipients(audience_type, region, overdue_only)
+    recipient_ids = None
+    if audience_type == 'selected':
+        recipient_ids, err = _parse_recipient_ids(data.get('recipient_ids'))
+        if err:
+            return jsonify({'error': err[0]}), err[1]
+
+    recipients = _resolve_recipients(audience_type, region, overdue_only, recipient_ids)
     deliverable, summary = _prepare_recipients(recipients, channel)
     if not deliverable:
         return jsonify({'error': f'No recipients have a usable {channel} contact'}), 400
@@ -395,7 +525,7 @@ def send_campaign():
             'error': f'This campaign has {summary["deliverable_count"]} deliverable recipients, exceeding the configured limit of {max_recipient_count}'
         }), 400
     preview_error = _validate_preview_token(
-        data.get('preview_token'), channel, audience_type, region, overdue_only, deliverable
+        data.get('preview_token'), channel, audience_type, region, overdue_only, deliverable, recipient_ids
     )
     if preview_error:
         return jsonify({'error': preview_error[0]}), preview_error[1]
@@ -414,10 +544,12 @@ def send_campaign():
 
     cur = execute(
         """INSERT INTO campaigns (channel, audience_type, region, overdue_only, message, subject,
-                                   recipient_count, sent_count, failed_count, created_by, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                                   recipient_count, sent_count, failed_count, created_by, created_at,
+                                   recipient_ids)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (channel, audience_type, region, 1 if overdue_only else 0, message, subject,
-         summary['matched_count'], queued, skipped, get_current_user()['id'], utcnow())
+         summary['matched_count'], queued, skipped, get_current_user()['id'], utcnow(),
+         json.dumps(recipient_ids) if recipient_ids else None)
     )
     campaign_id = cur.lastrowid
     log_audit('SEND_CAMPAIGN', 'campaign', campaign_id,
