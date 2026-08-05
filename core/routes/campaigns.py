@@ -164,31 +164,31 @@ def _validate_preview_token(token, channel, audience_type, region, overdue_only,
 CAMPAIGN_TEMPLATES = {
     'overdue_reminder': {
         'label': 'Overdue payment reminder',
-        'sms': "Hi {name}, this is a reminder from Jodala Microfinance that your loan installment is overdue. Please make a payment as soon as possible to avoid penalties. Contact us if you need assistance.",
+        'sms': "Dear {name}, our records show your Jodala Microfinance loan installment is now overdue. Kindly settle payment promptly to avoid penalty charges. For assistance, please contact us.",
         'email_subject': "Overdue Loan Installment Reminder",
         'email': "Dear {name},\n\nThis is a reminder that your loan installment with Jodala Microfinance is currently overdue. Please make a payment as soon as possible to avoid additional penalties.\n\nIf you're facing difficulties or need to discuss your repayment plan, please contact us -- we're happy to help.\n\nThank you,\nJodala Microfinance",
     },
     'welcome': {
         'label': 'Welcome message',
-        'sms': "Welcome to Jodala Microfinance, {name}! We're glad to have you with us. Reach out anytime if you have questions about your account.",
+        'sms': "Dear {name}, welcome to Jodala Microfinance. Thank you for choosing us. For any queries regarding your account, please do not hesitate to contact us.",
         'email_subject': "Welcome to Jodala Microfinance",
         'email': "Dear {name},\n\nWelcome to Jodala Microfinance! We're glad to have you as part of our community.\n\nIf you have any questions about your account, loans, or savings, don't hesitate to reach out.\n\nWarm regards,\nJodala Microfinance",
     },
     'payment_confirmation': {
         'label': 'General payment thank-you',
-        'sms': "Hi {name}, thank you for your recent payment to Jodala Microfinance. We appreciate your continued trust in us.",
+        'sms': "Dear {name}, we confirm receipt of your recent payment to Jodala Microfinance. Thank you for your continued trust and prompt settlement.",
         'email_subject': "Thank You for Your Payment",
         'email': "Dear {name},\n\nThank you for your recent payment. We appreciate your continued partnership with Jodala Microfinance.\n\nIf you have any questions about your account, feel free to reach out.\n\nBest regards,\nJodala Microfinance",
     },
     'holiday_greeting': {
         'label': 'Holiday / seasonal greeting',
-        'sms': "Season's greetings from all of us at Jodala Microfinance, {name}! Wishing you a joyful holiday season.",
+        'sms': "Dear {name}, season's greetings from Jodala Microfinance. We thank you for your valued partnership and wish you a joyful holiday season.",
         'email_subject': "Season's Greetings from Jodala Microfinance",
         'email': "Dear {name},\n\nAs the year draws to a close, we want to thank you for being a valued member of the Jodala Microfinance family.\n\nWishing you and your loved ones a joyful holiday season.\n\nWarm regards,\nJodala Microfinance",
     },
     'new_product': {
         'label': 'New product / service announcement',
-        'sms': "Hi {name}, Jodala Microfinance now offers new savings and loan products. Visit your nearest branch or contact us to learn more.",
+        'sms': "Dear {name}, Jodala Microfinance is pleased to announce new savings and loan products. Kindly visit your nearest branch or contact us to learn more.",
         'email_subject': "New Products Now Available",
         'email': "Dear {name},\n\nWe're excited to let you know that Jodala Microfinance now offers new savings and loan products designed to serve you better.\n\nVisit your nearest branch or contact us to learn more about what's available.\n\nBest regards,\nJodala Microfinance",
     },
@@ -282,7 +282,7 @@ def draft_campaign_message():
                 text = lines[1].strip() if len(lines) > 1 else text
 
         if '{name}' not in text:
-            text = f"Hi {{name}}, " + text[0].lower() + text[1:] if channel == 'sms' else f"Dear {{name}},\n\n{text}"
+            text = f"Dear {{name}}, " + text[0].lower() + text[1:] if channel == 'sms' else f"Dear {{name}},\n\n{text}"
 
         return jsonify({'message': text, 'subject': subject})
     except requests.exceptions.HTTPError as e:

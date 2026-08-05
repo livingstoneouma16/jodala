@@ -212,9 +212,11 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
         ),
         phone=borrower_phone,
         sms_message=(
-            f"Jodala Microfinance: Payment of {format_currency(amount)} received for loan "
-            f"{loan['loan_number']} (receipt {repayment['receipt_number']}). "
-            f"Balance: {format_currency(new_outstanding)}. Thank you."
+            f"Dear {borrower_name or 'Customer'}, we've received your payment of "
+            f"{format_currency(amount)} for loan {loan['loan_number']}. "
+            f"Receipt: {repayment['receipt_number']}. "
+            f"Outstanding balance: {format_currency(new_outstanding)}. "
+            f"Thank you - Jodala Microfinance."
         ),
         ai_event_type='repayment_recorded',
         ai_facts={

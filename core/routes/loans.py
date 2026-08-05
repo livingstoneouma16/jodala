@@ -451,9 +451,11 @@ def _disburse_loan(loan_id, user_id, disbursement_method='cash', disbursement_da
             f"<p>Thank you for banking with us.</p>"
         ),
         (
-            f"Jodala Microfinance: {format_currency(amount_disbursed)} has been disbursed for "
-            f"loan {loan['loan_number']}{receipt_note}. First repayment due "
-            f"{first_repayment.isoformat()}."
+            f"Dear {borrower_name or 'Customer'}, {format_currency(amount_disbursed)} has been "
+            f"disbursed to you for loan {loan['loan_number']}{receipt_note} on "
+            f"{disbursement_date.isoformat()}. First repayment due "
+            f"{first_repayment.isoformat()}. Thank you for banking with us "
+            f"- Jodala Microfinance."
         ),
         ai_event_type='loan_disbursed',
         ai_facts={
@@ -512,9 +514,10 @@ def send_overdue_reminders():
             ),
             phone=borrower_phone,
             sms_message=(
-                f"Jodala Microfinance: Loan {loan['loan_number']} has {overdue_total['cnt']} "
-                f"overdue installment(s) totalling {format_currency(overdue_total['amt'])}. "
-                f"Please pay as soon as possible to avoid penalties."
+                f"Dear {borrower_name or 'Customer'}, loan {loan['loan_number']} has "
+                f"{overdue_total['cnt']} overdue installment(s) totalling "
+                f"{format_currency(overdue_total['amt'])}. Please pay promptly to avoid "
+                f"penalties. Call us if you need help - Jodala Microfinance."
             ),
             ai_event_type='loan_overdue_reminder',
             ai_facts={
