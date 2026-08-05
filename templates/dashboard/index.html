@@ -67,7 +67,7 @@
         <div class="stat-body">
           <div class="stat-label outstanding-value">What is Owed</div>
           <div class="stat-value outstanding-value" id="statPortfolio">—</div>
-          <div class="stat-change"><span id="statDisbursed">—</span> disbursed total</div>
+          <div class="stat-change"><span id="statDisbursed">—</span> disbursed this month</div>
         </div>
       </div>
     </div>
@@ -277,7 +277,7 @@ async function loadStats(s) {
     document.getElementById('statActiveLoans').textContent = fmt(s.active_loans, 0);
     document.getElementById('statPending').textContent    = fmt(s.pending_loans, 0);
     document.getElementById('statPortfolio').textContent  = fmtCurrency(s.total_outstanding);
-    document.getElementById('statDisbursed').textContent  = fmtCurrency(s.total_disbursed);
+    document.getElementById('statDisbursed').textContent  = fmtCurrency(s.monthly_disbursed);
     document.getElementById('statPAR').textContent        = s.par.toFixed(1) + '%';
     document.getElementById('statOverdue').textContent    = fmt(s.overdue_loans, 0);
     document.getElementById('statCollections').textContent = fmtCurrency(s.monthly_collections);

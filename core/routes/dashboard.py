@@ -31,6 +31,12 @@ def stats():
     total_disbursed = db.execute(
         "SELECT COALESCE(SUM(amount_disbursed), 0) FROM loans WHERE status IN ('active', 'completed')"
     ).fetchone()[0]
+    monthly_disbursed = db.execute(
+        """SELECT COALESCE(SUM(amount_disbursed), 0) FROM loans
+           WHERE status IN ('active', 'completed')
+           AND disbursement_date >= %s AND disbursement_date <= %s""",
+        (month_start, today_iso)
+    ).fetchone()[0]
     total_outstanding = db.execute(
         "SELECT COALESCE(SUM(outstanding_balance), 0) FROM loans WHERE status = 'active'"
     ).fetchone()[0]
@@ -93,6 +99,7 @@ def stats():
         'active_loans': active_loans,
         'pending_loans': pending_loans,
         'total_disbursed': round(total_disbursed, 2),
+        'monthly_disbursed': round(monthly_disbursed, 2),
         'total_outstanding': round(total_outstanding, 2),
         'due_today': due_today,
         'overdue_loans': len(overdue_loan_ids),
