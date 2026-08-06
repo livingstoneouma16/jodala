@@ -11,7 +11,7 @@
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('savingsProducts',this)">Savings Products</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('regions',this)">Regions</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('notifications',this)">Notifications</button></li>
-  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('mpesa',this)">M-Pesa</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('mpesa',this)">Payment Gateway</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showSet('backups',this)">Backups</button></li>
 </ul>
 
@@ -171,9 +171,45 @@
   </div></div></div>
 </div>
 
-<!-- M-Pesa Settings -->
+<!-- Payment Gateway Settings -->
 <div id="mpesaSet" class="d-none">
-  <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-phone" style="color:var(--brand-light)"></i>M-Pesa STK Push (Lipa Na M-Pesa Online)</div>
+  <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-toggles" style="color:var(--brand-light)"></i>Active STK Push Gateway</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">Choose which gateway new payment prompts (loan repayments and savings deposits) go through. Only one is active at a time — switch back and forth freely; past transactions and their history are unaffected.</div></div>
+  <div class="jd-card-body">
+    <div class="row g-4" id="gatewaySelectForm">
+      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+    </div>
+    <div class="d-flex justify-content-end mt-3">
+      <button class="btn btn-brand" id="saveGatewayBtn" onclick="saveMpesaSettings()"><i class="bi bi-save me-1"></i>Save Gateway Choice</button>
+    </div>
+  </div></div>
+
+  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-cloud" style="color:var(--brand-light)"></i>CloudPat STK Push</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">Alternative mobile-money gateway to M-Pesa Daraja. Unlike Daraja, CloudPat has no shared sandbox default — enter your own API key/secret from CloudPat's developer portal before pushes will work, even for testing.</div></div>
+  <div class="jd-card-body">
+    <div class="row g-4" id="cloudpatForm">
+      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+    </div>
+    <div class="alert alert-warning mt-3" style="font-size:12.5px">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      CloudPat must be able to reach your <strong>Callback URL</strong> over the public internet with a valid HTTPS
+      certificate. If this app is only running locally, use a tunnel (e.g. ngrok) and paste its HTTPS URL +
+      <code>/mpesa/cloudpat/callback</code> below — otherwise payments will show "pending" forever since the
+      confirmation can never arrive.
+    </div>
+    <hr class="my-4" />
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm" id="testCloudpatPhone" placeholder="Test phone e.g. 0712345678" style="width:220px" />
+        <button class="btn btn-outline-secondary btn-sm" onclick="sendTestCloudpatPush()" id="testCloudpatBtn">
+          <i class="bi bi-send me-1"></i>Send KSh 1 Test Push
+        </button>
+      </div>
+      <button class="btn btn-brand" id="saveCloudpatBtn" onclick="saveMpesaSettings()"><i class="bi bi-save me-1"></i>Save Settings</button>
+    </div>
+  </div></div>
+
+  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-phone" style="color:var(--brand-light)"></i>M-Pesa STK Push (Lipa Na M-Pesa Online)</div>
     <div class="text-muted" style="font-size:12px;margin-top:2px">Lets staff trigger a payment prompt on a member's phone for loan repayments and savings deposits</div></div>
   <div class="jd-card-body">
     <div id="mpesaSandboxNotice" class="alert alert-info d-none" style="font-size:12.5px">
@@ -239,8 +275,8 @@
   </div>
   <div class="jd-card-body p-0"><div class="table-responsive">
     <table class="table mb-0" style="font-size:12.5px">
-      <thead><tr><th style="padding-left:16px">When</th><th>Purpose</th><th>Phone</th><th>Amount</th><th>Status</th><th style="padding-right:16px">Receipt / Detail</th></tr></thead>
-      <tbody id="mpesaLogBody"><tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
+      <thead><tr><th style="padding-left:16px">When</th><th>Purpose</th><th>Gateway</th><th>Phone</th><th>Amount</th><th>Status</th><th style="padding-right:16px">Receipt / Detail</th></tr></thead>
+      <tbody id="mpesaLogBody"><tr><td colspan="7" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
     </table>
   </div></div></div>
 </div>
@@ -864,6 +900,46 @@ async function loadSmsLog() {
 async function loadMpesaSettings() {
   try {
     const data = await API.get('/settings/api/mpesa');
+
+    document.getElementById('gatewaySelectForm').innerHTML = `
+      <div class="col-md-8">
+        <select class="form-select" id="activeGateway">
+          <option value="mpesa" ${data.payment_gateway!=='cloudpat'?'selected':''}>M-Pesa Daraja (Safaricom)</option>
+          <option value="cloudpat" ${data.payment_gateway==='cloudpat'?'selected':''}>CloudPat</option>
+        </select>
+      </div>
+      <div class="col-md-4 d-flex align-items-center">
+        <span class="badge ${data.payment_gateway==='cloudpat' ? (data.cloudpat_configured ? 'bg-success' : 'bg-warning text-dark') : (data.mpesa_shortcode ? 'bg-success' : 'bg-warning text-dark')}" style="font-size:11px">
+          ${data.payment_gateway==='cloudpat'
+            ? (data.cloudpat_configured ? 'CloudPat configured' : 'CloudPat not fully configured yet')
+            : 'Using M-Pesa Daraja'}
+        </span>
+      </div>`;
+
+    document.getElementById('cloudpatForm').innerHTML = `
+      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Environment</label>
+        <select class="form-select" id="cpEnv">
+          <option value="sandbox" ${data.cloudpat_environment!=='production'?'selected':''}>Sandbox (testing)</option>
+          <option value="production" ${data.cloudpat_environment==='production'?'selected':''}>Production (live)</option>
+        </select></div>
+      <div class="col-md-4 d-flex align-items-end">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="cpEnabled" ${data.cloudpat_enabled ? 'checked' : ''} />
+          <label class="form-check-label" for="cpEnabled" style="font-size:12.5px">CloudPat payments enabled</label>
+        </div>
+      </div>
+      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Till Number</label>
+        <input type="text" class="form-control" id="cpTillNumber" placeholder="Your CloudPat till number" value="${escapeHtml(data.cloudpat_till_number||'')}" /></div>
+
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">API Key</label>
+        <input type="text" class="form-control" id="cpApiKey" value="${escapeHtml(data.cloudpat_api_key||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">API Secret</label>
+        <input type="password" class="form-control" id="cpApiSecret" placeholder="${data.cloudpat_api_secret_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'From CloudPat developer portal'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.cloudpat_api_secret_set ? 'A secret is already saved. Leave blank to keep it.' : 'Not yet configured.'}</div></div>
+
+      <div class="col-md-12"><label class="form-label" style="font-size:12.5px">Callback URL</label>
+        <input type="text" class="form-control" id="cpCallbackUrl" placeholder="https://your-public-domain.example.com/mpesa/cloudpat/callback" value="${escapeHtml(data.cloudpat_callback_url||'')}" /></div>`;
+
     document.getElementById('mpesaSandboxNotice').classList.toggle('d-none', !data.using_sandbox_defaults);
     document.getElementById('mpesaForm').innerHTML = `
       <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Environment</label>
@@ -929,6 +1005,7 @@ async function saveMpesaSettings() {
   setLoading(btn, true);
   try {
     const body = {
+      payment_gateway: document.getElementById('activeGateway').value,
       mpesa_environment: document.getElementById('mConsumerEnv').value,
       mpesa_enabled: document.getElementById('mEnabled').checked,
       mpesa_shortcode: document.getElementById('mShortcode').value,
@@ -939,6 +1016,11 @@ async function saveMpesaSettings() {
       mpesa_b2c_command_id: document.getElementById('mB2cCommandId').value,
       mpesa_b2c_result_url: document.getElementById('mB2cResultUrl').value,
       mpesa_b2c_timeout_url: document.getElementById('mB2cTimeoutUrl').value,
+      cloudpat_environment: document.getElementById('cpEnv').value,
+      cloudpat_enabled: document.getElementById('cpEnabled').checked,
+      cloudpat_till_number: document.getElementById('cpTillNumber').value,
+      cloudpat_api_key: document.getElementById('cpApiKey').value,
+      cloudpat_callback_url: document.getElementById('cpCallbackUrl').value,
     };
     const secret = document.getElementById('mConsumerSecret').value;
     if (secret) body.mpesa_consumer_secret = secret;
@@ -948,8 +1030,10 @@ async function saveMpesaSettings() {
     if (initiatorPassword) body.mpesa_initiator_password = initiatorPassword;
     const cert = document.getElementById('mB2cCertificate').value.trim();
     if (cert) body.mpesa_b2c_certificate = cert;
+    const cpSecret = document.getElementById('cpApiSecret').value;
+    if (cpSecret) body.cloudpat_api_secret = cpSecret;
     await API.put('/settings/api/mpesa', body);
-    Toast.success('M-Pesa settings saved');
+    Toast.success('Payment gateway settings saved');
     loadMpesaSettings();
   } catch(e) { Toast.error(e.message); }
   finally { setLoading(btn, false); }
@@ -979,21 +1063,35 @@ async function sendTestMpesaPush() {
   finally { setLoading(btn, false); loadMpesaLog(); }
 }
 
+async function sendTestCloudpatPush() {
+  const btn = document.getElementById('testCloudpatBtn');
+  const phone = document.getElementById('testCloudpatPhone').value.trim();
+  if (!phone) { Toast.warning('Enter a phone number first'); return; }
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/settings/api/cloudpat/test', { phone });
+    Toast.success(data.message || 'Test push sent');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); loadMpesaLog(); }
+}
+
 async function loadMpesaLog() {
   try {
     const rows = await API.get('/settings/api/mpesa/log');
     const body = document.getElementById('mpesaLogBody');
     if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-4">No M-Pesa attempts yet</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted p-4">No payment gateway attempts yet</td></tr>`;
       return;
     }
     const badge = s => s==='success' ? '<span class="badge bg-success">success</span>'
       : s==='failed' ? '<span class="badge bg-danger">failed</span>'
       : '<span class="badge bg-secondary">pending</span>';
+    const gwBadge = g => g==='cloudpat' ? '<span class="badge bg-info text-dark">CloudPat</span>' : '<span class="badge bg-secondary">M-Pesa</span>';
     body.innerHTML = rows.map(r => `
       <tr>
         <td style="padding-left:16px;white-space:nowrap">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
         <td style="text-transform:capitalize">${escapeHtml(String(r.purpose).replace('_',' '))}</td>
+        <td>${gwBadge(r.gateway || 'mpesa')}</td>
         <td>${escapeHtml(r.phone)}</td>
         <td>KSh ${Number(r.amount).toLocaleString()}</td>
         <td>${badge(r.status)}</td>

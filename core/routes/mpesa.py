@@ -1,22 +1,33 @@
 """
-M-Pesa STK Push routes.
+M-Pesa Daraja / CloudPat STK Push routes.
 
 Two touchpoints in the UI trigger a push:
   - Loan repayments (record.html): purpose='loan_repayment', target_id=loan_id
   - Savings deposits (savings/index.html): purpose='savings_deposit', target_id=savings_account_id
 
+STK Push is gateway-agnostic: Settings > Payment Gateway lets an admin
+switch the active gateway between M-Pesa Daraja and CloudPat (the
+`payment_gateway` company_setting, 'mpesa' or 'cloudpat'). Both gateways
+share the same mpesa_transactions table (tagged by its `gateway` column),
+the same status-polling endpoint, and the same repayment/deposit
+application logic on success -- only which vendor SDK is called and which
+URL the vendor calls back on differ. B2C disbursement remains M-Pesa-only
+(CloudPat does not currently offer a disbursement product).
+
 Flow:
   1. Frontend POSTs /mpesa/api/stkpush with purpose/target_id/phone/amount.
-     We validate the target, ask Safaricom to push a prompt to the phone,
-     and store a 'pending' row in mpesa_transactions keyed by
-     CheckoutRequestID.
+     We validate the target, ask the active gateway to push a prompt to the
+     phone, and store a 'pending' row in mpesa_transactions keyed by
+     checkout_request_id.
   2. The frontend polls GET /mpesa/api/status/<checkout_request_id> every
      few seconds waiting for the row to leave 'pending'.
-  3. Safaricom calls POST /mpesa/callback (no login -- this is Safaricom's
-     server, not a browser) once the customer enters their PIN or cancels.
-     On success we apply the payment using exactly the same internal logic
-     as a manually-recorded repayment/deposit, so accounting stays
-     consistent regardless of how the money came in.
+  3. The gateway calls POST /mpesa/callback (Daraja) or
+     POST /mpesa/cloudpat/callback (CloudPat) -- no login, since this is
+     the vendor's server, not a browser -- once the customer enters their
+     PIN or cancels. On success we apply the payment using exactly the same
+     internal logic as a manually-recorded repayment/deposit, so accounting
+     stays consistent regardless of how the money came in or which gateway
+     sent it.
 """
 from flask import Blueprint, request, jsonify, url_for, current_app
 
@@ -25,9 +36,19 @@ from core.auth import login_required, get_current_user
 from core.serializers import mpesa_transaction_public
 from core.utils import log_audit
 from core.mpesa import initiate_stk_push, initiate_b2c_payment, MpesaError, normalize_phone
+from core.cloudpat import initiate_stk_push as cloudpat_initiate_stk_push, CloudPatError
 from core import limiter
 
 mpesa_bp = Blueprint('mpesa', __name__)
+
+
+def get_active_gateway():
+    """Which STK Push gateway new pushes should use: 'mpesa' or 'cloudpat'.
+    Set under Settings > Payment Gateway. Defaults to 'mpesa' (Daraja) if
+    unset or set to something unrecognized."""
+    from core.mpesa import _setting
+    value = (_setting('payment_gateway') or 'mpesa').strip().lower()
+    return value if value in ('mpesa', 'cloudpat') else 'mpesa'
 
 
 def _b2c_result_url():
@@ -59,6 +80,17 @@ def _callback_url():
     if override:
         return override
     return url_for('mpesa.callback', _external=True)
+
+
+def _cloudpat_callback_url():
+    """Same reasoning as _callback_url() above -- CloudPat also needs a
+    publicly reachable HTTPS URL. Set cloudpat_callback_url in
+    Settings > Payment Gateway to override."""
+    from core.mpesa import _setting
+    override = _setting('cloudpat_callback_url')
+    if override:
+        return override
+    return url_for('mpesa.cloudpat_callback', _external=True)
 
 
 @mpesa_bp.route('/api/stkpush', methods=['POST'])
@@ -96,33 +128,48 @@ def stk_push():
         account_reference = target['account_number']
         transaction_desc = 'Savings Dep'
 
+    gateway = get_active_gateway()
+
     try:
         phone_normalized = normalize_phone(phone)
-        result = initiate_stk_push(
-            phone=phone_normalized,
-            amount=amount,
-            account_reference=account_reference,
-            transaction_desc=transaction_desc,
-            callback_url=_callback_url(),
-        )
-    except MpesaError as e:
+        if gateway == 'cloudpat':
+            result = cloudpat_initiate_stk_push(
+                phone=phone_normalized,
+                amount=amount,
+                account_reference=account_reference,
+                transaction_desc=transaction_desc,
+                callback_url=_cloudpat_callback_url(),
+            )
+            checkout_request_id = result.get('checkout_request_id')
+            merchant_request_id = result.get('merchant_request_id')
+        else:
+            result = initiate_stk_push(
+                phone=phone_normalized,
+                amount=amount,
+                account_reference=account_reference,
+                transaction_desc=transaction_desc,
+                callback_url=_callback_url(),
+            )
+            checkout_request_id = result.get('CheckoutRequestID')
+            merchant_request_id = result.get('MerchantRequestID')
+    except (MpesaError, CloudPatError) as e:
         return jsonify({'error': str(e)}), 502
 
-    checkout_request_id = result.get('CheckoutRequestID')
-    merchant_request_id = result.get('MerchantRequestID')
     now = utcnow()
     execute(
         """INSERT INTO mpesa_transactions (checkout_request_id, merchant_request_id, purpose, target_id,
-               phone, amount, status, initiated_by, created_at, updated_at)
-           VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s, %s, %s)""",
+               phone, amount, status, initiated_by, gateway, created_at, updated_at)
+           VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s, %s, %s, %s)""",
         (checkout_request_id, merchant_request_id, purpose, int(target_id), phone_normalized,
-         float(amount), user['id'], now, now)
+         float(amount), user['id'], gateway, now, now)
     )
     log_audit('MPESA_STK_PUSH_INITIATED', purpose, int(target_id))
 
+    prompt_label = 'CloudPat' if gateway == 'cloudpat' else 'M-Pesa'
     return jsonify({
-        'message': 'STK push sent -- ask the customer to check their phone and enter their M-Pesa PIN',
+        'message': f'STK push sent -- ask the customer to check their phone and enter their {prompt_label} PIN',
         'checkout_request_id': checkout_request_id,
+        'gateway': gateway,
     }), 201
 
 
@@ -135,6 +182,60 @@ def stk_status(checkout_request_id):
     if not txn:
         return jsonify({'error': 'Unknown checkout request'}), 404
     return jsonify(mpesa_transaction_public(txn))
+
+
+def _apply_successful_stk_payment(txn, mpesa_receipt, confirmed_amount, result_code, result_desc, gateway_label):
+    """Shared by both gateways' callbacks: applies a confirmed STK payment
+    using exactly the same internal logic as a manually-recorded
+    repayment/deposit, so accounting stays consistent regardless of which
+    gateway (M-Pesa or CloudPat) the money came in through. `mpesa_receipt`
+    is stored in the shared mpesa_receipt_number column either way -- it
+    holds whichever vendor's own receipt/reference number applies."""
+    now = utcnow()
+    try:
+        if txn['purpose'] == 'loan_repayment':
+            from core.routes.repayments import _record_repayment, _RepaymentError
+            try:
+                repayment, _ = _record_repayment(
+                    loan_id=txn['target_id'], amount=confirmed_amount, payment_method='mobile_money',
+                    reference_number=mpesa_receipt, notes=f'Paid via {gateway_label} STK Push',
+                    user_id=txn['initiated_by'],
+                )
+                execute(
+                    "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+                    "mpesa_receipt_number = %s, repayment_id = %s, updated_at = %s WHERE id = %s",
+                    (result_code, result_desc, mpesa_receipt, repayment['id'], now, txn['id'])
+                )
+            except _RepaymentError as e:
+                current_app.logger.error('%s payment succeeded but could not be applied to loan %s: %s',
+                                          gateway_label, txn['target_id'], e)
+                execute(
+                    "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+                    "mpesa_receipt_number = %s, updated_at = %s WHERE id = %s",
+                    (result_code, f'Paid but not applied: {e}', mpesa_receipt, now, txn['id'])
+                )
+        else:
+            from core.routes.savings import _create_transaction
+            savings_txn, _ = _create_transaction(
+                account_id=txn['target_id'], txn_type='deposit', amount=confirmed_amount,
+                method='mobile_money', user_id=txn['initiated_by'], reference=mpesa_receipt,
+                notes=f'Paid via {gateway_label} STK Push',
+            )
+            execute(
+                "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+                "mpesa_receipt_number = %s, savings_transaction_id = %s, updated_at = %s WHERE id = %s",
+                (result_code, result_desc, mpesa_receipt, savings_txn['id'], now, txn['id'])
+            )
+    except Exception:
+        current_app.logger.exception('%s callback: failed to apply payment for checkout_request_id=%s',
+                                      gateway_label, txn['checkout_request_id'])
+        execute(
+            "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
+            "mpesa_receipt_number = %s, updated_at = %s WHERE id = %s",
+            (result_code, 'Paid but failed to apply -- needs manual reconciliation', mpesa_receipt, now, txn['id'])
+        )
+
+    log_audit('MPESA_PAYMENT_RECEIVED', txn['purpose'], txn['target_id'])
 
 
 @mpesa_bp.route('/callback', methods=['POST'])
@@ -189,51 +290,65 @@ def callback():
     mpesa_receipt = items.get('MpesaReceiptNumber')
     confirmed_amount = items.get('Amount', txn['amount'])
 
-    try:
-        if txn['purpose'] == 'loan_repayment':
-            from core.routes.repayments import _record_repayment, _RepaymentError
-            try:
-                repayment, _ = _record_repayment(
-                    loan_id=txn['target_id'], amount=confirmed_amount, payment_method='mobile_money',
-                    reference_number=mpesa_receipt, notes='Paid via M-Pesa STK Push',
-                    user_id=txn['initiated_by'],
-                )
-                execute(
-                    "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
-                    "mpesa_receipt_number = %s, repayment_id = %s, updated_at = %s WHERE id = %s",
-                    (result_code, result_desc, mpesa_receipt, repayment['id'], now, txn['id'])
-                )
-            except _RepaymentError as e:
-                current_app.logger.error('M-Pesa payment succeeded but could not be applied to loan %s: %s',
-                                          txn['target_id'], e)
-                execute(
-                    "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
-                    "mpesa_receipt_number = %s, updated_at = %s WHERE id = %s",
-                    (result_code, f'Paid but not applied: {e}', mpesa_receipt, now, txn['id'])
-                )
-        else:
-            from core.routes.savings import _create_transaction
-            savings_txn, _ = _create_transaction(
-                account_id=txn['target_id'], txn_type='deposit', amount=confirmed_amount,
-                method='mobile_money', user_id=txn['initiated_by'], reference=mpesa_receipt,
-                notes='Paid via M-Pesa STK Push',
-            )
-            execute(
-                "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
-                "mpesa_receipt_number = %s, savings_transaction_id = %s, updated_at = %s WHERE id = %s",
-                (result_code, result_desc, mpesa_receipt, savings_txn['id'], now, txn['id'])
-            )
-    except Exception:
-        current_app.logger.exception('M-Pesa callback: failed to apply payment for checkout_request_id=%s',
-                                      checkout_request_id)
-        execute(
-            "UPDATE mpesa_transactions SET status = 'success', result_code = %s, result_desc = %s, "
-            "mpesa_receipt_number = %s, updated_at = %s WHERE id = %s",
-            (result_code, 'Paid but failed to apply -- needs manual reconciliation', mpesa_receipt, now, txn['id'])
-        )
-
-    log_audit('MPESA_PAYMENT_RECEIVED', txn['purpose'], txn['target_id'])
+    _apply_successful_stk_payment(txn, mpesa_receipt, confirmed_amount, result_code, result_desc, 'M-Pesa')
     return jsonify({'ResultCode': 0, 'ResultDesc': 'Accepted'}), 200
+
+
+@mpesa_bp.route('/cloudpat/callback', methods=['POST'])
+def cloudpat_callback():
+    """CloudPat posts the result here once the customer responds to the STK
+    prompt (or it times out). No @login_required -- there is no user
+    session on CloudPat's side. We only trust a callback that references a
+    checkout_request_id we ourselves generated and are still waiting on;
+    anything else is ignored. In production, additionally restrict inbound
+    traffic to this path to CloudPat's published IP ranges at the
+    network/firewall level. Always acknowledge with HTTP 200 so CloudPat
+    doesn't retry forever, even if something below fails -- we log failures
+    instead.
+
+    Expected payload shape (CloudPat's own callback envelope, distinct from
+    Daraja's nested Body.stkCallback shape):
+        {
+          "checkout_request_id": "...",
+          "result_code": 0,
+          "result_desc": "Success",
+          "receipt_number": "...",
+          "amount": 500
+        }
+    """
+    body = request.get_json(silent=True) or {}
+    checkout_request_id = body.get('checkout_request_id')
+    if not checkout_request_id:
+        current_app.logger.warning('CloudPat callback: malformed payload: %r', body)
+        return jsonify({'result_code': 0, 'result_desc': 'Accepted'}), 200
+
+    result_code = body.get('result_code')
+    result_desc = body.get('result_desc', '')
+
+    txn = get_db().execute(
+        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = %s", (checkout_request_id,)
+    ).fetchone()
+    if not txn:
+        current_app.logger.warning('CloudPat callback for unknown checkout_request_id: %s', checkout_request_id)
+        return jsonify({'result_code': 0, 'result_desc': 'Accepted'}), 200
+    if txn['status'] != 'pending':
+        # Already processed (CloudPat sometimes sends the callback more
+        # than once) -- acknowledge without reprocessing.
+        return jsonify({'result_code': 0, 'result_desc': 'Accepted'}), 200
+
+    if result_code != 0:
+        execute(
+            "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
+            "WHERE id = %s",
+            (result_code, result_desc, utcnow(), txn['id'])
+        )
+        return jsonify({'result_code': 0, 'result_desc': 'Accepted'}), 200
+
+    receipt_number = body.get('receipt_number')
+    confirmed_amount = body.get('amount', txn['amount'])
+
+    _apply_successful_stk_payment(txn, receipt_number, confirmed_amount, result_code, result_desc, 'CloudPat')
+    return jsonify({'result_code': 0, 'result_desc': 'Accepted'}), 200
 
 
 @mpesa_bp.route('/api/b2c', methods=['POST'])

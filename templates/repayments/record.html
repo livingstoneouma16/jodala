@@ -7,7 +7,6 @@
   <p class="text-muted mb-0" style="font-size:13px">Enter repayment details below</p></div>
   <a href="{{ url_for('repayments.index') }}" class="btn btn-brand-outline btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
 </div>
-<div class="alert d-none" id="cachedFormBanner" style="background:#FFF7ED;border:1px solid #F4A261;color:#7C4A03;font-size:12.5px;padding:8px 14px"></div>
 <div class="row g-3 justify-content-center">
   <div class="col-12 col-lg-7">
     <div class="jd-card">
@@ -137,8 +136,7 @@ let currentLoan = null;
 document.getElementById('payDate').value = new Date().toISOString().split('T')[0];
 
 // Keep a pristine copy of all loan options so we can filter/restore them.
-// (Replaced by applyOfflineBundleToForm()'s override when offline data is used.)
-let allLoanOptionsHTML = document.getElementById('loanSelect').innerHTML;
+const allLoanOptionsHTML = document.getElementById('loanSelect').innerHTML;
 
 function toggleBorrower() {
   const type = document.getElementById('borrowerType').value;
@@ -187,42 +185,13 @@ function filterLoans() {
   }
 }
 
-// If we're offline (or this cached page is stale), refresh the borrower/loan
-// dropdowns from the last-synced offline bundle instead of trusting whatever
-// server-rendered options happen to be baked into this cached page copy.
-let offlineLoansById = {};
-async function applyOfflineBundleToForm() {
-  if (navigator.onLine) { await Offline.refreshBundle(); return; }
-  const bundle = await Offline.getBundle();
-  if (!bundle) return;
-  const banner = document.getElementById('cachedFormBanner');
-  banner.classList.remove('d-none');
-  banner.innerHTML = `<i class="bi bi-wifi-off me-1"></i>Offline — using borrower/loan data cached as of ${new Date(bundle.synced_at).toLocaleString()}. This payment will be queued and synced automatically once you're back online.`;
-  document.getElementById('mpesaPhone').closest('.mt-3').classList.add('d-none'); // M-Pesa needs a live connection
-
-  offlineLoansById = Object.fromEntries(bundle.loans.map(l => [String(l.id), l]));
-  const memberSel = document.getElementById('memberSelect');
-  const clientSel = document.getElementById('clientSelect');
-  memberSel.innerHTML = '<option value="">Search and select member…</option>' +
-    bundle.members.map(m => `<option value="${m.id}">${escapeHtml(m.first_name)} ${escapeHtml(m.last_name)} — ${escapeHtml(m.member_number)} (${escapeHtml(m.phone||'')})</option>`).join('');
-  clientSel.innerHTML = '<option value="">Search and select client…</option>' +
-    bundle.clients.map(c => `<option value="${c.id}">${escapeHtml(c.first_name)} ${escapeHtml(c.last_name)} — ${escapeHtml(c.client_number)} (${escapeHtml(c.phone||'')})</option>`).join('');
-
-  const loanSel = document.getElementById('loanSelect');
-  loanSel.innerHTML = '<option value="">Select a member or client first…</option>' +
-    bundle.loans.map(l => `<option value="${l.id}" data-member-id="${l.member_id||''}" data-client-id="${l.client_id||''}">${escapeHtml(l.borrower_name)} — ${escapeHtml(l.loan_number)} (Outstanding: ${fmtCurrency(l.outstanding_balance)})</option>`).join('');
-  allLoanOptionsHTML = loanSel.innerHTML;
-}
-
 // Pre-fill from URL params
 const urlParams = new URLSearchParams(window.location.search);
-applyOfflineBundleToForm().then(() => {
-  if (urlParams.get('loan_id')) {
-    fetchLoanById(urlParams.get('loan_id'));
-  } else {
-    filterLoans();
-  }
-});
+if (urlParams.get('loan_id')) {
+  fetchLoanById(urlParams.get('loan_id'));
+} else {
+  filterLoans();
+}
 
 async function selectLoan() {
   const id = document.getElementById('loanSelect').value;
@@ -231,24 +200,17 @@ async function selectLoan() {
 }
 
 async function fetchLoanById(id) {
-  if (!navigator.onLine && offlineLoansById[id]) {
-    document.getElementById('loanSelect').value = id;
-    showLoanInfo(offlineLoansById[id]);
-    return;
-  }
   try {
     const data = await API.get(`/loans/api/${id}`);
     document.getElementById('loanSelect').value = id;
     showLoanInfo(data);
-  } catch(e) {
-    if (offlineLoansById[id]) { document.getElementById('loanSelect').value = id; showLoanInfo(offlineLoansById[id]); }
-  }
+  } catch(e) {}
 }
 
 function showLoanInfo(loan) {
   currentLoan = loan;
   document.getElementById('loanId').value = loan.id;
-  document.getElementById('infoBorrower').textContent = loan.member_name || loan.borrower_details?.name || loan.borrower_name || '—';
+  document.getElementById('infoBorrower').textContent = loan.member_name || loan.borrower_details?.name || '—';
   document.getElementById('infoLoanNo').textContent = loan.loan_number;
   document.getElementById('infoOutstanding').textContent = fmtCurrency(loan.outstanding_balance);
   document.getElementById('infoStatus').innerHTML = statusPill(loan.status);
@@ -343,24 +305,10 @@ document.getElementById('repaymentForm').addEventListener('submit', async functi
   const btn = document.getElementById('submitBtn');
   setLoading(btn, true);
   const body = Object.fromEntries(new FormData(this).entries());
-  // Carry the loan's display label along so it's still recognisable on the
-  // Repayments list while this is sitting in the outbox, unsynced.
-  const loanOpt = document.getElementById('loanSelect').selectedOptions[0];
-  body.loan_number = loanOpt ? loanOpt.textContent.split(' — ')[1]?.split(' (')[0] : '';
-
   try {
     const data = await API.post('/repayments/api', body);
     Toast.success(`Payment recorded! Receipt: ${data.repayment.receipt_number}`);
     setTimeout(() => window.location.href = `/repayments/${data.repayment.id}/receipt`, 1200);
-  } catch(e) {
-    if (e.isNetworkError) {
-      await Offline.queueAction('record_repayment', body);
-      Toast.warning('Offline — payment queued and will sync automatically once connected');
-      setTimeout(() => window.location.href = `/repayments/`, 1200);
-    } else {
-      Toast.error(e.message);
-      setLoading(btn, false);
-    }
-  }
+  } catch(e) { Toast.error(e.message); setLoading(btn, false); }
 });
 </script>{% endblock %}

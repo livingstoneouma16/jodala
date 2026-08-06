@@ -228,6 +228,7 @@ def mpesa_transaction_public(row):
         'phone': d['phone'],
         'amount': d['amount'],
         'status': d['status'],
+        'gateway': d.get('gateway', 'mpesa'),
         'result_desc': d.get('result_desc'),
         'mpesa_receipt_number': d.get('mpesa_receipt_number'),
         'repayment_id': d.get('repayment_id'),

@@ -33,18 +33,11 @@ const API = {
         return null;
       }
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const err = new Error(data.error || data.message || `HTTP ${res.status}`);
-        err.status = res.status;
-        err.conflict = !!data.conflict; // offline-sync action the server couldn't safely apply
-        throw err;
-      }
+      if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
       return data;
     } catch (err) {
       if (err.message !== 'Failed to fetch') throw err;
-      const networkErr = new Error('Network error — check connection');
-      networkErr.isNetworkError = true;
-      throw networkErr;
+      throw new Error('Network error — check connection');
     }
   },
   get(url)           { return this.request('GET', url); },
