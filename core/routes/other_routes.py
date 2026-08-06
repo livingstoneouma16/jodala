@@ -314,13 +314,13 @@ def send_test_sms():
 @role_required('admin')
 def get_mpesa_settings():
     from core.mpesa import get_b2c_config, is_b2c_configured, _setting
-    from core.cloudpat import get_cloudpat_config, is_configured as is_cloudpat_configured
+    from core.cloudpay import get_cloudpay_config, is_configured as is_cloudpay_configured
     cfg = get_b2c_config()
-    cp_cfg = get_cloudpat_config()
+    cp_cfg = get_cloudpay_config()
     active_gateway = (_setting('payment_gateway') or 'mpesa').strip().lower()
     return jsonify({
-        # Which gateway new STK pushes use -- 'mpesa' or 'cloudpat'
-        'payment_gateway': active_gateway if active_gateway in ('mpesa', 'cloudpat') else 'mpesa',
+        # Which gateway new STK pushes use -- 'mpesa' or 'cloudpay'
+        'payment_gateway': active_gateway if active_gateway in ('mpesa', 'cloudpay') else 'mpesa',
 
         'mpesa_environment': cfg['environment'],
         'mpesa_consumer_key': cfg['consumer_key'],
@@ -333,7 +333,7 @@ def get_mpesa_settings():
         'mpesa_enabled': cfg['enabled'],
         'mpesa_callback_url': _setting('mpesa_callback_url', ''),
         'using_sandbox_defaults': cfg['is_sandbox'] and not (_setting('mpesa_consumer_key') or os.getenv('MPESA_CONSUMER_KEY')),
-        # B2C (disbursement) -- M-Pesa only, CloudPat has no disbursement product
+        # B2C (disbursement) -- M-Pesa only, CloudPay has no disbursement product
         'mpesa_initiator_name': cfg['initiator_name'],
         'mpesa_initiator_password_set': bool(cfg['initiator_password']),
         'mpesa_b2c_shortcode': cfg['b2c_shortcode'],
@@ -343,14 +343,14 @@ def get_mpesa_settings():
         'mpesa_b2c_result_url': _setting('mpesa_b2c_result_url', ''),
         'mpesa_b2c_timeout_url': _setting('mpesa_b2c_timeout_url', ''),
 
-        # CloudPat
-        'cloudpat_environment': cp_cfg['environment'],
-        'cloudpat_api_key': cp_cfg['api_key'],
-        'cloudpat_api_secret_set': bool(cp_cfg['api_secret']),
-        'cloudpat_till_number': cp_cfg['till_number'],
-        'cloudpat_enabled': cp_cfg['enabled'],
-        'cloudpat_callback_url': _setting('cloudpat_callback_url', ''),
-        'cloudpat_configured': is_cloudpat_configured(),
+        # CloudPay
+        'cloudpay_environment': cp_cfg['environment'],
+        'cloudpay_api_key': cp_cfg['api_key'],
+        'cloudpay_api_secret_set': bool(cp_cfg['api_secret']),
+        'cloudpay_till_number': cp_cfg['till_number'],
+        'cloudpay_enabled': cp_cfg['enabled'],
+        'cloudpay_callback_url': _setting('cloudpay_callback_url', ''),
+        'cloudpay_configured': is_cloudpay_configured(),
     })
 
 
@@ -369,7 +369,7 @@ def update_mpesa_settings():
             execute("INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)", (key, str(value), now))
 
     if 'payment_gateway' in data:
-        _set('payment_gateway', 'cloudpat' if data.get('payment_gateway') == 'cloudpat' else 'mpesa')
+        _set('payment_gateway', 'cloudpay' if data.get('payment_gateway') == 'cloudpay' else 'mpesa')
     if 'mpesa_environment' in data:
         _set('mpesa_environment', 'production' if data.get('mpesa_environment') == 'production' else 'sandbox')
     if 'mpesa_consumer_key' in data:
@@ -410,21 +410,21 @@ def update_mpesa_settings():
             return jsonify({'error': str(e)}), 400
         _set('mpesa_b2c_certificate', data['mpesa_b2c_certificate'].strip())
 
-    # CloudPat
-    if 'cloudpat_environment' in data:
-        _set('cloudpat_environment', 'production' if data.get('cloudpat_environment') == 'production' else 'sandbox')
-    if 'cloudpat_api_key' in data:
-        _set('cloudpat_api_key', (data.get('cloudpat_api_key') or '').strip())
-    if 'cloudpat_till_number' in data:
-        _set('cloudpat_till_number', (data.get('cloudpat_till_number') or '').strip())
-    if 'cloudpat_callback_url' in data:
-        _set('cloudpat_callback_url', (data.get('cloudpat_callback_url') or '').strip())
-    if 'cloudpat_enabled' in data:
-        _set('cloudpat_enabled', '1' if data.get('cloudpat_enabled') else '0')
+    # CloudPay
+    if 'cloudpay_environment' in data:
+        _set('cloudpay_environment', 'production' if data.get('cloudpay_environment') == 'production' else 'sandbox')
+    if 'cloudpay_api_key' in data:
+        _set('cloudpay_api_key', (data.get('cloudpay_api_key') or '').strip())
+    if 'cloudpay_till_number' in data:
+        _set('cloudpay_till_number', (data.get('cloudpay_till_number') or '').strip())
+    if 'cloudpay_callback_url' in data:
+        _set('cloudpay_callback_url', (data.get('cloudpay_callback_url') or '').strip())
+    if 'cloudpay_enabled' in data:
+        _set('cloudpay_enabled', '1' if data.get('cloudpay_enabled') else '0')
     # Only overwrite the stored secret if a new value was actually typed in
     # -- an empty string means "leave it unchanged", not "clear it".
-    if data.get('cloudpat_api_secret'):
-        _set('cloudpat_api_secret', data['cloudpat_api_secret'].strip())
+    if data.get('cloudpay_api_secret'):
+        _set('cloudpay_api_secret', data['cloudpay_api_secret'].strip())
 
     log_audit('UPDATE_MPESA_SETTINGS', 'company_settings', None)
     return jsonify({'message': 'Payment gateway settings updated'})
@@ -462,12 +462,12 @@ def send_test_mpesa_push():
     })
 
 
-@settings_bp.route('/api/cloudpat/test', methods=['POST'])
+@settings_bp.route('/api/cloudpay/test', methods=['POST'])
 @login_required
 @role_required('admin')
-def send_test_cloudpat_push():
-    from core.cloudpat import initiate_stk_push, CloudPatError, normalize_phone
-    from core.routes.mpesa import _cloudpat_callback_url
+def send_test_cloudpay_push():
+    from core.cloudpay import initiate_stk_push, CloudPayError, normalize_phone
+    from core.routes.mpesa import _cloudpay_callback_url
     data = request.get_json() or {}
     phone = data.get('phone')
     if not phone:
@@ -476,12 +476,12 @@ def send_test_cloudpat_push():
         phone_normalized = normalize_phone(phone)
         result = initiate_stk_push(
             phone=phone_normalized, amount=1, account_reference='TEST',
-            transaction_desc='Test Push', callback_url=_cloudpat_callback_url(),
+            transaction_desc='Test Push', callback_url=_cloudpay_callback_url(),
         )
-    except CloudPatError as e:
+    except CloudPayError as e:
         return jsonify({'error': str(e)}), 502
     return jsonify({
-        'message': f'Test STK push (KSh 1) sent to {phone_normalized} via CloudPat -- check the phone for the prompt.',
+        'message': f'Test STK push (KSh 1) sent to {phone_normalized} via CloudPay -- check the phone for the prompt.',
         'checkout_request_id': result.get('checkout_request_id'),
     })
 

@@ -1408,29 +1408,29 @@ def _migration_0029_repayment_void(conn):
     )
 
 
-def _migration_0030_cloudpat_gateway(conn):
-    """Adds CloudPat as a switchable alternative to M-Pesa Daraja for STK
-    Push. Rather than a parallel table, CloudPat reuses mpesa_transactions
+def _migration_0030_cloudpay_gateway(conn):
+    """Adds CloudPay as a switchable alternative to M-Pesa Daraja for STK
+    Push. Rather than a parallel table, CloudPay reuses mpesa_transactions
     (tagged via the new `gateway` column) so the Settings activity log,
     status-polling endpoint, and repayment/deposit application logic all
     work identically no matter which gateway sent the push. Also adds the
-    cloudpat_* company_settings keys and a `payment_gateway` selector
-    ('mpesa' or 'cloudpat') that determines which gateway new pushes use."""
+    cloudpay_* company_settings keys and a `payment_gateway` selector
+    ('mpesa' or 'cloudpay') that determines which gateway new pushes use."""
     mpesa_cols = list(_table_columns(conn, 'mpesa_transactions'))
     if 'gateway' not in mpesa_cols:
         conn.execute("ALTER TABLE mpesa_transactions ADD COLUMN gateway TEXT NOT NULL DEFAULT 'mpesa'")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_mpesa_gateway ON mpesa_transactions(gateway)")
 
     now = utcnow()
-    cloudpat_defaults = {
+    cloudpay_defaults = {
         'payment_gateway': 'mpesa',
-        'cloudpat_environment': 'sandbox',
-        'cloudpat_api_key': '',
-        'cloudpat_api_secret': '',
-        'cloudpat_till_number': '',
-        'cloudpat_enabled': '1',
+        'cloudpay_environment': 'sandbox',
+        'cloudpay_api_key': '',
+        'cloudpay_api_secret': '',
+        'cloudpay_till_number': '',
+        'cloudpay_enabled': '1',
     }
-    for key, value in cloudpat_defaults.items():
+    for key, value in cloudpay_defaults.items():
         row = conn.execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
         if not row:
             conn.execute(
@@ -1472,7 +1472,7 @@ MIGRATIONS = [
     (27, 'add loan_import_batches and loans.is_imported for bulk CSV portfolio import', _migration_0027_loan_portfolio_import),
     (28, "add campaigns.recipient_ids for hand-picked ('selected') campaign audiences", _migration_0028_campaign_selected_recipients),
     (29, "add voided_at/voided_by/void_reason to repayments for reversing mis-entered payments", _migration_0029_repayment_void),
-    (30, "add CloudPat as a switchable STK Push gateway alongside M-Pesa Daraja", _migration_0030_cloudpat_gateway),
+    (30, "add CloudPay as a switchable STK Push gateway alongside M-Pesa Daraja", _migration_0030_cloudpay_gateway),
 ]
 
 
