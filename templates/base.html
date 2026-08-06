@@ -166,6 +166,17 @@
         <i class="bi bi-download"></i>
       </button>
 
+      <!-- Offline / pending-sync indicator -->
+      <span class="icon-btn d-none" data-offline-indicator title="You're offline — Repayments still works; other data may be stale"
+            style="position:relative;color:#F4A261;cursor:default">
+        <i class="bi bi-wifi-off"></i>
+      </span>
+      <a href="{{ url_for('repayments.index') }}" class="icon-btn" title="Repayments waiting to sync" style="position:relative">
+        <i class="bi bi-cloud-arrow-up"></i>
+        <span class="badge d-none" data-offline-badge
+              style="position:absolute;top:2px;right:2px;background:#E63946;color:#fff;font-size:9px;border-radius:50%;min-width:15px;height:15px;line-height:15px;padding:0">0</span>
+      </a>
+
       <!-- Theme Toggle -->
       <button class="icon-btn" id="themeToggle" title="Toggle theme">
         <i class="bi bi-moon-fill" id="themeIcon"></i>
@@ -241,6 +252,7 @@
 <script>window.CURRENCY_SYM = 'Ksh ';</script>
 <script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/offline.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pwa.js') }}"></script>
 {% block extra_js %}{% endblock %}
 </body>

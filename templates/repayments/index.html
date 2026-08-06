@@ -5,8 +5,18 @@
 <div class="d-flex align-items-center justify-content-between mb-4">
   <div><h4 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0">Repayment Records</h4>
   <p class="text-muted mb-0" style="font-size:13px">All loan repayment transactions</p></div>
-  <a href="{{ url_for('repayments.record_page') }}" class="btn btn-brand"><i class="bi bi-plus-lg me-1"></i>Record Payment</a>
+  <div class="d-flex gap-2">
+    {% if user and user.role == 'admin' %}
+    <button class="btn btn-brand-outline" onclick="toggleConflicts()" id="conflictsBtn"><i class="bi bi-exclamation-triangle me-1"></i>Sync Issues</button>
+    {% endif %}
+    <a href="{{ url_for('repayments.record_page') }}" class="btn btn-brand"><i class="bi bi-plus-lg me-1"></i>Record Payment</a>
+  </div>
 </div>
+<div class="jd-card mb-3 d-none" id="conflictsPanel"><div class="jd-card-body">
+  <div class="jd-card-title mb-2"><i class="bi bi-exclamation-triangle" style="color:#dc3545"></i> Offline actions needing review</div>
+  <div id="conflictsList" style="font-size:12.5px"></div>
+</div></div>
+<div class="alert d-none" id="cachedBanner" style="background:#FFF7ED;border:1px solid #F4A261;color:#7C4A03;font-size:12.5px;padding:8px 14px"></div>
 <div class="jd-card mb-3"><div class="jd-card-body">
   <div class="row g-2 align-items-end">
     <div class="col-md-3"><label class="form-label">From Date</label>
@@ -43,35 +53,71 @@ function resetFilter() {
   document.getElementById('dateTo').value='';
   loadRepayments(1);
 }
+function rowHtml(r, pending) {
+  const pendingBadge = pending ? '<span class="badge" style="background:#F4A261;color:#5A2E00" title="Recorded offline, waiting to sync">Pending sync</span>' : '';
+  return `<tr style="${r.is_voided ? 'opacity:.55' : ''}${pending ? ';background:rgba(244,162,97,.08)' : ''}">
+      <td><span style="font-weight:600;font-size:12px;color:var(--brand-ink);${r.is_voided ? 'text-decoration:line-through' : ''}">${escapeHtml(r.receipt_number || 'Pending…')}</span></td>
+      <td style="font-size:12px">${escapeHtml(r.loan_number || '')}</td>
+      <td style="font-weight:700;color:var(--brand-light);${r.is_voided ? 'text-decoration:line-through' : ''}">${fmtCurrency(r.amount)}</td>
+      <td style="font-size:12px">${fmtCurrency(r.principal_portion || 0)}</td>
+      <td style="font-size:12px">${fmtCurrency(r.interest_portion || 0)}</td>
+      <td style="font-size:12px;text-transform:capitalize">${escapeHtml((r.payment_method || 'cash').replace('_',' '))}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${fmtDate(r.payment_date)}</td>
+      <td>${pending ? pendingBadge : (r.is_voided ? '<span class="badge" style="background:#dc3545">Voided</span>' : '<span class="badge" style="background:var(--brand-pale);color:var(--brand-ink)">Active</span>')}</td>
+      <td class="text-nowrap">
+        ${pending ? '' : `<a href="/repayments/${r.id}/receipt" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--surface-2);border:1px solid var(--border)" title="Receipt"><i class="bi bi-printer"></i></a>`}
+        ${(IS_ADMIN && !pending && !r.is_voided) ? `<button onclick="voidRepayment(${r.id})" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:#fff5f5;border:1px solid #dc3545;color:#dc3545" title="Void this repayment"><i class="bi bi-x-circle"></i></button>` : ''}
+      </td>
+    </tr>`;
+}
+
+async function pendingRowsHtml() {
+  const outbox = await Offline.listOutbox();
+  return outbox
+    .filter(i => i.action_type === 'record_repayment')
+    .map(i => rowHtml({
+      amount: i.payload.amount, payment_method: i.payload.payment_method,
+      payment_date: i.payload.payment_date, loan_number: i.payload.loan_number || '',
+    }, true))
+    .join('');
+}
+
 async function loadRepayments(page=1) {
   const from = document.getElementById('dateFrom').value;
   const to = document.getElementById('dateTo').value;
   const tbody = document.getElementById('repaymentsTable');
+  const banner = document.getElementById('cachedBanner');
   tbody.innerHTML = '<tr><td colspan="9" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr>';
+  const pendingHtml = await pendingRowsHtml();
+
   try {
     const params = new URLSearchParams({page, per_page:20, date_from:from, date_to:to});
     const data = await API.get(`/repayments/api?${params}`);
+    banner.classList.add('d-none');
     document.getElementById('totalBadge').textContent = data.total + ' records';
-    if (!data.repayments.length) { tbody.innerHTML='<tr><td colspan="9"><div class="empty-state"><i class="bi bi-arrow-repeat"></i><p>No repayments found</p></div></td></tr>'; return; }
+    if (!data.repayments.length && !pendingHtml) { tbody.innerHTML='<tr><td colspan="9"><div class="empty-state"><i class="bi bi-arrow-repeat"></i><p>No repayments found</p></div></td></tr>'; return; }
     const total = data.repayments.reduce((s,r)=>s+r.amount, 0);
     document.getElementById('totalAmount').textContent = 'Total: ' + fmtCurrency(total);
-    tbody.innerHTML = data.repayments.map(r=>`<tr style="${r.is_voided ? 'opacity:.55' : ''}">
-      <td><span style="font-weight:600;font-size:12px;color:var(--brand-ink);${r.is_voided ? 'text-decoration:line-through' : ''}">${escapeHtml(r.receipt_number)}</span></td>
-      <td style="font-size:12px">${escapeHtml(r.loan_number)}</td>
-      <td style="font-weight:700;color:var(--brand-light);${r.is_voided ? 'text-decoration:line-through' : ''}">${fmtCurrency(r.amount)}</td>
-      <td style="font-size:12px">${fmtCurrency(r.principal_portion)}</td>
-      <td style="font-size:12px">${fmtCurrency(r.interest_portion)}</td>
-      <td style="font-size:12px;text-transform:capitalize">${escapeHtml(r.payment_method.replace('_',' '))}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${fmtDate(r.payment_date)}</td>
-      <td>${r.is_voided ? '<span class="badge" style="background:#dc3545">Voided</span>' : '<span class="badge" style="background:var(--brand-pale);color:var(--brand-ink)">Active</span>'}</td>
-      <td class="text-nowrap">
-        <a href="/repayments/${r.id}/receipt" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:var(--surface-2);border:1px solid var(--border)" title="Receipt"><i class="bi bi-printer"></i></a>
-        ${(IS_ADMIN && !r.is_voided) ? `<button onclick="voidRepayment(${r.id})" class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:#fff5f5;border:1px solid #dc3545;color:#dc3545" title="Void this repayment"><i class="bi bi-x-circle"></i></button>` : ''}
-      </td>
-    </tr>`).join('');
+    tbody.innerHTML = pendingHtml + data.repayments.map(r => rowHtml(r, false)).join('');
     renderPagination('pageBtns', data.current_page, data.pages, loadRepayments);
-  } catch(e) { Toast.error(e.message); }
+  } catch(e) {
+    if (!e.isNetworkError) { Toast.error(e.message); return; }
+    // Offline -- fall back to the last-synced cached bundle.
+    const bundle = await Offline.getBundle();
+    if (!bundle) { tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="bi bi-wifi-off"></i><p>Offline, and nothing cached yet. Connect once to enable offline browsing.</p></div></td></tr>'; return; }
+    banner.classList.remove('d-none');
+    banner.innerHTML = `<i class="bi bi-wifi-off me-1"></i>Offline — showing cached data as of ${new Date(bundle.synced_at).toLocaleString()}. New repayments here are queued and will sync automatically.`;
+    document.getElementById('totalBadge').textContent = bundle.repayments.length + ' cached records';
+    const total = bundle.repayments.reduce((s,r)=>s+r.amount, 0);
+    document.getElementById('totalAmount').textContent = 'Total: ' + fmtCurrency(total);
+    tbody.innerHTML = pendingHtml + bundle.repayments.map(r => rowHtml(r, false)).join('');
+    document.getElementById('pageBtns').innerHTML = '';
+    document.getElementById('pageInfo').textContent = '';
+  }
 }
+
+window.addEventListener('offline:synced', () => loadRepayments(1));
+
 function voidRepayment(repaymentId) {
   const reason = prompt('Reason for voiding this repayment (required):');
   if (reason === null) return;
@@ -81,7 +127,41 @@ function voidRepayment(repaymentId) {
       await API.post(`/repayments/api/${repaymentId}/void`, { reason: reason.trim() });
       Toast.success('Repayment voided');
       loadRepayments(1);
-    } catch(e) { Toast.error(e.message); }
+    } catch(e) {
+      if (e.isNetworkError) {
+        await Offline.queueAction('void_repayment', { repayment_id: repaymentId, reason: reason.trim() });
+        Toast.warning('Offline — void queued, will apply once back online');
+        loadRepayments(1);
+      } else {
+        Toast.error(e.message);
+      }
+    }
   });
+}
+
+async function toggleConflicts() {
+  const panel = document.getElementById('conflictsPanel');
+  if (!panel.classList.contains('d-none')) { panel.classList.add('d-none'); return; }
+  panel.classList.remove('d-none');
+  const list = document.getElementById('conflictsList');
+  list.innerHTML = '<span class="spinner-border spinner-border-sm spinner-brand"></span>';
+  try {
+    const data = await API.get('/repayments/api/conflicts?status=open');
+    if (!data.conflicts.length) { list.innerHTML = '<span class="text-muted">No open sync issues.</span>'; return; }
+    list.innerHTML = data.conflicts.map(c => `
+      <div class="mb-2 p-2 rounded" style="background:var(--surface-2);border:1px solid var(--border)">
+        <div><strong>${escapeHtml(c.action_type.replace('_',' '))}</strong> — ${escapeHtml(c.error_message)}</div>
+        <div class="text-muted" style="font-size:11px">Queued ${c.queued_at ? fmtDate(c.queued_at) : '—'} · Payload: ${escapeHtml(JSON.stringify(c.payload))}</div>
+        <button class="btn btn-sm mt-1" style="font-size:11px;padding:2px 8px" onclick="resolveConflict(${c.id})">Mark resolved</button>
+      </div>`).join('');
+  } catch(e) { list.innerHTML = `<span class="text-danger">${escapeHtml(e.message)}</span>`; }
+}
+
+async function resolveConflict(id) {
+  try {
+    await API.post(`/repayments/api/conflicts/${id}/resolve`, {});
+    Toast.success('Marked resolved');
+    toggleConflicts(); toggleConflicts();
+  } catch(e) { Toast.error(e.message); }
 }
 </script>{% endblock %}

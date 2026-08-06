@@ -10,6 +10,54 @@ from core.utils import (generate_receipt_number, log_audit, paginate, adjust_mai
                         adjust_account_balance, notify, format_currency)
 from core.routes.loans import _borrower_name_sql
 
+# ---------------------------------------------------------------------------
+# Offline sync support
+# ---------------------------------------------------------------------------
+# Loan officers recording/voiding repayments in the field with no signal
+# queue those actions locally (browser IndexedDB, see static/js/offline.js)
+# and replay them here once connectivity returns. Each queued action carries
+# a client-generated `client_ref` UUID used two ways:
+#   1. Idempotency -- if the same action gets flushed twice (tab closed
+#      mid-sync, a retried request that actually succeeded server-side but
+#      the response never made it back, etc), the second attempt is
+#      recognised as a duplicate and returns the original result instead of
+#      double-applying it.
+#   2. Conflict tracking -- if an action can't be safely applied by the time
+#      it reaches the server (the loan was closed/written off by someone
+#      else while this officer was offline, the loan no longer exists,
+#      etc), it's parked in sync_conflicts for an admin to review rather
+#      than silently dropped or force-applied. See _park_conflict below.
+def _find_by_client_ref(client_ref):
+    if not client_ref:
+        return None
+    return get_db().execute(
+        """SELECT repayments.*, loans.loan_number FROM repayments
+           LEFT JOIN loans ON loans.id = repayments.loan_id WHERE repayments.client_ref = %s""",
+        (client_ref,)
+    ).fetchone()
+
+
+def _park_conflict(client_ref, action_type, payload, error_message, loan_id, queued_at, user_id):
+    """Records an offline action that reached the server but couldn't be
+    safely applied. Idempotent on client_ref like everything else here --
+    if this exact action was already parked (e.g. the sync retried after a
+    dropped response), don't create a second row."""
+    existing = get_db().execute(
+        "SELECT id FROM sync_conflicts WHERE client_ref = %s", (client_ref,)
+    ).fetchone()
+    if existing:
+        return existing['id']
+    cur = execute(
+        """INSERT INTO sync_conflicts (client_ref, action_type, payload, error_message, loan_id,
+               queued_at, status, created_by, created_at)
+           VALUES (%s, %s, %s, %s, %s, %s, 'open', %s, %s)""",
+        (client_ref, action_type, json.dumps(payload), error_message, loan_id,
+         queued_at, user_id, utcnow())
+    )
+    log_audit('SYNC_CONFLICT_CREATED', 'sync_conflict', cur.lastrowid,
+              new_values={'action_type': action_type, 'error': error_message})
+    return cur.lastrowid
+
 repayments_bp = Blueprint('repayments', __name__)
 
 
@@ -78,6 +126,21 @@ def list_repayments():
 def record_repayment():
     data = request.get_json()
     user = get_current_user()
+    client_ref = data.get('client_ref')  # present when this was queued offline and is now syncing
+
+    # Dedupe: if this exact offline action already made it to the server
+    # (e.g. an earlier sync attempt succeeded but the client never saw the
+    # response, and is now retrying), return the original result rather
+    # than recording the payment a second time.
+    if client_ref:
+        existing = _find_by_client_ref(client_ref)
+        if existing:
+            return jsonify({
+                'message': 'Repayment recorded',
+                'repayment': repayment_public(existing),
+                'loan_balance': None,
+                'already_synced': True,
+            }), 200
 
     try:
         repayment, new_outstanding = _record_repayment(
@@ -88,8 +151,21 @@ def record_repayment():
             payment_date=data.get('payment_date'),
             notes=data.get('notes'),
             user_id=user['id'],
+            client_ref=client_ref,
         )
     except _RepaymentError as e:
+        if client_ref:
+            # This was an offline-queued action that can no longer be
+            # safely auto-applied (loan closed/written off/gone since it
+            # was queued, etc) -- park it for admin review instead of just
+            # failing, since the officer who queued it may be offline again
+            # by the time they'd see a plain error.
+            _park_conflict(
+                client_ref=client_ref, action_type='record_repayment', payload=data,
+                error_message=str(e), loan_id=data.get('loan_id'),
+                queued_at=data.get('queued_at'), user_id=user['id'],
+            )
+            return jsonify({'error': str(e), 'conflict': True}), 409
         return jsonify({'error': str(e)}), e.status_code
 
     return jsonify({
@@ -106,7 +182,7 @@ class _RepaymentError(Exception):
 
 
 def _record_repayment(loan_id, amount, payment_method='cash', reference_number=None,
-                       payment_date=None, notes=None, user_id=None):
+                       payment_date=None, notes=None, user_id=None, client_ref=None):
     """Core repayment-recording logic, shared by the manual "Record Repayment"
     API endpoint and the M-Pesa STK Push callback (app/routes/mpesa.py) so a
     payment collected via M-Pesa is applied to the loan schedule exactly the
@@ -170,11 +246,11 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
     cur = execute(
         """INSERT INTO repayments (receipt_number, loan_id, amount, principal_portion, interest_portion,
                penalty_portion, payment_method, reference_number, payment_date, notes, collected_by, created_at,
-               allocation_snapshot)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+               allocation_snapshot, client_ref)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (generate_receipt_number(), loan['id'], amount, principal_portion, interest_portion, penalty_portion,
          payment_method, reference_number, payment_date or today.isoformat(), notes, user_id, now,
-         json.dumps(updates))
+         json.dumps(updates), client_ref)
     )
     log_audit('REPAYMENT_RECORDED', 'repayment', cur.lastrowid)
     adjust_main_account_balance(amount)
@@ -251,13 +327,45 @@ def void_repayment(repayment_id):
     reason = (data.get('reason') or '').strip()
     if not reason:
         return jsonify({'error': 'A reason is required to void a repayment'}), 400
+    user = get_current_user()
+    client_ref = data.get('client_ref')
+
+    if client_ref:
+        db = get_db()
+        already = db.execute(
+            "SELECT id FROM sync_conflicts WHERE client_ref = %s", (client_ref,)
+        ).fetchone()
+        target = db.execute("SELECT voided_at FROM repayments WHERE id = %s", (repayment_id,)).fetchone()
+        # Idempotent: a retried void-sync where the repayment is already
+        # voided (by this same queued action, previously flushed) is a
+        # no-op success, not an error.
+        if not already and target and target['voided_at']:
+            repayment = get_db().execute(
+                """SELECT repayments.*, loans.loan_number FROM repayments
+                   LEFT JOIN loans ON loans.id = repayments.loan_id WHERE repayments.id = %s""",
+                (repayment_id,)
+            ).fetchone()
+            return jsonify({
+                'message': 'Repayment voided', 'repayment': repayment_public(repayment),
+                'loan_balance': None, 'already_synced': True,
+            }), 200
 
     try:
         repayment, new_outstanding = _void_repayment(
-            repayment_id=repayment_id, reason=reason, user_id=get_current_user()['id']
+            repayment_id=repayment_id, reason=reason, user_id=user['id']
         )
     except _RepaymentError as e:
+        if client_ref:
+            _park_conflict(
+                client_ref=client_ref, action_type='void_repayment',
+                payload={**data, 'repayment_id': repayment_id}, error_message=str(e),
+                loan_id=None, queued_at=data.get('queued_at'), user_id=user['id'],
+            )
+            return jsonify({'error': str(e), 'conflict': True}), 409
         return jsonify({'error': str(e)}), e.status_code
+
+    if client_ref:
+        execute("UPDATE repayments SET client_ref = %s WHERE id = %s", (client_ref, repayment['id']))
 
     return jsonify({
         'message': 'Repayment voided',
@@ -403,6 +511,94 @@ def _void_repayment(repayment_id, reason, user_id=None):
     )
 
     return repayment, new_outstanding
+
+
+@repayments_bp.route('/api/offline-bundle', methods=['GET'])
+@login_required
+def offline_bundle():
+    """Data pulled into the browser's IndexedDB cache so the Repayments
+    section keeps working (browsing balances, recording/voiding payments)
+    with no connection. Deliberately scoped rather than a full portfolio
+    dump: active loans + their borrowers, and the last 60 days of
+    repayments -- enough for a field officer's day-to-day, small enough to
+    sync quickly on a weak connection and not go stale fast. Every screen
+    that renders this data must show when it was last synced (see
+    static/js/offline.js) since it's a live financial ledger and cached
+    balances can be wrong the moment someone else acts on the same loan."""
+    db = get_db()
+    loans = db.execute(
+        _borrower_name_sql() +
+        " WHERE loans.status IN ('active', 'disbursed') AND loans.outstanding_balance > 0"
+        " ORDER BY borrower_name"
+    ).fetchall()
+    members = db.execute(
+        "SELECT id, first_name, last_name, member_number, phone FROM members "
+        "WHERE status = 'active' ORDER BY first_name"
+    ).fetchall()
+    clients = db.execute(
+        "SELECT id, first_name, last_name, client_number, phone FROM clients "
+        "WHERE status = 'active' ORDER BY first_name"
+    ).fetchall()
+    recent = db.execute(
+        """SELECT repayments.*, loans.loan_number FROM repayments
+           LEFT JOIN loans ON loans.id = repayments.loan_id
+           WHERE repayments.payment_date >= (CURRENT_DATE - INTERVAL '60 days')
+           ORDER BY repayments.created_at DESC LIMIT 500"""
+    ).fetchall()
+
+    return jsonify({
+        'synced_at': utcnow(),
+        'loans': [dict(l) for l in loans],
+        'members': [dict(m) for m in members],
+        'clients': [dict(c) for c in clients],
+        'repayments': [repayment_public(r) for r in recent],
+    })
+
+
+@repayments_bp.route('/api/conflicts', methods=['GET'])
+@login_required
+@role_required('admin')
+def list_sync_conflicts():
+    status = request.args.get('status', 'open')
+    where = "WHERE status = %s" if status != 'all' else ""
+    params = (status,) if status != 'all' else ()
+    rows = get_db().execute(
+        f"SELECT * FROM sync_conflicts {where} ORDER BY created_at DESC", params
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d['payload'] = json.loads(d['payload']) if d.get('payload') else {}
+        out.append(d)
+    return jsonify({'conflicts': out})
+
+
+@repayments_bp.route('/api/conflicts/<int:conflict_id>/resolve', methods=['POST'])
+@login_required
+@role_required('admin')
+def resolve_sync_conflict(conflict_id):
+    """Marks a parked offline action as handled. This endpoint doesn't
+    retry the action automatically -- an admin who's looked at *why* it
+    conflicted (loan closed, duplicate, wrong amount, etc) should decide
+    the right fix by hand (e.g. re-recording it correctly, or leaving it
+    dismissed), rather than the system guessing and getting a ledger entry
+    wrong."""
+    data = request.get_json(silent=True) or {}
+    notes = (data.get('notes') or '').strip()
+    conflict = get_db().execute("SELECT * FROM sync_conflicts WHERE id = %s", (conflict_id,)).fetchone()
+    if not conflict:
+        return jsonify({'error': 'Conflict not found'}), 404
+    if conflict['status'] != 'open':
+        return jsonify({'error': 'Conflict already resolved'}), 400
+
+    user = get_current_user()
+    execute(
+        "UPDATE sync_conflicts SET status = 'resolved', resolved_by = %s, resolved_at = %s, "
+        "resolution_notes = %s WHERE id = %s",
+        (user['id'], utcnow(), notes, conflict_id)
+    )
+    log_audit('SYNC_CONFLICT_RESOLVED', 'sync_conflict', conflict_id, new_values={'notes': notes})
+    return jsonify({'message': 'Conflict marked resolved'})
 
 
 @repayments_bp.route('/api/<int:repayment_id>', methods=['GET'])

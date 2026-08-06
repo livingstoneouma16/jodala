@@ -1408,6 +1408,45 @@ def _migration_0029_repayment_void(conn):
     )
 
 
+def _migration_0030_offline_repayment_sync(conn):
+    """Supports recording/voiding repayments while offline (field loan
+    officers with no signal) and syncing once connectivity returns.
+
+    client_ref is a UUID generated on-device when a repayment/void is first
+    queued in the browser's IndexedDB outbox. It's sent back on sync so a
+    retried/duplicate flush of the same queued action (e.g. the tab closed
+    mid-sync and the item is resent) is recognised as the same action
+    rather than applied twice -- see the UNIQUE index below and the
+    dedupe-by-client_ref checks in core/routes/repayments.py.
+
+    sync_conflicts holds actions that reached the server during sync but
+    couldn't be safely auto-applied (e.g. the loan was closed/written off
+    by someone else while this officer was offline, or the payment would
+    overpay the loan). Nothing here is silently dropped or force-applied;
+    an admin reviews and resolves each row from the Repayments page."""
+    conn.execute("ALTER TABLE repayments ADD COLUMN IF NOT EXISTS client_ref TEXT")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_repayments_client_ref ON repayments(client_ref) "
+        "WHERE client_ref IS NOT NULL"
+    )
+    conn.execute("""CREATE TABLE IF NOT EXISTS sync_conflicts (
+        id SERIAL PRIMARY KEY,
+        client_ref TEXT UNIQUE NOT NULL,
+        action_type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        error_message TEXT NOT NULL,
+        loan_id INTEGER REFERENCES loans(id),
+        queued_at TEXT,
+        status TEXT NOT NULL DEFAULT 'open',
+        resolved_by INTEGER REFERENCES users(id),
+        resolved_at TEXT,
+        resolution_notes TEXT,
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sync_conflicts_status ON sync_conflicts(status)")
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1441,6 +1480,8 @@ MIGRATIONS = [
     (27, 'add loan_import_batches and loans.is_imported for bulk CSV portfolio import', _migration_0027_loan_portfolio_import),
     (28, "add campaigns.recipient_ids for hand-picked ('selected') campaign audiences", _migration_0028_campaign_selected_recipients),
     (29, "add voided_at/voided_by/void_reason to repayments for reversing mis-entered payments", _migration_0029_repayment_void),
+    (30, "add repayments.client_ref and sync_conflicts table for offline repayment recording/voiding",
+     _migration_0030_offline_repayment_sync),
 ]
 
 
