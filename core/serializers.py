@@ -173,6 +173,10 @@ def repayment_public(row):
         'payment_method': d['payment_method'],
         'payment_date': d['payment_date'],
         'created_at': d['created_at'],
+        'voided_at': d.get('voided_at'),
+        'voided_by': d.get('voided_by'),
+        'void_reason': d.get('void_reason'),
+        'is_voided': d.get('voided_at') is not None,
     }
 
 

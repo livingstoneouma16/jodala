@@ -80,3 +80,65 @@ class TestRecordRepayment:
         }, headers=auth_header(admin_token))
 
         assert second.get_json()['loan_balance'] == round(starting_balance - 700, 2)
+
+
+class TestVoidRepayment:
+    def test_void_restores_outstanding_balance(self, client, admin_token, approved_loan):
+        starting_balance = approved_loan['outstanding_balance']
+
+        record = client.post('/repayments/api', json={
+            'loan_id': approved_loan['id'], 'amount': 1000, 'payment_method': 'cash',
+        }, headers=auth_header(admin_token)).get_json()
+        repayment_id = record['repayment']['id']
+
+        resp = client.post(f'/repayments/api/{repayment_id}/void', json={
+            'reason': 'Entered against the wrong loan',
+        }, headers=auth_header(admin_token))
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        assert resp.get_json()['loan_balance'] == starting_balance
+
+        follow_up = client.get(f"/loans/api/{approved_loan['id']}", headers=auth_header(admin_token)).get_json()
+        assert follow_up['outstanding_balance'] == starting_balance
+        assert all(s['status'] == 'pending' for s in follow_up['schedule'])
+
+    def test_void_requires_reason(self, client, admin_token, approved_loan):
+        record = client.post('/repayments/api', json={
+            'loan_id': approved_loan['id'], 'amount': 500, 'payment_method': 'cash',
+        }, headers=auth_header(admin_token)).get_json()
+        repayment_id = record['repayment']['id']
+
+        resp = client.post(f'/repayments/api/{repayment_id}/void', json={},
+                            headers=auth_header(admin_token))
+        assert resp.status_code == 400
+
+    def test_cannot_void_twice(self, client, admin_token, approved_loan):
+        record = client.post('/repayments/api', json={
+            'loan_id': approved_loan['id'], 'amount': 500, 'payment_method': 'cash',
+        }, headers=auth_header(admin_token)).get_json()
+        repayment_id = record['repayment']['id']
+
+        client.post(f'/repayments/api/{repayment_id}/void', json={'reason': 'duplicate'},
+                     headers=auth_header(admin_token))
+        second = client.post(f'/repayments/api/{repayment_id}/void', json={'reason': 'duplicate again'},
+                              headers=auth_header(admin_token))
+        assert second.status_code == 400
+
+    def test_voided_repayment_excluded_from_default_list(self, client, admin_token, approved_loan):
+        record = client.post('/repayments/api', json={
+            'loan_id': approved_loan['id'], 'amount': 500, 'payment_method': 'cash',
+        }, headers=auth_header(admin_token)).get_json()
+        repayment_id = record['repayment']['id']
+        client.post(f'/repayments/api/{repayment_id}/void', json={'reason': 'test'},
+                     headers=auth_header(admin_token))
+
+        listed = client.get('/repayments/api', headers=auth_header(admin_token)).get_json()
+        assert repayment_id not in [r['id'] for r in listed['repayments']]
+
+        listed_with_voided = client.get('/repayments/api?include_voided=true',
+                                         headers=auth_header(admin_token)).get_json()
+        assert repayment_id in [r['id'] for r in listed_with_voided['repayments']]
+
+    def test_void_nonexistent_repayment_404s(self, client, admin_token):
+        resp = client.post('/repayments/api/999999/void', json={'reason': 'test'},
+                            headers=auth_header(admin_token))
+        assert resp.status_code == 404

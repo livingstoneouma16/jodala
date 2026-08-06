@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify, render_template, abort
 from datetime import date
+import json
 
 from core.database import get_db, execute, utcnow
-from core.auth import login_required, get_current_user
+from core.auth import login_required, role_required, get_current_user
 from core.calculator import allocate_payment
 from core.serializers import repayment_public, member_full_name, client_full_name
 from core.utils import (generate_receipt_number, log_audit, paginate, adjust_main_account_balance,
@@ -41,8 +42,11 @@ def list_repayments():
     loan_id = request.args.get('loan_id')
     date_from = request.args.get('date_from')
     date_to = request.args.get('date_to')
+    include_voided = request.args.get('include_voided', 'false').lower() == 'true'
 
     where, params = [], []
+    if not include_voided:
+        where.append("repayments.voided_at IS NULL")
     if loan_id:
         where.append("repayments.loan_id = %s")
         params.append(int(loan_id))
@@ -165,10 +169,12 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
     now = utcnow()
     cur = execute(
         """INSERT INTO repayments (receipt_number, loan_id, amount, principal_portion, interest_portion,
-               penalty_portion, payment_method, reference_number, payment_date, notes, collected_by, created_at)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+               penalty_portion, payment_method, reference_number, payment_date, notes, collected_by, created_at,
+               allocation_snapshot)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (generate_receipt_number(), loan['id'], amount, principal_portion, interest_portion, penalty_portion,
-         payment_method, reference_number, payment_date or today.isoformat(), notes, user_id, now)
+         payment_method, reference_number, payment_date or today.isoformat(), notes, user_id, now,
+         json.dumps(updates))
     )
     log_audit('REPAYMENT_RECORDED', 'repayment', cur.lastrowid)
     adjust_main_account_balance(amount)
@@ -224,6 +230,175 @@ def _record_repayment(loan_id, amount, payment_method='cash', reference_number=N
             'amount_paid': format_currency(amount),
             'receipt_number': repayment['receipt_number'],
             'remaining_balance': format_currency(new_outstanding),
+        }
+    )
+
+    return repayment, new_outstanding
+
+
+@repayments_bp.route('/api/<int:repayment_id>/void', methods=['POST'])
+@login_required
+@role_required('admin')
+def void_repayment(repayment_id):
+    """Reverses a mis-entered repayment (wrong loan, wrong amount, duplicate
+    M-Pesa callback, etc). This is a VOID, not a delete: the repayment row
+    stays in place -- receipt number and all -- marked with voided_at/
+    voided_by/void_reason, so there's still a record it happened and was
+    later corrected. Admin-only, and a reason is required, because this
+    touches the loan schedule, the loan balance, and the accounting ledger
+    all at once."""
+    data = request.get_json(silent=True) or {}
+    reason = (data.get('reason') or '').strip()
+    if not reason:
+        return jsonify({'error': 'A reason is required to void a repayment'}), 400
+
+    try:
+        repayment, new_outstanding = _void_repayment(
+            repayment_id=repayment_id, reason=reason, user_id=get_current_user()['id']
+        )
+    except _RepaymentError as e:
+        return jsonify({'error': str(e)}), e.status_code
+
+    return jsonify({
+        'message': 'Repayment voided',
+        'repayment': repayment_public(repayment),
+        'loan_balance': new_outstanding
+    })
+
+
+def _void_repayment(repayment_id, reason, user_id=None):
+    """Reverses everything _record_repayment did for this repayment:
+    schedule allocations, the loan's total_paid/outstanding_balance/status,
+    and the ledger/main-account postings. The repayment row itself is kept
+    and marked voided rather than deleted, for audit purposes -- see the
+    /void route docstring. Raises _RepaymentError on failure; returns
+    (repayment_row, new_outstanding_balance) on success."""
+    db = get_db()
+    repayment = db.execute("SELECT * FROM repayments WHERE id = %s", (repayment_id,)).fetchone()
+    if not repayment:
+        raise _RepaymentError('Repayment not found', 404)
+    if repayment['voided_at']:
+        raise _RepaymentError('Repayment has already been voided', 400)
+
+    loan = db.execute("SELECT * FROM loans WHERE id = %s", (repayment['loan_id'],)).fetchone()
+    if not loan:
+        raise _RepaymentError('Loan for this repayment no longer exists', 404)
+
+    amount = repayment['amount']
+
+    # Reverse the exact per-schedule-row deltas this repayment applied, in
+    # the exact order they were applied, so partial-payment rows are
+    # unwound to precisely what they were before -- not re-derived from
+    # today's schedule state, which could differ if other payments (or a
+    # restructure that rebuilt the schedule) have happened since.
+    allocation = json.loads(repayment['allocation_snapshot']) if repayment['allocation_snapshot'] else []
+    for u in allocation:
+        schedule = db.execute(
+            "SELECT * FROM loan_schedules WHERE id = %s", (u['schedule_id'],)
+        ).fetchone()
+        if not schedule:
+            # Schedule was rebuilt (e.g. a restructure/extend) since this
+            # payment was recorded -- nothing to unwind on a row that no
+            # longer exists; the loan-level totals below are still
+            # reversed correctly regardless.
+            continue
+        new_principal_paid = max(0, schedule['principal_paid'] - u['principal_paid_delta'])
+        new_interest_paid = max(0, schedule['interest_paid'] - u['interest_paid_delta'])
+        new_total_paid = max(0, schedule['total_paid'] - u['total_paid_delta'])
+        new_status = 'paid' if new_total_paid >= schedule['total_due'] - 0.0001 else (
+            'partial' if new_total_paid > 0 else 'pending'
+        )
+        execute(
+            """UPDATE loan_schedules SET principal_paid = %s, interest_paid = %s, total_paid = %s,
+                   status = %s, paid_date = %s WHERE id = %s""",
+            (new_principal_paid, new_interest_paid, new_total_paid,
+             new_status, None if new_status != 'paid' else schedule['paid_date'], schedule['id'])
+        )
+
+    today = date.today()
+    new_total_paid_loan = max(0, (loan['total_paid'] or 0) - amount)
+    new_outstanding = round(loan['outstanding_balance'] + amount, 2)
+    new_status = loan['status']
+    actual_end_date = loan['actual_end_date']
+    # A loan that had been auto-completed by this payment goes back to
+    # active now that the payment is voided; an already-written-off or
+    # otherwise-closed loan is left alone since voiding a payment doesn't
+    # undo that separate decision.
+    if loan['status'] == 'completed' and new_outstanding > 0:
+        new_status = 'active'
+        actual_end_date = None
+
+    execute(
+        """UPDATE loans SET total_paid = %s, outstanding_balance = %s, status = %s, actual_end_date = %s,
+               updated_at = %s WHERE id = %s""",
+        (new_total_paid_loan, new_outstanding, new_status, actual_end_date, utcnow(), loan['id'])
+    )
+
+    # Reverse the ledger/main-account postings _record_repayment made,
+    # using the same portions actually recorded on this repayment (not
+    # recomputed from the loan's current interest ratio, which may have
+    # drifted since).
+    adjust_main_account_balance(-amount)
+    adjust_account_balance('1100', repayment['principal_portion'])
+    adjust_account_balance('4000', -repayment['interest_portion'])
+
+    now = utcnow()
+    execute(
+        "UPDATE repayments SET voided_at = %s, voided_by = %s, void_reason = %s WHERE id = %s",
+        (now, user_id, reason, repayment['id'])
+    )
+    log_audit('REPAYMENT_VOIDED', 'repayment', repayment['id'],
+              old_values={'amount': amount, 'loan_id': loan['id']},
+              new_values={'void_reason': reason})
+
+    repayment = db.execute(
+        """SELECT repayments.*, loans.loan_number FROM repayments
+           LEFT JOIN loans ON loans.id = repayments.loan_id WHERE repayments.id = %s""",
+        (repayment['id'],)
+    ).fetchone()
+
+    borrower_name, borrower_email, borrower_phone = None, None, None
+    if loan['member_id']:
+        p = db.execute("SELECT first_name, last_name, email, phone FROM members WHERE id = %s",
+                        (loan['member_id'],)).fetchone()
+    elif loan['client_id']:
+        p = db.execute("SELECT first_name, last_name, email, phone FROM clients WHERE id = %s",
+                        (loan['client_id'],)).fetchone()
+    else:
+        p = None
+    if p:
+        borrower_name, borrower_email, borrower_phone = f"{p['first_name']} {p['last_name']}", p['email'], p['phone']
+
+    notify(
+        user_id,
+        'Repayment Voided',
+        f"Repayment of {format_currency(amount)} on loan {loan['loan_number']} "
+        f"(receipt {repayment['receipt_number']}) was voided. Reason: {reason}",
+        notification_type='warning', related_type='repayment', related_id=repayment['id'],
+        email=borrower_email,
+        email_subject=f"Payment correction - Receipt {repayment['receipt_number']}",
+        email_body_html=(
+            f"<p>Dear {borrower_name or 'Customer'},</p>"
+            f"<p>Your payment of <strong>{format_currency(amount)}</strong> "
+            f"for loan <strong>{loan['loan_number']}</strong> (receipt "
+            f"<strong>{repayment['receipt_number']}</strong>) has been reversed.</p>"
+            f"<p>Updated outstanding balance: <strong>{format_currency(new_outstanding)}</strong></p>"
+            f"<p>If you believe this is an error, please contact us.</p>"
+        ),
+        phone=borrower_phone,
+        sms_message=(
+            f"Dear {borrower_name or 'Customer'}, your payment of {format_currency(amount)} "
+            f"for loan {loan['loan_number']} (receipt {repayment['receipt_number']}) has been "
+            f"reversed. Updated balance: {format_currency(new_outstanding)}. "
+            f"Contact us if you believe this is an error - Jodala Microfinance."
+        ),
+        ai_event_type='repayment_voided',
+        ai_facts={
+            'borrower_name': borrower_name, 'loan_number': loan['loan_number'],
+            'amount_reversed': format_currency(amount),
+            'receipt_number': repayment['receipt_number'],
+            'reason': reason,
+            'new_outstanding_balance': format_currency(new_outstanding),
         }
     )
 

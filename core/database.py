@@ -1382,6 +1382,32 @@ def _migration_0028_campaign_selected_recipients(conn):
     conn.execute("ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS recipient_ids TEXT")
 
 
+def _migration_0029_repayment_void(conn):
+    """Lets an admin correct a mis-entered repayment (wrong loan, wrong
+    amount, duplicate M-Pesa callback, etc). Deliberately a soft "void"
+    rather than a hard DELETE: the repayment row -- and its receipt number
+    -- must stay in place for audit purposes even after being reversed, so
+    anyone reviewing history later can see a payment was recorded AND that
+    it was later corrected, by whom, and why. voided_at being NULL is what
+    every other query in the app should keep treating as "this repayment is
+    real/active"; a non-NULL voided_at means its effect on the loan
+    schedule, loan balance and ledger accounts has been reversed by
+    core.routes.repayments._void_repayment."""
+    conn.execute("ALTER TABLE repayments ADD COLUMN IF NOT EXISTS voided_at TEXT")
+    conn.execute("ALTER TABLE repayments ADD COLUMN IF NOT EXISTS voided_by INTEGER REFERENCES users(id)")
+    conn.execute("ALTER TABLE repayments ADD COLUMN IF NOT EXISTS void_reason TEXT")
+    # Exact per-schedule-row deltas this repayment applied (JSON list of
+    # {schedule_id, principal_paid_delta, interest_paid_delta,
+    # total_paid_delta, fully_paid}), captured at the moment the payment was
+    # recorded. Voiding replays these deltas in reverse rather than
+    # re-deriving an allocation from today's schedule state, which would be
+    # wrong as soon as any other payment has happened on the loan since.
+    conn.execute("ALTER TABLE repayments ADD COLUMN IF NOT EXISTS allocation_snapshot TEXT")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_repayments_voided_at ON repayments(voided_at)"
+    )
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1414,6 +1440,7 @@ MIGRATIONS = [
     (26, 'add collection_tasks table for automated collections escalation ladder', _migration_0026_collection_tasks),
     (27, 'add loan_import_batches and loans.is_imported for bulk CSV portfolio import', _migration_0027_loan_portfolio_import),
     (28, "add campaigns.recipient_ids for hand-picked ('selected') campaign audiences", _migration_0028_campaign_selected_recipients),
+    (29, "add voided_at/voided_by/void_reason to repayments for reversing mis-entered payments", _migration_0029_repayment_void),
 ]
 
 
