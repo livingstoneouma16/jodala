@@ -569,14 +569,25 @@ def topup_loan(loan_id):
     remaining_principal = remaining_principal_row['remaining']
     new_principal = remaining_principal + topup_amount
 
-    # Terms (term length, interest rate/type, repayment frequency) stay
-    # exactly as they were originally applied -- NOT re-pulled from the
-    # product (which may have changed since) and NOT overridable via the
-    # request body.
-    term = loan['term']
+    # Interest rate/type and repayment frequency stay exactly as they were
+    # originally applied -- NOT re-pulled from the product (which may have
+    # changed since) and NOT overridable via the request body.
     interest_rate = loan['interest_rate']
     interest_type = loan['interest_type']
     repayment_frequency = loan['repayment_frequency']
+
+    # The term to re-amortize over is however many installments are still
+    # outstanding -- NOT the loan's original full term. Re-amortizing over
+    # the full term again would rebuild the schedule as if the loan were
+    # starting fresh today, pushing expected_end_date out by a full term's
+    # worth of periods past where it already was. Using the remaining
+    # installment count keeps the new schedule landing back on (approximately)
+    # the same expected_end_date the loan already had.
+    remaining_installments_row = get_db().execute(
+        "SELECT COUNT(*) AS c FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')",
+        (loan_id,)
+    ).fetchone()
+    term = remaining_installments_row['c'] or loan['term']
 
     summary = loan_summary(new_principal, interest_rate, term, interest_type,
                             product['insurance_fee'])
@@ -595,10 +606,10 @@ def topup_loan(loan_id):
         "SELECT COALESCE(SUM(interest_paid), 0) AS i FROM loan_schedules WHERE loan_id = %s", (loan_id,)
     ).fetchone()['i']
 
-    # Rebuild the repayment schedule from today for the remaining term,
-    # replacing whatever was left of the old one -- the loan keeps its
-    # original id/loan_number, it's simply re-amortized on the bigger
-    # principal instead of spawning a new loan record.
+    # Rebuild the repayment schedule from today for the remaining
+    # installments, replacing whatever was left of the old one -- the loan
+    # keeps its original id/loan_number, it's simply re-amortized on the
+    # bigger principal instead of spawning a new loan record.
     execute("DELETE FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')", (loan_id,))
 
     schedule_data = build_loan_schedule(
@@ -613,7 +624,12 @@ def topup_loan(loan_id):
             (loan_id, s['installment_number'], s['due_date'].isoformat(),
              s['principal_due'], s['interest_due'], s['total_due'], s['balance_after'])
         )
-    expected_end_date = schedule_data[-1]['due_date'].isoformat() if schedule_data else loan['expected_end_date']
+    # expected_end_date is intentionally left as the loan's original value --
+    # a top-up should not push the payoff date out. The re-amortized schedule
+    # (built over the remaining installment count above) lands on it already;
+    # this just makes sure the stored value never drifts even if a schedule
+    # can't be built (e.g. term resolves to 0).
+    expected_end_date = loan['expected_end_date']
 
     new_total_repayable = summary['total_repayable']
     new_total_paid = round(already_paid_principal + already_paid_interest, 2)
