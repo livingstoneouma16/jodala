@@ -18,6 +18,30 @@ Run with: pytest tests/test_mpesa.py -v
 from unittest.mock import patch
 
 from conftest import auth_header
+from core.routes.mpesa import _amount_matches, _is_success_code, _parse_stk_amount
+
+
+class TestGatewayInputValidation:
+    def test_stk_amount_requires_a_positive_whole_shilling(self):
+        assert _parse_stk_amount('1000') == 1000
+        assert _parse_stk_amount(1000.0) == 1000
+        for value in (0, -1, 'not-a-number', 1000.5):
+            try:
+                _parse_stk_amount(value)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f'{value!r} should be rejected')
+
+    def test_success_code_accepts_numeric_and_string_zero(self):
+        assert _is_success_code(0)
+        assert _is_success_code('0')
+        assert not _is_success_code(1)
+
+    def test_callback_amount_must_match_original_stk_request(self):
+        assert _amount_matches(1000, '1000')
+        assert not _amount_matches(1000, 999)
+        assert not _amount_matches(1000, 'not-a-number')
 
 
 def _stk_success_body(checkout_request_id, amount=1000, receipt='NLJ7RT61SV'):

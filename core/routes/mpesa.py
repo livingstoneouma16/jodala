@@ -29,6 +29,8 @@ Flow:
      stays consistent regardless of how the money came in or which gateway
      sent it.
 """
+import os
+
 from flask import Blueprint, request, jsonify, url_for, current_app
 
 from core.database import get_db, execute, utcnow
@@ -40,6 +42,34 @@ from core.cloudpay import initiate_stk_push as cloudpay_initiate_stk_push, Cloud
 from core import limiter
 
 mpesa_bp = Blueprint('mpesa', __name__)
+
+
+def _parse_stk_amount(value):
+    """Daraja and CloudPay STK pushes settle whole Kenyan shillings.
+    Reject fractional or malformed inputs instead of rounding one amount for
+    the gateway while storing a different amount locally."""
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        raise ValueError('amount must be a valid whole-shilling number')
+    if amount <= 0 or not amount.is_integer():
+        raise ValueError('amount must be a positive whole-shilling number')
+    return int(amount)
+
+
+def _is_success_code(value):
+    """Both gateways may serialise a successful result code as 0 or '0'."""
+    return str(value).strip() == '0'
+
+
+def _amount_matches(expected, confirmed):
+    """Only apply a callback whose confirmed value exactly matches the
+    customer-approved STK request. A mismatch must be reconciled manually,
+    not silently over- or under-posted to a loan or savings account."""
+    try:
+        return float(expected) == float(confirmed)
+    except (TypeError, ValueError):
+        return False
 
 
 def get_active_gateway():
@@ -74,9 +104,9 @@ def _callback_url():
     # this app is itself already being served from that public HTTPS host
     # (e.g. in production, or via a tunnel like ngrok pointed at localhost
     # during sandbox testing). Set mpesa_callback_url in Settings > M-Pesa
-    # to override.
+    # or MPESA_CALLBACK_URL in the deployment environment to override.
     from core.mpesa import _setting
-    override = _setting('mpesa_callback_url')
+    override = _setting('mpesa_callback_url') or os.getenv('MPESA_CALLBACK_URL')
     if override:
         return override
     return url_for('mpesa.callback', _external=True)
@@ -85,9 +115,10 @@ def _callback_url():
 def _cloudpay_callback_url():
     """Same reasoning as _callback_url() above -- CloudPay also needs a
     publicly reachable HTTPS URL. Set cloudpay_callback_url in
-    Settings > Payment Gateway to override."""
+    Settings > Payment Gateway or CLOUDPAY_CALLBACK_URL in the deployment
+    environment to override."""
     from core.mpesa import _setting
-    override = _setting('cloudpay_callback_url')
+    override = _setting('cloudpay_callback_url') or os.getenv('CLOUDPAY_CALLBACK_URL')
     if override:
         return override
     return url_for('mpesa.cloudpay_callback', _external=True)
@@ -107,8 +138,12 @@ def stk_push():
 
     if purpose not in ('loan_repayment', 'savings_deposit'):
         return jsonify({'error': 'Invalid purpose'}), 400
-    if not target_id or not phone or not amount:
+    if not target_id or not phone or amount is None:
         return jsonify({'error': 'target_id, phone, and amount are required'}), 400
+    try:
+        amount = _parse_stk_amount(amount)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
     db = get_db()
     if purpose == 'loan_repayment':
@@ -155,13 +190,17 @@ def stk_push():
     except (MpesaError, CloudPayError) as e:
         return jsonify({'error': str(e)}), 502
 
+    if not checkout_request_id:
+        current_app.logger.error('%s STK gateway returned no checkout request ID: %r', gateway, result)
+        return jsonify({'error': 'Payment gateway did not return a checkout request ID'}), 502
+
     now = utcnow()
     execute(
         """INSERT INTO mpesa_transactions (checkout_request_id, merchant_request_id, purpose, target_id,
                phone, amount, status, initiated_by, gateway, created_at, updated_at)
            VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s, %s, %s, %s)""",
         (checkout_request_id, merchant_request_id, purpose, int(target_id), phone_normalized,
-         float(amount), user['id'], gateway, now, now)
+         amount, user['id'], gateway, now, now)
     )
     log_audit('MPESA_STK_PUSH_INITIATED', purpose, int(target_id))
 
@@ -261,7 +300,7 @@ def callback():
         return jsonify({'ResultCode': 0, 'ResultDesc': 'Accepted'}), 200
 
     txn = get_db().execute(
-        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = %s", (checkout_request_id,)
+        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = %s AND gateway = 'mpesa'", (checkout_request_id,)
     ).fetchone()
     if not txn:
         current_app.logger.warning('M-Pesa callback for unknown CheckoutRequestID: %s', checkout_request_id)
@@ -272,7 +311,7 @@ def callback():
         return jsonify({'ResultCode': 0, 'ResultDesc': 'Accepted'}), 200
 
     now = utcnow()
-    if result_code != 0:
+    if not _is_success_code(result_code):
         execute(
             "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
             "WHERE id = %s",
@@ -289,6 +328,17 @@ def callback():
 
     mpesa_receipt = items.get('MpesaReceiptNumber')
     confirmed_amount = items.get('Amount', txn['amount'])
+    if not _amount_matches(txn['amount'], confirmed_amount):
+        current_app.logger.error(
+            'M-Pesa callback amount mismatch for %s: requested=%s confirmed=%s',
+            checkout_request_id, txn['amount'], confirmed_amount,
+        )
+        execute(
+            "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
+            "WHERE id = %s",
+            (result_code, 'Confirmed amount does not match the requested amount; manual reconciliation required', utcnow(), txn['id'])
+        )
+        return jsonify({'ResultCode': 0, 'ResultDesc': 'Accepted'}), 200
 
     _apply_successful_stk_payment(txn, mpesa_receipt, confirmed_amount, result_code, result_desc, 'M-Pesa')
     return jsonify({'ResultCode': 0, 'ResultDesc': 'Accepted'}), 200
@@ -326,7 +376,7 @@ def cloudpay_callback():
     result_desc = body.get('result_desc', '')
 
     txn = get_db().execute(
-        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = %s", (checkout_request_id,)
+        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = %s AND gateway = 'cloudpay'", (checkout_request_id,)
     ).fetchone()
     if not txn:
         current_app.logger.warning('CloudPay callback for unknown checkout_request_id: %s', checkout_request_id)
@@ -336,7 +386,7 @@ def cloudpay_callback():
         # than once) -- acknowledge without reprocessing.
         return jsonify({'result_code': 0, 'result_desc': 'Accepted'}), 200
 
-    if result_code != 0:
+    if not _is_success_code(result_code):
         execute(
             "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
             "WHERE id = %s",
@@ -346,6 +396,17 @@ def cloudpay_callback():
 
     receipt_number = body.get('receipt_number')
     confirmed_amount = body.get('amount', txn['amount'])
+    if not _amount_matches(txn['amount'], confirmed_amount):
+        current_app.logger.error(
+            'CloudPay callback amount mismatch for %s: requested=%s confirmed=%s',
+            checkout_request_id, txn['amount'], confirmed_amount,
+        )
+        execute(
+            "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
+            "WHERE id = %s",
+            (result_code, 'Confirmed amount does not match the requested amount; manual reconciliation required', utcnow(), txn['id'])
+        )
+        return jsonify({'result_code': 0, 'result_desc': 'Accepted'}), 200
 
     _apply_successful_stk_payment(txn, receipt_number, confirmed_amount, result_code, result_desc, 'CloudPay')
     return jsonify({'result_code': 0, 'result_desc': 'Accepted'}), 200
@@ -450,7 +511,7 @@ def _handle_b2c_result(body):
         return  # already processed -- Safaricom retries occasionally
 
     now = utcnow()
-    if result_code != 0:
+    if not _is_success_code(result_code):
         execute(
             "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
             "WHERE id = %s",
