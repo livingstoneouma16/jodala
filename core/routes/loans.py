@@ -544,7 +544,8 @@ def send_overdue_reminders():
 @login_required
 @role_required('admin')
 def trigger_overdue_reminders():
-    """Manually trigger overdue-reminder emails (also runnable via
+    """Manually trigger overdue reminders through the configured email and
+    TextSMS channels (also runnable via
     `python send_overdue_reminders.py` / cron -- see that script)."""
     result = send_overdue_reminders()
     log_audit('OVERDUE_REMINDERS_SENT', 'loan', None, new_values=result)

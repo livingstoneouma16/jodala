@@ -268,6 +268,108 @@ CAMPAIGN_TEMPLATES = {
         'email_subject': "New Products Now Available",
         'email': "Dear {name},\n\nWe're excited to let you know that Jodala Microfinance now offers new savings and loan products designed to serve you better.\n\nVisit your nearest branch or contact us to learn more about what's available.\n\nBest regards,\nJodala Microfinance",
     },
+    'payment_due_soon': {
+        'label': 'Upcoming payment reminder',
+        'sms': "Dear {name}, this is a friendly reminder to prepare for your upcoming Jodala Microfinance loan repayment. Thank you for paying on time.",
+        'email_subject': "Reminder: Upcoming Loan Repayment",
+        'email': "Dear {name},\n\nThis is a friendly reminder that your next Jodala Microfinance loan repayment is coming up soon.\n\nPlease ensure you have made the necessary arrangements to pay on time. If you need help, kindly contact us before the due date.\n\nThank you,\nJodala Microfinance",
+    },
+    'savings_encouragement': {
+        'label': 'Savings encouragement',
+        'sms': "Dear {name}, every small saving brings you closer to your goals. Make a deposit into your Jodala Microfinance savings account today.",
+        'email_subject': "Grow Your Savings, One Deposit at a Time",
+        'email': "Dear {name},\n\nYour savings can help you prepare for opportunities and unexpected needs. Even a small, regular deposit makes a difference over time.\n\nVisit us or use your preferred payment channel to grow your Jodala Microfinance savings today.\n\nWarm regards,\nJodala Microfinance",
+    },
+    'loan_product_promotion': {
+        'label': 'Loan product promotion',
+        'sms': "Dear {name}, looking for support for your business, school fees, or personal goals? Ask Jodala Microfinance about our flexible loan options.",
+        'email_subject': "Find a Loan That Supports Your Goals",
+        'email': "Dear {name},\n\nWhether you are growing a business, paying school fees, or meeting another important need, Jodala Microfinance has loan options that may suit you.\n\nContact us or visit your nearest branch to learn about eligibility and repayment options.\n\nBest regards,\nJodala Microfinance",
+    },
+    'account_update': {
+        'label': 'Account update request',
+        'sms': "Dear {name}, please help us keep your records current. Visit Jodala Microfinance to confirm or update your phone number, email, and identification details.",
+        'email_subject': "Help Us Keep Your Account Details Current",
+        'email': "Dear {name},\n\nTo serve you better, please ensure that your contact and identification details are up to date.\n\nKindly visit Jodala Microfinance or contact our team to confirm or update your phone number, email address, and other account information.\n\nThank you,\nJodala Microfinance",
+    },
+    'branch_hours': {
+        'label': 'Branch hours / service update',
+        'sms': "Dear {name}, Jodala Microfinance has an important service update. Please contact your branch or check our official channels for the latest opening hours and assistance.",
+        'email_subject': "Important Service Update from Jodala Microfinance",
+        'email': "Dear {name},\n\nWe have an important service update to share with you. For the latest branch opening hours and service information, please contact your Jodala Microfinance branch or our support team.\n\nThank you for your understanding.\n\nJodala Microfinance",
+    },
+    'customer_appreciation': {
+        'label': 'Customer appreciation',
+        'sms': "Dear {name}, thank you for choosing Jodala Microfinance. We value your trust and remain committed to supporting your financial journey.",
+        'email_subject': "Thank You for Banking with Jodala Microfinance",
+        'email': "Dear {name},\n\nThank you for choosing Jodala Microfinance. Your trust means a great deal to us.\n\nWe remain committed to providing reliable financial services and supporting your goals at every step.\n\nWarm regards,\nJodala Microfinance",
+    },
+    'financial_literacy': {
+        'label': 'Financial tips invitation',
+        'sms': "Dear {name}, strengthen your financial future with good saving, budgeting, and repayment habits. Contact Jodala Microfinance for financial guidance.",
+        'email_subject': "Simple Steps Toward Financial Wellbeing",
+        'email': "Dear {name},\n\nGood financial habits can make a meaningful difference. Creating a budget, saving regularly, and paying loans on time are important steps toward your goals.\n\nContact Jodala Microfinance if you would like guidance on managing your savings or loan repayments.\n\nBest regards,\nJodala Microfinance",
+    },
+    'loan_approval_celebration': {
+        'label': 'Loan approval congratulations',
+        'sms': "Dear {name}, congratulations on your approved Jodala Microfinance loan. Our team will guide you on the next steps for disbursement.",
+        'email_subject': "Congratulations: Your Loan Has Been Approved",
+        'email': "Dear {name},\n\nCongratulations! Your Jodala Microfinance loan has been approved.\n\nOur team will guide you through the remaining disbursement steps. Please contact us if you have any questions.\n\nWarm regards,\nJodala Microfinance",
+    },
+    'loan_application_followup': {
+        'label': 'Loan application follow-up',
+        'sms': "Dear {name}, thank you for your loan application. Jodala Microfinance is reviewing it and will share an update as soon as possible.",
+        'email_subject': "Update on Your Loan Application",
+        'email': "Dear {name},\n\nThank you for your loan application. Our team is reviewing the information provided and will share an update as soon as possible.\n\nIf we need anything further, we will contact you directly.\n\nThank you,\nJodala Microfinance",
+    },
+    'loan_completion': {
+        'label': 'Loan completion congratulations',
+        'sms': "Dear {name}, congratulations on completing your Jodala Microfinance loan repayments. Thank you for your commitment and trust.",
+        'email_subject': "Congratulations on Completing Your Loan",
+        'email': "Dear {name},\n\nCongratulations on completing your loan repayments. Thank you for your commitment and for choosing Jodala Microfinance.\n\nWe look forward to continuing to support your financial goals.\n\nWarm regards,\nJodala Microfinance",
+    },
+    'referral_invitation': {
+        'label': 'Refer a friend',
+        'sms': "Dear {name}, share the benefits of Jodala Microfinance with a friend or family member who may need savings or loan services.",
+        'email_subject': "Share Jodala Microfinance with Someone You Know",
+        'email': "Dear {name},\n\nDo you know someone who could benefit from trusted savings or loan services? Invite them to learn more about Jodala Microfinance.\n\nThank you for being part of our community.\n\nBest regards,\nJodala Microfinance",
+    },
+    'member_meeting': {
+        'label': 'Member meeting invitation',
+        'sms': "Dear {name}, you are invited to an upcoming Jodala Microfinance member meeting. Please contact us for the date, time, venue, and agenda.",
+        'email_subject': "You Are Invited to a Member Meeting",
+        'email': "Dear {name},\n\nYou are invited to an upcoming Jodala Microfinance member meeting. It will be a chance to receive updates, ask questions, and engage with our team.\n\nPlease contact us for the date, time, venue, and agenda.\n\nJodala Microfinance",
+    },
+    'training_invitation': {
+        'label': 'Training / workshop invitation',
+        'sms': "Dear {name}, Jodala Microfinance invites you to our upcoming financial or business training. Contact us to reserve your place and get event details.",
+        'email_subject': "Invitation: Financial and Business Training",
+        'email': "Dear {name},\n\nJodala Microfinance invites you to an upcoming financial or business training session. The session is designed to help you build practical skills for your goals.\n\nContact us to reserve your place and receive the event details.\n\nWarm regards,\nJodala Microfinance",
+    },
+    'service_survey': {
+        'label': 'Customer feedback request',
+        'sms': "Dear {name}, your feedback helps us serve you better. Please share your experience with Jodala Microfinance by contacting our team.",
+        'email_subject': "We Would Value Your Feedback",
+        'email': "Dear {name},\n\nYour feedback helps us improve our services. We would appreciate hearing about your experience with Jodala Microfinance and how we can serve you better.\n\nPlease contact our team to share your suggestions.\n\nThank you,\nJodala Microfinance",
+    },
+    'fraud_awareness': {
+        'label': 'Security and fraud awareness',
+        'sms': "Dear {name}, keep your account safe: never share your PIN, password, or verification code. Contact Jodala Microfinance immediately if you notice suspicious activity.",
+        'email_subject': "Keep Your Account Safe",
+        'email': "Dear {name},\n\nPlease help protect your account. Never share your PIN, password, one-time verification code, or other sensitive information with anyone.\n\nIf you notice suspicious activity or receive an unexpected request for account information, contact Jodala Microfinance immediately.\n\nJodala Microfinance",
+    },
+    'public_holiday_notice': {
+        'label': 'Public holiday notice',
+        'sms': "Dear {name}, please note that Jodala Microfinance services may operate on adjusted hours during the upcoming public holiday. Contact us for details.",
+        'email_subject': "Public Holiday Service Notice",
+        'email': "Dear {name},\n\nPlease note that Jodala Microfinance branch hours and services may be adjusted during the upcoming public holiday.\n\nContact our team for the latest information and any assistance you may need.\n\nThank you,\nJodala Microfinance",
+    },
+    'year_end_thanks': {
+        'label': 'Year-end thank you',
+        'sms': "Dear {name}, thank you for your trust throughout the year. Jodala Microfinance wishes you a peaceful holiday season and a prosperous new year.",
+        'email_subject': "Thank You for a Wonderful Year",
+        'email': "Dear {name},\n\nAs the year comes to a close, we sincerely thank you for your trust and partnership.\n\nJodala Microfinance wishes you and your loved ones a peaceful holiday season and a prosperous new year.\n\nWarm regards,\nJodala Microfinance",
+    },
 }
 
 
@@ -295,12 +397,11 @@ def get_campaign_template(key):
 @login_required
 @role_required('admin', 'loan_officer')
 def draft_campaign_message():
-    """Generate a custom campaign message with the Anthropic API, based on a
-    short prompt describing what the sender wants to say. Requires
-    ANTHROPIC_API_KEY to be set in the environment."""
-    api_key = os.getenv('ANTHROPIC_API_KEY')
+    """Generate a custom campaign message with ChatGPT via the OpenAI API.
+    Requires OPENAI_API_KEY to be set in the server environment."""
+    api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
-        return jsonify({'error': 'AI drafting is not configured -- set ANTHROPIC_API_KEY on the server'}), 400
+        return jsonify({'error': 'ChatGPT drafting is not configured -- set OPENAI_API_KEY on the server'}), 400
 
     data = request.get_json() or {}
     prompt = (data.get('prompt') or '').strip()
@@ -331,25 +432,36 @@ def draft_campaign_message():
 
     try:
         resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
+            "https://api.openai.com/v1/responses",
             headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
+                "Authorization": f"Bearer {api_key}",
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-sonnet-5",
-                "max_tokens": 500,
-                "system": system_prompt,
-                "messages": [{"role": "user", "content": prompt}],
+                # Keep the model configurable so deployments can choose the
+                # OpenAI model appropriate for their cost/quality needs.
+                "model": os.getenv('OPENAI_CAMPAIGN_MODEL', 'gpt-5'),
+                "instructions": system_prompt,
+                "input": prompt,
+                "max_output_tokens": 500,
+                "store": False,
             },
             timeout=20,
         )
         resp.raise_for_status()
         result = resp.json()
-        text = "".join(block.get('text', '') for block in result.get('content', []) if block.get('type') == 'text').strip()
+        # Responses API may provide a convenient output_text field, while the
+        # canonical payload contains message/content items. Handle both.
+        text = (result.get('output_text') or '').strip()
         if not text:
-            return jsonify({'error': 'AI returned an empty draft -- try rephrasing your prompt'}), 502
+            text = ''.join(
+                content.get('text', '')
+                for item in result.get('output', [])
+                for content in item.get('content', [])
+                if content.get('type') == 'output_text'
+            ).strip()
+        if not text:
+            return jsonify({'error': 'ChatGPT returned an empty draft -- try rephrasing your prompt'}), 502
 
         subject = None
         if channel == 'email':
@@ -363,7 +475,7 @@ def draft_campaign_message():
 
         return jsonify({'message': text, 'subject': subject})
     except requests.exceptions.HTTPError as e:
-        # Surface the Anthropic API's actual error message instead of a generic
+        # Surface the OpenAI API's actual error message instead of a generic
         # "400 Bad Request" so misconfiguration (bad model name, bad key, etc.)
         # is diagnosable from the UI/logs.
         detail = None
@@ -371,9 +483,9 @@ def draft_campaign_message():
             detail = e.response.json().get('error', {}).get('message')
         except Exception:
             pass
-        return jsonify({'error': f'AI drafting failed: {detail or e}'}), 502
+        return jsonify({'error': f'ChatGPT drafting failed: {detail or e}'}), 502
     except requests.exceptions.RequestException as e:
-        return jsonify({'error': f'AI drafting failed: {e}'}), 502
+        return jsonify({'error': f'ChatGPT drafting failed: {e}'}), 502
 
 
 @campaigns_bp.route('/')

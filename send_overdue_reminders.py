@@ -1,5 +1,6 @@
 """
-Stand-alone script to email overdue-loan reminders.
+Stand-alone script to send overdue-loan reminders by the configured email
+and TextSMS channels.
 
 As of core/scheduler.py, this now runs automatically once a day *inside*
 the web process itself (see app.py / OVERDUE_REMINDER_HOUR env vars
