@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, render_template, send_file, Response
-from datetime import date
+from datetime import date, timedelta
 import csv
 import io
 
@@ -296,19 +296,55 @@ def member_report():
     })
 
 
-def _compute_regional_performance():
+def _compute_regional_performance(month=None):
     """Portfolio performance broken down by borrower region: reach (members),
     volume (loan counts/principal/disbursed), and health (outstanding,
     collected, arrears, PAR%, collection rate%). A loan's region comes from
     its member/client (see _loan_join_sql) -- loans themselves don't carry a
     region directly. Plain function (no @login_required) so both the JSON
     endpoint and the Excel/CSV exports can call it directly without an extra
-    auth check or a jsonify->get_json round trip."""
+    auth check or a jsonify->get_json round trip.
+
+    `month` scopes the report to a single calendar month ('YYYY-MM'),
+    defaulting to the current month -- this is a monthly report, not a
+    lifetime snapshot. It's applied per-metric rather than as one blanket
+    date filter, since "this month" means something different for each:
+      - member_count: members whose account was created in that month
+        (region reach gained that month, not the region's all-time headcount)
+      - loan_count/active_loan_count/total_principal/total_disbursed:
+        loans disbursed in that month
+      - total_collected: repayments actually received in that month
+      - total_outstanding/par_outstanding/par_pct: as of month-end (a
+        balance is a point-in-time figure, not something that accrues
+        "during" a month, so this uses the snapshot at the end of the
+        selected month rather than summing disbursed-that-month balances)
+      - arrears_amount: installments overdue as of month-end
+    """
     today = date.today()
+    if month:
+        year, mon = (int(x) for x in month.split('-'))
+    else:
+        year, mon = today.year, today.month
 
-    loans = get_db().execute(_loan_join_sql() + " ORDER BY loans.created_at DESC").fetchall()
+    month_start = date(year, mon, 1)
+    month_end = date(year + 1, 1, 1) if mon == 12 else date(year, mon + 1, 1)
+    # For "as of month-end" balance/PAR figures: if the selected month is
+    # the current month, month-end hasn't happened yet, so "as of" has to
+    # mean "as of today" instead of a future date.
+    as_of = min(month_end, today + timedelta(days=1))
 
-    # Overdue installments on active loans, joined just enough to resolve a
+    loans = get_db().execute(
+        _loan_join_sql() + " WHERE loans.disbursement_date >= %s AND loans.disbursement_date < %s "
+                            "ORDER BY loans.created_at DESC",
+        (month_start.isoformat(), month_end.isoformat())
+    ).fetchall()
+
+    # All loans (regardless of disbursement month) are needed for the
+    # as-of-month-end balance/PAR figures -- a loan disbursed last month
+    # still contributes to this month's outstanding balance.
+    all_loans = get_db().execute(_loan_join_sql()).fetchall()
+
+    # Overdue installments as of month-end, joined just enough to resolve a
     # region without an N+1 query per row (member_regions/client_regions are
     # prefetched once below instead of queried per overdue row).
     overdue = get_db().execute(
@@ -317,11 +353,28 @@ def _compute_regional_performance():
            FROM loan_schedules
            LEFT JOIN loans ON loans.id = loan_schedules.loan_id
            WHERE loan_schedules.due_date < %s AND loan_schedules.status IN ('pending', 'partial')""",
-        (today.isoformat(),)
+        (as_of.isoformat(),)
+    ).fetchall()
+
+    # Repayments received within the month, for the total_collected figure.
+    collections = get_db().execute(
+        """SELECT loans.member_id, loans.client_id, repayments.amount_paid
+           FROM repayments
+           LEFT JOIN loans ON loans.id = repayments.loan_id
+           WHERE repayments.payment_date >= %s AND repayments.payment_date < %s""",
+        (month_start.isoformat(), month_end.isoformat())
     ).fetchall()
 
     member_regions = {m['id']: m['region'] for m in get_db().execute("SELECT id, region FROM members").fetchall()}
     client_regions = {c['id']: c['region'] for c in get_db().execute("SELECT id, region FROM clients").fetchall()}
+    members_this_month = get_db().execute(
+        "SELECT id, region FROM members WHERE created_at >= %s AND created_at < %s",
+        (month_start.isoformat(), month_end.isoformat())
+    ).fetchall()
+    clients_this_month = get_db().execute(
+        "SELECT id, region FROM clients WHERE created_at >= %s AND created_at < %s",
+        (month_start.isoformat(), month_end.isoformat())
+    ).fetchall()
 
     regions = {}
 
@@ -343,20 +396,32 @@ def _compute_regional_performance():
         region = member_regions.get(s['member_id']) if s['member_id'] else client_regions.get(s['client_id'])
         bucket(region)['arrears_amount'] += (s['total_due'] - s['total_paid'])
 
+    # Volume figures (loan_count, principal, disbursed) are scoped to loans
+    # disbursed in the selected month.
     for l in loans:
         b = bucket(l['region'])
         b['loan_count'] += 1
         b['total_principal'] += l['principal_amount'] or 0
         b['total_disbursed'] += l['amount_disbursed'] or 0
-        b['total_outstanding'] += l['outstanding_balance'] or 0
-        b['total_collected'] += l['total_paid'] or 0
         if l['status'] == 'active':
             b['active_loan_count'] += 1
-            if l['id'] in overdue_loan_ids:
-                b['par_outstanding'] += l['outstanding_balance'] or 0
 
-    for region in member_regions.values():
-        bucket(region)['member_count'] += 1
+    # Balance/PAR figures are as-of-month-end, so they're computed from the
+    # full loan book rather than just this month's disbursements.
+    for l in all_loans:
+        b = bucket(l['region'])
+        b['total_outstanding'] += l['outstanding_balance'] or 0
+        if l['status'] == 'active' and l['id'] in overdue_loan_ids:
+            b['par_outstanding'] += l['outstanding_balance'] or 0
+
+    for c in collections:
+        region = member_regions.get(c['member_id']) if c['member_id'] else client_regions.get(c['client_id'])
+        bucket(region)['total_collected'] += c['amount_paid'] or 0
+
+    for m in members_this_month:
+        bucket(m['region'])['member_count'] += 1
+    for c in clients_this_month:
+        bucket(c['region'])['member_count'] += 1
 
     result = []
     for data in regions.values():
@@ -384,13 +449,13 @@ def _compute_regional_performance():
         'arrears_amount': round(sum(r['arrears_amount'] for r in result), 2),
     }
 
-    return {'regions': result, 'totals': totals}
+    return {'month': f'{year:04d}-{mon:02d}', 'regions': result, 'totals': totals}
 
 
 @reports_bp.route('/api/regional-performance')
 @login_required
 def regional_performance():
-    return jsonify(_compute_regional_performance())
+    return jsonify(_compute_regional_performance(request.args.get('month')))
 
 
 @reports_bp.route('/api/export/loans/excel')
@@ -590,7 +655,7 @@ def export_regional_excel():
     from openpyxl.styles import Font, PatternFill, Alignment
     from openpyxl.utils import get_column_letter
 
-    data = _compute_regional_performance()
+    data = _compute_regional_performance(request.args.get('month'))
 
     wb = Workbook()
     ws = wb.active
@@ -599,14 +664,17 @@ def export_regional_excel():
     header_fill = PatternFill(start_color="1B4332", end_color="1B4332", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
 
+    ws.cell(row=1, column=1, value=f"Regional Performance -- {data['month']}").font = Font(bold=True, size=13)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(_REGIONAL_HEADERS))
+
     for col, header in enumerate(_REGIONAL_HEADERS, 1):
-        cell = ws.cell(row=1, column=col, value=header)
+        cell = ws.cell(row=2, column=col, value=header)
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = Alignment(horizontal='center')
         ws.column_dimensions[get_column_letter(col)].width = 16
 
-    for row, values in enumerate(_regional_rows(data['regions']), 2):
+    for row, values in enumerate(_regional_rows(data['regions']), 3):
         for col, value in enumerate(values, 1):
             ws.cell(row=row, column=col, value=value)
 
@@ -616,7 +684,7 @@ def export_regional_excel():
         # Default chart height is ~8 rows tall; stack each chart below the
         # last with a margin instead of hardcoded rows, so charts can't
         # overlap as the region count grows.
-        row_1 = 2
+        row_1 = 3
         row_2 = row_1 + 18
         row_3 = row_2 + 18
         row_4 = row_3 + 18
@@ -641,7 +709,8 @@ def export_regional_excel():
     wb.save(output)
     output.seek(0)
 
-    return send_file(output, as_attachment=True, download_name='regional_performance.xlsx',
+    return send_file(output, as_attachment=True,
+                      download_name=f"regional_performance_{data['month']}.xlsx",
                       mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
@@ -911,5 +980,6 @@ def export_collections_csv():
 @reports_bp.route('/api/export/regional/csv')
 @login_required
 def export_regional_csv():
-    data = _compute_regional_performance()
-    return _csv_response(_REGIONAL_HEADERS, _regional_rows(data['regions']), 'regional_performance.csv')
+    data = _compute_regional_performance(request.args.get('month'))
+    return _csv_response(_REGIONAL_HEADERS, _regional_rows(data['regions']),
+                          f"regional_performance_{data['month']}.csv")
