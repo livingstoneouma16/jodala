@@ -106,13 +106,16 @@ def apply_page():
 def quote_loan():
     """Preview the summary numbers (installment, total interest/repayable, fees)
     for a proposed loan before submitting the application."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (data.get('product_id'),)).fetchone()
     if not product:
         return jsonify({'error': 'Invalid loan product'}), 400
 
-    principal = float(data.get('principal_amount', 0))
-    term = int(data.get('term', 0))
+    try:
+        principal = float(data.get('principal_amount'))
+        term = int(data.get('term'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Amount and term must be valid numbers'}), 400
 
     if principal < product['min_amount'] or principal > product['max_amount']:
         return jsonify({'error': f"Amount must be between {product['min_amount']} and {product['max_amount']}"}), 400
@@ -120,7 +123,11 @@ def quote_loan():
         return jsonify({'error': f"Term must be between {product['min_term']} and {product['max_term']}"}), 400
 
     summary = loan_summary(principal, product['interest_rate'], term, product['interest_type'],
-                            product['insurance_fee'])
+                           product['insurance_fee'])
+    summary['schedule'] = build_loan_schedule(
+        principal, product['interest_rate'], term, product['interest_type'],
+        product['repayment_frequency'], date.today()
+    )
     return jsonify(summary)
 
 
@@ -163,15 +170,18 @@ def list_loans():
 @loans_bp.route('/api', methods=['POST'])
 @login_required
 def create_loan():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     user = get_current_user()
 
     product = get_db().execute("SELECT * FROM loan_products WHERE id = %s", (data.get('product_id'),)).fetchone()
     if not product:
         return jsonify({'error': 'Invalid loan product'}), 400
 
-    principal = float(data.get('principal_amount', 0))
-    term = int(data.get('term', 0))
+    try:
+        principal = float(data.get('principal_amount'))
+        term = int(data.get('term'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Amount and term must be valid numbers'}), 400
 
     if principal < product['min_amount'] or principal > product['max_amount']:
         return jsonify({'error': f"Amount must be between {product['min_amount']} and {product['max_amount']}"}), 400

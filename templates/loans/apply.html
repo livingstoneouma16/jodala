@@ -198,16 +198,28 @@ function selectProduct(id, rate, minAmt, maxAmt, minTerm, maxTerm, freq, el) {
   calcPreview();
 }
 
-function calcPreview() {
+async function calcPreview() {
   if (!selectedProduct) return;
   const amount = parseFloat(document.getElementById('principalAmount').value) || 0;
   const term = parseInt(document.getElementById('loanTerm').value) || 0;
   if (!amount || !term) return;
 
+  let quote;
+  try {
+    // The server is the source of truth for flat/reducing interest and fees.
+    quote = await API.post('/loans/api/quote', {
+      product_id: selectedProduct.id,
+      principal_amount: amount,
+      term,
+    });
+  } catch (e) {
+    document.getElementById('loanPreview').innerHTML = `<div class="text-danger small">${e.message}</div>`;
+    return;
+  }
   const { rate } = selectedProduct;
-  const totalInterest = amount * (rate / 100) * term;
-  const totalRepayable = amount + totalInterest;
-  const installment = totalRepayable / term;
+  const totalInterest = quote.total_interest;
+  const totalRepayable = quote.total_repayable;
+  const installment = quote.installment_amount;
 
   document.getElementById('loanPreview').innerHTML = `
     <div style="font-size:12.5px">
@@ -227,6 +239,8 @@ function calcPreview() {
         <span style="color:var(--text-muted)">${selectedProduct.freq.charAt(0).toUpperCase()+selectedProduct.freq.slice(1)} Installment</span>
         <span style="font-weight:700;color:var(--brand-ink)">${fmtCurrency(installment)}</span>
       </div>
+      ${quote.insurance_fee ? `<div class="d-flex justify-content-between py-1 border-top"><span style="color:var(--text-muted)">Insurance Fee</span><span style="font-weight:600">${fmtCurrency(quote.insurance_fee)}</span></div><div class="d-flex justify-content-between py-1"><span style="color:var(--text-muted)">Net Disbursement</span><span style="font-weight:700">${fmtCurrency(quote.net_disbursement)}</span></div>` : ''}
+      ${quote.schedule && quote.schedule.length ? `<div class="pt-2 mt-1 border-top text-muted" style="font-size:11px"><i class="bi bi-calendar3 me-1"></i>Indicative schedule: ${quote.schedule.length} payments from ${quote.schedule[0].due_date} to ${quote.schedule[quote.schedule.length - 1].due_date}</div>` : ''}
     </div>`;
 }
 

@@ -20,6 +20,28 @@ def _create_active_staff_user(db_conn):
 
 
 class TestLoanApplication:
+    def test_quote_includes_an_indicative_repayment_schedule(self, client, admin_token, loan_product):
+        response = client.post('/loans/api/quote', json={
+            'product_id': loan_product['id'], 'principal_amount': 10000, 'term': 6,
+        }, headers=auth_header(admin_token))
+        assert response.status_code == 200, response.get_data(as_text=True)
+        quote = response.get_json()
+        assert len(quote['schedule']) == 6
+        assert quote['schedule'][-1]['balance_after'] == 0
+
+    def test_quote_rejects_invalid_numeric_values(self, client, admin_token, loan_product):
+        response = client.post('/loans/api/quote', json={
+            'product_id': loan_product['id'], 'principal_amount': 'not-a-number', 'term': 6,
+        }, headers=auth_header(admin_token))
+        assert response.status_code == 400
+
+    def test_create_loan_rejects_invalid_numeric_values(self, client, admin_token, member, loan_product):
+        response = client.post('/loans/api', json={
+            'member_id': member['id'], 'borrower_type': 'member',
+            'product_id': loan_product['id'], 'principal_amount': 'not-a-number', 'term': 6,
+        }, headers=auth_header(admin_token))
+        assert response.status_code == 400
+
     def test_create_loan_within_product_limits(self, client, admin_token, member, loan_product):
         resp = client.post('/loans/api', json={
             'member_id': member['id'],
