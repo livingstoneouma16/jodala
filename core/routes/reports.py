@@ -358,7 +358,7 @@ def _compute_regional_performance(month=None):
 
     # Repayments received within the month, for the total_collected figure.
     collections = get_db().execute(
-        """SELECT loans.member_id, loans.client_id, repayments.amount_paid
+        """SELECT loans.member_id, loans.client_id, repayments.amount
            FROM repayments
            LEFT JOIN loans ON loans.id = repayments.loan_id
            WHERE repayments.payment_date >= %s AND repayments.payment_date < %s""",
@@ -416,7 +416,7 @@ def _compute_regional_performance(month=None):
 
     for c in collections:
         region = member_regions.get(c['member_id']) if c['member_id'] else client_regions.get(c['client_id'])
-        bucket(region)['total_collected'] += c['amount_paid'] or 0
+        bucket(region)['total_collected'] += c['amount'] or 0
 
     for m in members_this_month:
         bucket(m['region'])['member_count'] += 1
