@@ -606,15 +606,31 @@ def topup_loan(loan_id):
         "SELECT COALESCE(SUM(interest_paid), 0) AS i FROM loan_schedules WHERE loan_id = %s", (loan_id,)
     ).fetchone()['i']
 
-    # Rebuild the repayment schedule from today for the remaining
-    # installments, replacing whatever was left of the old one -- the loan
-    # keeps its original id/loan_number, it's simply re-amortized on the
-    # bigger principal instead of spawning a new loan record.
+    # The rebuilt schedule must resume on the borrower's actual next due
+    # date -- NOT today. Anchoring on today (via _one_period_before(today,...))
+    # makes build_loan_schedule generate installment #1 as due exactly today,
+    # regardless of what the real next due date already was, which is what
+    # made every top-up show up as "due today" even when the next real
+    # installment was still weeks out. Grab that real next due date before
+    # the DELETE below removes the row it lives on.
+    next_due_row = get_db().execute(
+        "SELECT MIN(due_date) AS d FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')",
+        (loan_id,)
+    ).fetchone()
+    # due_date is stored as TEXT (ISO strings), so MIN() here returns a
+    # plain string, not a date object -- has to be parsed before it can be
+    # passed through _one_period_before, which does real date arithmetic.
+    next_due_date = date.fromisoformat(next_due_row['d']) if next_due_row['d'] else today
+
+    # Rebuild the repayment schedule for the remaining installments,
+    # replacing whatever was left of the old one -- the loan keeps its
+    # original id/loan_number, it's simply re-amortized on the bigger
+    # principal instead of spawning a new loan record.
     execute("DELETE FROM loan_schedules WHERE loan_id = %s AND status IN ('pending', 'partial')", (loan_id,))
 
     schedule_data = build_loan_schedule(
         new_principal, interest_rate, term, interest_type, repayment_frequency,
-        _one_period_before(today, repayment_frequency)
+        _one_period_before(next_due_date, repayment_frequency)
     )
     for s in schedule_data:
         execute(
