@@ -155,6 +155,43 @@ def record_expense():
     return jsonify({'message': 'Expense recorded', 'expense': expense_public(expense)}), 201
 
 
+@accounting_bp.route('/api/expenses/monthly-report')
+@login_required
+def expenses_monthly_report():
+    """Splits every recorded expense into its own calendar-month report --
+    one entry per month with that month's total, category breakdown, and
+    full expense list -- instead of one lump list/total across all time.
+    Most recent month first."""
+    rows = get_db().execute("SELECT * FROM expenses ORDER BY expense_date DESC").fetchall()
+
+    months = {}
+    for r in rows:
+        key = (r['expense_date'] or '')[:7]  # 'YYYY-MM'
+        if len(key) != 7:
+            continue
+        months.setdefault(key, []).append(r)
+
+    reports = []
+    for month in sorted(months.keys(), reverse=True):
+        month_rows = months[month]
+        by_category = {}
+        for r in month_rows:
+            by_category[r['category']] = by_category.get(r['category'], 0) + r['amount']
+        reports.append({
+            'month': month,
+            'label': date.fromisoformat(month + '-01').strftime('%B %Y'),
+            'total_amount': round(sum(r['amount'] for r in month_rows), 2),
+            'count': len(month_rows),
+            'by_category': [
+                {'category': c, 'amount': round(a, 2)}
+                for c, a in sorted(by_category.items(), key=lambda x: -x[1])
+            ],
+            'expenses': [expense_public(r) for r in month_rows],
+        })
+
+    return jsonify({'reports': reports})
+
+
 @accounting_bp.route('/api/journal', methods=['GET'])
 @login_required
 def list_journal():

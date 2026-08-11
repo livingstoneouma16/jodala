@@ -16,6 +16,7 @@
   <li class="nav-item"><button class="nav-link active" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('overview',this)">Overview</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('income',this)">Income</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('expenses',this)">Expenses</button></li>
+  <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('monthly',this)">Monthly Reports</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('journal',this)">Journal</button></li>
   <li class="nav-item"><button class="nav-link" style="font-size:13px;border:1px solid var(--border);border-radius:6px" onclick="showAccTab('trial',this)">Trial Balance</button></li>
 </ul>
@@ -67,6 +68,11 @@
       <tbody id="expenseTable"><tr><td colspan="6" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
     </table></div>
   </div>
+</div>
+
+<!-- Monthly Reports Tab -->
+<div id="monthlyTab" class="d-none">
+  <div id="monthlyReports"><div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div></div>
 </div>
 
 <!-- Journal Tab -->
@@ -176,11 +182,12 @@ document.getElementById('jnlDate').value = today;
 function showAccTab(tab, el) {
   document.querySelectorAll('.nav-link').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
-  ['overview','income','expenses','journal','trial'].forEach(t => {
+  ['overview','income','expenses','monthly','journal','trial'].forEach(t => {
     document.getElementById(t+'Tab').classList.toggle('d-none', t!==tab);
   });
   if (tab==='income') loadIncome();
   else if (tab==='expenses') loadExpenses();
+  else if (tab==='monthly') loadMonthlyReports();
   else if (tab==='journal') loadJournal();
   else if (tab==='trial') loadTrialBalance();
 }
@@ -243,6 +250,43 @@ async function loadExpenses() {
       <td style="font-size:12px;color:var(--text-muted)">${fmtDate(e.expense_date)}</td>
     </tr>`).join('');
   } catch(e) {}
+}
+
+async function loadMonthlyReports() {
+  const wrap = document.getElementById('monthlyReports');
+  wrap.innerHTML = '<div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>';
+  try {
+    const data = await API.get('/accounting/api/expenses/monthly-report');
+    if (!data.reports.length) { wrap.innerHTML = '<div class="empty-state"><i class="bi bi-receipt-cutoff"></i><p>No expenses recorded yet</p></div>'; return; }
+    wrap.innerHTML = data.reports.map((r, idx) => {
+      const catBadges = r.by_category.map(c =>
+        `<span class="badge me-1 mb-1" style="background:#FFE4E6;color:#991B1B;font-size:10px">${escapeHtml(c.category)}: ${fmtCurrency(c.amount)}</span>`
+      ).join('');
+      const rows = r.expenses.map(e => `<tr>
+        <td style="font-weight:600;font-size:12px;color:var(--danger-ink)">${escapeHtml(e.reference)}</td>
+        <td style="font-size:13px">${escapeHtml(e.description)}</td>
+        <td><span class="badge" style="background:#FFE4E6;color:#991B1B;font-size:10px">${escapeHtml(e.category)}</span></td>
+        <td style="font-weight:700;color:var(--danger-ink)">${fmtCurrency(e.amount)}</td>
+        <td style="font-size:12px">${escapeHtml(e.vendor||'—')}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${fmtDate(e.expense_date)}</td>
+      </tr>`).join('');
+      return `
+      <div class="jd-card mb-3">
+        <div class="jd-card-header d-flex align-items-center justify-content-between" style="cursor:pointer" onclick="document.getElementById('monthBody${idx}').classList.toggle('d-none')">
+          <div class="jd-card-title"><i class="bi bi-calendar3 me-1" style="color:var(--danger-ink)"></i>${escapeHtml(r.label)}
+            <span class="text-muted" style="font-size:12px;font-weight:400"> — ${r.count} expense${r.count===1?'':'s'}</span></div>
+          <div style="font-weight:700;color:var(--danger-ink)">${fmtCurrency(r.total_amount)}</div>
+        </div>
+        <div class="jd-card-body" id="monthBody${idx}">
+          <div class="mb-3">${catBadges}</div>
+          <div class="table-responsive"><table class="table mb-0">
+            <thead><tr><th>Reference</th><th>Description</th><th>Category</th><th>Amount</th><th>Vendor</th><th>Date</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { wrap.innerHTML = ''; }
 }
 
 async function loadJournal() {
