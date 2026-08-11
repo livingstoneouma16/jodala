@@ -7,6 +7,7 @@ adjust_account_balance / post_journal_line helpers in core/utils.
 Run with: pytest tests/test_accounting.py -v
 """
 from conftest import auth_header
+from core.database import _migration_0033_expenses_vendor_receipt_approver
 
 
 def _account_id(client, admin_token, code):
@@ -20,6 +21,30 @@ def _trial_balance_row(client, admin_token, code):
 
 
 class TestIncomeExpensePostToLedger:
+    def test_expense_schema_repair_adds_fields_missing_from_legacy_installs(self, db_conn):
+        """Existing databases created before the expanded expense form must
+        be upgraded before ``record_expense`` writes its optional fields."""
+        db_conn.execute('DROP TABLE expenses')
+        db_conn.execute('''CREATE TABLE expenses (
+            id SERIAL PRIMARY KEY,
+            reference TEXT UNIQUE NOT NULL,
+            description TEXT NOT NULL,
+            category TEXT,
+            amount REAL NOT NULL,
+            expense_date TEXT NOT NULL,
+            payment_method TEXT DEFAULT 'cash',
+            account_id INTEGER REFERENCES accounts(id),
+            recorded_by INTEGER REFERENCES users(id),
+            created_at TEXT NOT NULL
+        )''')
+
+        _migration_0033_expenses_vendor_receipt_approver(db_conn)
+        columns = {row[0] for row in db_conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'expenses'"
+        )}
+
+        assert {'vendor', 'receipt_ref', 'approved_by'} <= columns
+
     def test_income_increases_cash_and_income_account(self, client, admin_token):
         before_cash = _trial_balance_row(client, admin_token, '1000')['debit']
         before_fee = _trial_balance_row(client, admin_token, '4100')['credit']
