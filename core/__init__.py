@@ -1,8 +1,9 @@
 import os
 import hashlib
+import json
 import logging
 from datetime import datetime
-from flask import Flask
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 from flask_compress import Compress
 from flask_limiter import Limiter
@@ -193,6 +194,43 @@ def create_app():
 
     # Schema + migrations + first-run bootstrap
     init_db(app)
+
+    @app.before_request
+    def replay_offline_change_if_seen():
+        """Return the original result when an offline client retries a write.
+        This is deliberately limited to JSON API writes; auth, gateway and
+        campaign actions remain live-only and never enter the offline queue."""
+        key = request.headers.get('Idempotency-Key')
+        if not key or request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+            return None
+        if (not request.path.endswith('/api') and '/api/' not in request.path) or \
+                request.path.startswith(('/auth/', '/mpesa/', '/campaigns/', '/settings/api/backups')):
+            return None
+        row = get_db().execute(
+            "SELECT method, path, status_code, response_body FROM idempotency_records WHERE idempotency_key = %s",
+            (key,)
+        ).fetchone()
+        if row:
+            if row['method'] != request.method or row['path'] != request.path:
+                return jsonify({'error': 'Idempotency key was reused for a different request'}), 409
+            return app.response_class(row['response_body'], status=row['status_code'], mimetype='application/json')
+        g.idempotency_key = key
+
+    @app.after_request
+    def save_offline_change_result(response):
+        key = getattr(g, 'idempotency_key', None)
+        if key and response.is_json and response.status_code < 500:
+            try:
+                execute(
+                    """INSERT INTO idempotency_records
+                       (idempotency_key, method, path, status_code, response_body, created_at)
+                       VALUES (%s, %s, %s, %s, %s, %s)""",
+                    (key, request.method, request.path, response.status_code,
+                     response.get_data(as_text=True), datetime.utcnow().isoformat())
+                )
+            except Exception:
+                app.logger.exception('Could not store idempotent API result')
+        return response
 
     # Register blueprints
     from core.routes.auth import auth_bp

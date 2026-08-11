@@ -16,13 +16,48 @@ const Auth = {
   clear() { localStorage.removeItem('jd_token'); }
 };
 
+// Durable queue for ordinary JSON changes made without connectivity. Each
+// entry keeps one idempotency key so synchronisation cannot duplicate it.
+const OfflineChanges = {
+  storageKey: 'jd_offline_changes_v1',
+  list() { try { return JSON.parse(localStorage.getItem(this.storageKey) || '[]'); } catch (_) { return []; } },
+  save(items) { localStorage.setItem(this.storageKey, JSON.stringify(items)); },
+  canQueue(url) { return !url.startsWith('/mpesa/') && !url.startsWith('/auth/') && !url.startsWith('/campaigns/') && !url.startsWith('/settings/api/backups'); },
+  queue(method, url, body, key) {
+    const items = this.list();
+    if (!items.some(item => item.key === key)) { items.push({ method, url, body, key }); this.save(items); }
+  },
+  async sync() {
+    if (!navigator.onLine) return 0;
+    const remaining = []; let synced = 0;
+    for (const item of this.list()) {
+      try {
+        const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': item.key };
+        const token = Auth.getToken(); if (token) headers.Authorization = `Bearer ${token}`;
+        const response = await fetch(item.url, { method: item.method, headers, body: item.body ? JSON.stringify(item.body) : null });
+        if (!response.ok) throw new Error('Rejected');
+        synced += 1;
+      } catch (_) { remaining.push(item); }
+    }
+    this.save(remaining);
+    if (synced && window.Toast) Toast.success(`${synced} offline change${synced === 1 ? '' : 's'} synchronized.`);
+    return synced;
+  }
+};
+window.addEventListener('online', () => OfflineChanges.sync());
+
 // ── API Helper ────────────────────────────────────────────
 const API = {
   async request(method, url, body = null, opts = {}) {
     if (!navigator.onLine && method !== 'GET') {
-      throw new Error('You are offline. Financial changes are disabled until the connection returns.');
+      if (!OfflineChanges.canQueue(url)) throw new Error('This action requires a live internet connection.');
+      const key = `offline-${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
+      OfflineChanges.queue(method, url, body, key);
+      Toast.info('Saved offline. It will synchronize automatically when you are back online.');
+      return { queued_offline: true };
     }
     const headers = { 'Content-Type': 'application/json' };
+    if (method !== 'GET') headers['Idempotency-Key'] = `request-${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
     const token = Auth.getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
 

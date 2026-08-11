@@ -133,23 +133,21 @@ def delete_client(client_id):
     if not client:
         return jsonify({'error': 'Client not found'}), 404
 
-    active_loan = get_db().execute(
-        "SELECT id FROM loans WHERE client_id = %s AND status IN ('active', 'completed')",
+    # Loans can be referenced by repayment, restructuring, collection, and
+    # payment-gateway history. Deleting their rows here causes a database
+    # foreign-key error (HTTP 500) and, worse, risks erasing an audit trail.
+    # A client with any loan should be retained and deactivated instead.
+    loan = get_db().execute(
+        "SELECT loan_number FROM loans WHERE client_id = %s ORDER BY created_at DESC LIMIT 1",
         (client_id,)
     ).fetchone()
-    if active_loan:
-        return jsonify({'error': 'Cannot delete a client with active or completed loans. Write off or close the loan first.'}), 400
+    if loan:
+        return jsonify({
+            'error': f"Cannot delete this client because loan {loan['loan_number']} is on record. "
+                     'Set the client status to inactive instead to preserve the loan history.'
+        }), 400
 
     old_data = client_public(client)
-
-    loan_ids = [r['id'] for r in get_db().execute(
-        "SELECT id FROM loans WHERE client_id = %s", (client_id,)
-    ).fetchall()]
-    for loan_id in loan_ids:
-        execute("DELETE FROM loan_schedules WHERE loan_id = %s", (loan_id,))
-        execute("DELETE FROM repayments WHERE loan_id = %s", (loan_id,))
-    if loan_ids:
-        execute("DELETE FROM loans WHERE client_id = %s", (client_id,))
 
     execute("DELETE FROM clients WHERE id = %s", (client_id,))
     log_audit('DELETE_CLIENT', 'client', client_id, old_values=old_data)

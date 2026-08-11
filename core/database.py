@@ -1439,6 +1439,18 @@ def _migration_0030_cloudpay_gateway(conn):
             )
 
 
+def _migration_0031_idempotency_records(conn):
+    """Makes replaying an offline change safe after connectivity returns."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS idempotency_records (
+        idempotency_key TEXT PRIMARY KEY,
+        method TEXT NOT NULL,
+        path TEXT NOT NULL,
+        status_code INTEGER NOT NULL,
+        response_body TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )""")
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1473,6 +1485,7 @@ MIGRATIONS = [
     (28, "add campaigns.recipient_ids for hand-picked ('selected') campaign audiences", _migration_0028_campaign_selected_recipients),
     (29, "add voided_at/voided_by/void_reason to repayments for reversing mis-entered payments", _migration_0029_repayment_void),
     (30, "add CloudPay as a switchable STK Push gateway alongside M-Pesa Daraja", _migration_0030_cloudpay_gateway),
+    (31, 'add idempotency records for offline change synchronisation', _migration_0031_idempotency_records),
 ]
 
 

@@ -36,9 +36,13 @@ function updateOfflineNotice() {
 window.addEventListener('online', updateOfflineNotice);
 window.addEventListener('offline', updateOfflineNotice);
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', updateOfflineNotice);
+  document.addEventListener('DOMContentLoaded', () => {
+    updateOfflineNotice();
+    if (navigator.onLine && window.OfflineChanges) OfflineChanges.sync();
+  });
 } else {
   updateOfflineNotice();
+  if (navigator.onLine && window.OfflineChanges) OfflineChanges.sync();
 }
 
 // Surface the "Add to Home Screen" / install prompt as a button instead of
