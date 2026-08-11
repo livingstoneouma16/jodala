@@ -10,7 +10,7 @@ tasks, assign/reassign them, and mark them resolved with a note.
 from flask import Blueprint, request, jsonify, render_template
 
 from core.database import get_db, execute, utcnow
-from core.auth import login_required, role_required
+from core.auth import login_required, role_required, permission_required
 from core.collections import collections_ladder_public
 from core.serializers import loan_public
 from core.utils import log_audit
@@ -106,6 +106,7 @@ def list_tasks():
 @collections_bp.route('/api/<int:task_id>', methods=['PATCH'])
 @login_required
 @role_required('admin', 'loan_officer')
+@permission_required('collections.update')
 def update_task(task_id):
     """Assign/reassign a task, or resolve it with a note. Body:
     {assigned_to?, notes?, status?: 'open'|'resolved'}"""
@@ -163,6 +164,7 @@ def assignable_staff():
 @collections_bp.route('/api/run', methods=['POST'])
 @login_required
 @role_required('admin')
+@permission_required('collections.run')
 def run_now():
     """Manually trigger the escalation check (normally runs once daily via
     core/scheduler.py) -- e.g. right after making this change, so you don't

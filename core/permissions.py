@@ -77,6 +77,13 @@ PERMISSIONS = {
     'users.create':                      ('User Management', 'Create users'),
     'users.delete':                      ('User Management', 'Delete users'),
     'users.audit_logs':                  ('User Management', 'View audit logs'),
+
+    # Operations
+    'collections.update':                ('Collections', 'Assign or resolve collection tasks'),
+    'collections.run':                   ('Collections', 'Run collections escalation'),
+    'campaigns.send':                    ('Campaigns', 'Create and send campaigns'),
+    'campaigns.draft':                   ('Campaigns', 'Draft campaigns with ChatGPT'),
+    'repayments.void':                   ('Repayments', 'Void a repayment'),
 }
 
 # What each non-admin role could do before this system existed -- mirrors
@@ -86,6 +93,9 @@ DEFAULT_ROLE_PERMISSIONS = {
     'loan_officer': {
         'loans.approve',
         'loans.restructure',
+        'campaigns.send',
+        'campaigns.draft',
+        'collections.update',
     },
     'accountant': set(),
     'cashier': set(),

@@ -5,6 +5,7 @@ import os
 
 from core.database import get_db, execute, utcnow
 from core.auth import login_required, role_required, get_current_user, hash_password, ROLES
+from core.permissions import PERMISSIONS, module_groups
 from core.serializers import (loan_product_public, user_public, notification_public,
                               audit_log_public, member_full_name, client_full_name)
 from core.utils import (paginate, log_audit, adjust_main_account_balance, adjust_account_balance, notify,
@@ -1109,6 +1110,43 @@ def _set_additional_roles(user_id, roles):
     return roles
 
 
+@users_bp.route('/api/<int:user_id>/permissions', methods=['GET'])
+@login_required
+@role_required('admin')
+def get_user_permissions(user_id):
+    if not get_db().execute('SELECT id FROM users WHERE id = %s', (user_id,)).fetchone():
+        return jsonify({'error': 'User not found'}), 404
+    assigned = get_db().execute(
+        'SELECT permission_key FROM user_permissions WHERE user_id = %s ORDER BY permission_key', (user_id,)
+    ).fetchall()
+    return jsonify({
+        'permissions': [{'key': key, 'module': module, 'label': label} for key, (module, label) in PERMISSIONS.items()],
+        'groups': [{'name': name, 'permissions': [{'key': key, 'label': label} for key, label in items]}
+                   for name, items in module_groups()],
+        'assigned': [row['permission_key'] for row in assigned],
+    })
+
+
+@users_bp.route('/api/<int:user_id>/permissions', methods=['PUT'])
+@login_required
+@role_required('admin')
+def set_user_permissions(user_id):
+    if not get_db().execute('SELECT id FROM users WHERE id = %s', (user_id,)).fetchone():
+        return jsonify({'error': 'User not found'}), 404
+    data = request.get_json() or {}
+    requested = set(data.get('permissions') or [])
+    invalid = requested - set(PERMISSIONS)
+    if invalid:
+        return jsonify({'error': 'Unknown permission requested'}), 400
+    execute('DELETE FROM user_permissions WHERE user_id = %s', (user_id,))
+    now = utcnow()
+    for key in sorted(requested):
+        execute('INSERT INTO user_permissions (user_id, permission_key, created_at) VALUES (%s, %s, %s)',
+                (user_id, key, now))
+    log_audit('UPDATE_USER_PERMISSIONS', 'user', user_id, new_values={'permissions': sorted(requested)})
+    return jsonify({'message': 'Staff permissions updated', 'assigned': sorted(requested)})
+
+
 @users_bp.route('/api', methods=['GET'])
 @login_required
 @role_required('admin')
@@ -1263,6 +1301,7 @@ def delete_user(user_id):
     old_data = user_public(target)
     execute("DELETE FROM notifications WHERE user_id = %s", (user_id,))
     execute("DELETE FROM user_roles WHERE user_id = %s", (user_id,))
+    execute("DELETE FROM user_permissions WHERE user_id = %s", (user_id,))
     execute("DELETE FROM password_reset_tokens WHERE user_id = %s", (user_id,))
     execute("DELETE FROM users WHERE id = %s", (user_id,))
     log_audit('DELETE_USER', 'user', user_id, old_values=old_data)

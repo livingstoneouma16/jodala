@@ -1451,6 +1451,16 @@ def _migration_0031_idempotency_records(conn):
     )""")
 
 
+def _migration_0032_user_permissions(conn):
+    """Optional, admin-managed capability grants for individual staff."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS user_permissions (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        permission_key TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, permission_key)
+    )""")
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1486,6 +1496,7 @@ MIGRATIONS = [
     (29, "add voided_at/voided_by/void_reason to repayments for reversing mis-entered payments", _migration_0029_repayment_void),
     (30, "add CloudPay as a switchable STK Push gateway alongside M-Pesa Daraja", _migration_0030_cloudpay_gateway),
     (31, 'add idempotency records for offline change synchronisation', _migration_0031_idempotency_records),
+    (32, 'add individual staff permission grants', _migration_0032_user_permissions),
 ]
 
 

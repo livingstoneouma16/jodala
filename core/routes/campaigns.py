@@ -28,7 +28,7 @@ from flask import Blueprint, current_app, request, jsonify, render_template
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from core.database import get_db, execute, utcnow
-from core.auth import login_required, role_required, get_current_user
+from core.auth import login_required, role_required, permission_required, get_current_user
 from core.serializers import campaign_public
 from core.utils import paginate, log_audit
 from core.sms import normalize_phone, send_sms_async, is_configured as sms_configured
@@ -396,6 +396,7 @@ def get_campaign_template(key):
 @campaigns_bp.route('/api/draft', methods=['POST'])
 @login_required
 @role_required('admin', 'loan_officer')
+@permission_required('campaigns.draft')
 def draft_campaign_message():
     """Generate a custom campaign message with ChatGPT via the OpenAI API.
     Requires OPENAI_API_KEY to be set in the server environment."""
@@ -595,6 +596,7 @@ def list_campaigns():
 @campaigns_bp.route('/api', methods=['POST'])
 @login_required
 @role_required('admin', 'loan_officer')
+@permission_required('campaigns.send')
 def send_campaign():
     data = request.get_json() or {}
     channel = data.get('channel')

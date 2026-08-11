@@ -206,8 +206,43 @@ def role_required(*allowed_roles):
                 return jsonify({'error': 'Authentication required'}), 401
             user_roles = {user['role'], *user.get('additional_roles', [])}
             if not user_roles & set(allowed_roles):
+                # A route may have a fine-grained permission underneath this
+                # legacy role check. An explicit grant is allowed to extend a
+                # staff member beyond their primary role.
+                permission_key = getattr(fn, 'required_permission', None)
+                if permission_key and get_db().execute(
+                    'SELECT 1 FROM user_permissions WHERE user_id = %s AND permission_key = %s',
+                    (user['id'], permission_key)
+                ).fetchone():
+                    return fn(*args, **kwargs)
                 return jsonify({'error': 'Insufficient permissions for this action'}), 403
             return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def permission_required(permission_key):
+    """Allow admins, the role's normal rights, or an explicit staff grant."""
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            user = getattr(g, 'current_user', None)
+            if user is None:
+                return jsonify({'error': 'Authentication required'}), 401
+            if user['role'] == 'admin' or 'admin' in user.get('additional_roles', []):
+                return fn(*args, **kwargs)
+            from core.permissions import DEFAULT_ROLE_PERMISSIONS
+            roles = {user['role'], *user.get('additional_roles', [])}
+            if any(permission_key in DEFAULT_ROLE_PERMISSIONS.get(role, set()) for role in roles):
+                return fn(*args, **kwargs)
+            grant = get_db().execute(
+                'SELECT 1 FROM user_permissions WHERE user_id = %s AND permission_key = %s',
+                (user['id'], permission_key)
+            ).fetchone()
+            if not grant:
+                return jsonify({'error': 'You do not have permission for this action'}), 403
+            return fn(*args, **kwargs)
+        wrapper.required_permission = permission_key
         return wrapper
     return decorator
 
