@@ -155,9 +155,13 @@ class ConnectionWrapper:
     def __init__(self, raw_conn):
         self._conn = raw_conn
 
-    # The only table in this schema whose primary key isn't `id` (it's
-    # `version`) -- every other INSERT can safely ask for `RETURNING id`.
-    _NO_ID_PK_TABLES = {'schema_migrations'}
+    # Tables whose primary key isn't `id` -- every other INSERT can safely
+    # ask for `RETURNING id`. schema_migrations uses `version`;
+    # user_permissions uses a composite (user_id, permission_key) key with
+    # no id column at all; idempotency_records uses `idempotency_key` as its
+    # PK. Appending `RETURNING id` to inserts on any of these throws
+    # psycopg2.errors.UndefinedColumn instead of returning a lastrowid.
+    _NO_ID_PK_TABLES = {'schema_migrations', 'user_permissions', 'idempotency_records'}
 
     def execute(self, sql, params=()):
         cur = self._conn.cursor()
