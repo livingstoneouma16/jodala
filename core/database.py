@@ -1461,6 +1461,21 @@ def _migration_0032_user_permissions(conn):
     )""")
 
 
+def _migration_0033_expenses_vendor_receipt_approver(conn):
+    """The `expenses` table in SCHEMA_STATEMENTS carries `vendor`,
+    `receipt_ref`, and `approved_by` columns, but that CREATE TABLE only
+    runs via `CREATE TABLE IF NOT EXISTS` -- a no-op for any install where
+    `expenses` already existed before these columns were added. Those
+    installs never actually got the columns, so core.routes.accounting's
+    record_expense() INSERT (which writes to `vendor` and `receipt_ref`)
+    fails with an undefined-column error -> HTTP 500 on every attempt to
+    record an expense. Backfills them so existing databases match
+    SCHEMA_STATEMENTS."""
+    conn.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS vendor TEXT")
+    conn.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS receipt_ref TEXT")
+    conn.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id)")
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1497,6 +1512,8 @@ MIGRATIONS = [
     (30, "add CloudPay as a switchable STK Push gateway alongside M-Pesa Daraja", _migration_0030_cloudpay_gateway),
     (31, 'add idempotency records for offline change synchronisation', _migration_0031_idempotency_records),
     (32, 'add individual staff permission grants', _migration_0032_user_permissions),
+    (33, 'backfill vendor/receipt_ref/approved_by on expenses for installs predating those columns',
+     _migration_0033_expenses_vendor_receipt_approver),
 ]
 
 
