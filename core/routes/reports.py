@@ -128,7 +128,10 @@ def loan_report():
     }
 
     return jsonify({
-        'loans': [loan_public(l) for l in loans[:100]],
+        # Do not silently cap the detail list. The summary was calculated
+        # from every loan while the previous response exposed only the first
+        # 100, making later loans appear to be missing from Reports.
+        'loans': [loan_public(l) for l in loans],
         'summary': {k: round(v, 2) for k, v in summary.items()},
         'by_status': by_status
     })
@@ -484,6 +487,12 @@ def export_loans_excel():
         cell.font = header_font
         cell.alignment = Alignment(horizontal='center')
         ws.column_dimensions[get_column_letter(col)].width = 15
+
+    # Makes every exported loan immediately visible and filterable in Excel;
+    # the previous sheet had no filter/frozen header, which made large loan
+    # registers look incomplete when opened or sorted.
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = f"A1:M{max(1, len(loans) + 1)}"
 
     for row, loan in enumerate(loans, 2):
         ws.cell(row=row, column=1, value=loan['loan_number'])
