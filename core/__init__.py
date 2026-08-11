@@ -11,7 +11,7 @@ from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
-from core.database import init_db, resolve_db_url
+from core.database import init_db, resolve_db_url, get_db, execute
 
 load_dotenv()
 
