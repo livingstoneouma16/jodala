@@ -27,7 +27,7 @@ function updateOfflineNotice() {
       'font:600 13px/1.35 Arial,sans-serif', 'color:#fff',
       'background:#9c2f2f', 'box-shadow:0 2px 8px rgba(0,0,0,.2)'
     ].join(';');
-    notice.textContent = 'You are offline. Saved pages and app assets remain available, but payments and updates require a connection.';
+    notice.textContent = 'You are offline. Recently viewed pages and their last synced data remain available, but payments and updates require a connection.';
     document.body.prepend(notice);
   }
   notice.style.display = navigator.onLine ? 'none' : 'block';

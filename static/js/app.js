@@ -19,8 +19,8 @@ const Auth = {
 // ── API Helper ────────────────────────────────────────────
 const API = {
   async request(method, url, body = null, opts = {}) {
-    if (!navigator.onLine) {
-      throw new Error('You are offline. Connect to the internet before loading or changing financial records.');
+    if (!navigator.onLine && method !== 'GET') {
+      throw new Error('You are offline. Financial changes are disabled until the connection returns.');
     }
     const headers = { 'Content-Type': 'application/json' };
     const token = Auth.getToken();
