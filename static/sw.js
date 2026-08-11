@@ -9,12 +9,14 @@
    navigation fails with no connection at all.
    ========================================================= */
 
-const CACHE_VERSION = 'jodala-static-v3';
+const CACHE_VERSION = 'jodala-static-v4';
 const OFFLINE_URL = '/static/offline.html';
 
 const PRECACHE_URLS = [
   '/static/css/main.css',
   '/static/js/app.js',
+  '/static/js/pwa.js',
+  '/static/js/webauthn.js',
   '/static/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
@@ -70,7 +72,10 @@ self.addEventListener('fetch', (event) => {
   // cache in the background from the network.
   if (isStaticAsset(url)) {
     event.respondWith(
-      caches.match(req).then((cached) => {
+      // The main stylesheet is loaded with an asset-version query string;
+      // match its precached base URL too, otherwise it is needlessly missed
+      // whenever the device is offline.
+      caches.match(req, { ignoreSearch: true }).then((cached) => {
         const network = fetch(req).then((res) => {
           if (res && res.ok) {
             caches.open(CACHE_VERSION).then((cache) => cache.put(req, res.clone()));

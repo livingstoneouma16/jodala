@@ -19,6 +19,9 @@ const Auth = {
 // ── API Helper ────────────────────────────────────────────
 const API = {
   async request(method, url, body = null, opts = {}) {
+    if (!navigator.onLine) {
+      throw new Error('You are offline. Connect to the internet before loading or changing financial records.');
+    }
     const headers = { 'Content-Type': 'application/json' };
     const token = Auth.getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -47,6 +50,9 @@ const API = {
   delete(url)        { return this.request('DELETE', url); },
 
   async download(url, filename) {
+    if (!navigator.onLine) {
+      throw new Error('You are offline. Connect to the internet before downloading a report.');
+    }
     const token = Auth.getToken();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
