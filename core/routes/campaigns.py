@@ -27,7 +27,7 @@ import requests
 from flask import Blueprint, current_app, request, jsonify, render_template
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from core.database import get_db, execute, utcnow
+from core.database import get_db, execute, utcnow, get_company_branding
 from core.auth import login_required, role_required, permission_required, get_current_user
 from core.serializers import campaign_public
 from core.utils import paginate, log_audit
@@ -425,10 +425,11 @@ def draft_campaign_message():
     )
 
     system_prompt = (
-        "You draft short outbound messages for a microfinance institution called Jodala Microfinance, "
+        f"You draft short outbound messages for a microfinance institution called {get_company_branding()['company_name']}, "
         f"to be sent to {audience_desc}. Use the placeholder {{name}} wherever the recipient's name should "
-        "go -- it will be substituted per-recipient at send time. Be professional, warm, and concise. "
-        "Never invent specific loan amounts, dates, or figures that weren't given to you. " + length_hint
+        "go -- it will be substituted per-recipient at send time. The institution's name is added to the "
+        "message automatically at send time, so do not sign off with it yourself. Be professional, warm, "
+        "and concise. Never invent specific loan amounts, dates, or figures that weren't given to you. " + length_hint
     )
 
     try:
@@ -645,8 +646,17 @@ def send_campaign():
         return jsonify({'error': preview_error[0]}), preview_error[1]
 
     queued = 0
+    chama_name = get_company_branding()['company_name']
     for r in deliverable:
-        personalized = message.replace('{name}', r['name'] or 'there')
+        personalized = message.replace('{name}', r['name'] or 'there').replace('{chama_name}', chama_name)
+        # Every campaign message should carry the chama's name even if the
+        # sender didn't type the {chama_name} placeholder themselves --
+        # recipients get messages from lots of numbers/senders, so an
+        # unbranded SMS/email is easy to mistake for spam or a different
+        # sender entirely. Sign the message with it when it isn't already
+        # present in the text.
+        if chama_name not in personalized:
+            personalized = f"{personalized}\n\n- {chama_name}"
         if channel == 'sms':
             send_sms_async(r['contact'], personalized)
         else:
