@@ -69,6 +69,14 @@ class TestIncomeExpensePostToLedger:
         assert _trial_balance_row(client, admin_token, '1000')['debit'] == round(before_cash - 300, 2)
         assert _trial_balance_row(client, admin_token, '5000')['debit'] == round(before_exp + 300, 2)
 
+    def test_expense_rejects_invalid_amount_without_a_server_error(self, client, admin_token):
+        resp = client.post('/accounting/api/expenses', json={
+            'description': 'Office rent', 'amount': '',
+        }, headers=auth_header(admin_token))
+
+        assert resp.status_code == 400
+        assert resp.get_json()['error'] == 'Amount must be a number'
+
     def test_trial_balance_always_balances(self, client, admin_token):
         client.post('/accounting/api/income', json={'description': 'x', 'amount': 777}, headers=auth_header(admin_token))
         client.post('/accounting/api/expenses', json={'description': 'y', 'amount': 111}, headers=auth_header(admin_token))

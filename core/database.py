@@ -1536,6 +1536,16 @@ def run_migrations(conn):
         )
         conn.commit()
 
+    # A previous deployment may have marked a migration as applied even
+    # though its schema change was later reverted manually or restored from
+    # an older database backup.  The migration ledger alone is therefore not
+    # enough to protect a write path that depends on these columns.  Verify
+    # the actual table shape on every startup; this is a no-op once healthy.
+    expense_columns = _table_columns(conn, 'expenses')
+    if not {'vendor', 'receipt_ref', 'approved_by'} <= expense_columns:
+        _migration_0033_expenses_vendor_receipt_approver(conn)
+        conn.commit()
+
 
 def init_db(app):
     """Call once at app startup: resolves DATABASE_URL, opens a bootstrap

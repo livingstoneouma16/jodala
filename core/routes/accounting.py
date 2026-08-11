@@ -118,13 +118,33 @@ def list_expenses():
 @accounting_bp.route('/api/expenses', methods=['POST'])
 @login_required
 def record_expense():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'A valid expense payload is required'}), 400
+
+    description = str(data.get('description') or '').strip()
+    if not description:
+        return jsonify({'error': 'Description is required'}), 400
+
+    try:
+        amount = float(data.get('amount'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Amount must be a number'}), 400
+    if amount <= 0:
+        return jsonify({'error': 'Amount must be greater than zero'}), 400
+
+    expense_date = data.get('expense_date') or date.today().isoformat()
+    try:
+        date.fromisoformat(expense_date)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Expense date must be a valid date'}), 400
+
     user = get_current_user()
     cur = execute(
         """INSERT INTO expenses (reference, description, category, amount, expense_date, payment_method,
                vendor, receipt_ref, recorded_by, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-        (generate_expense_reference(), data.get('description', '').strip(), data.get('category', 'other'),
-         float(data.get('amount', 0)), data.get('expense_date', date.today().isoformat()),
+        (generate_expense_reference(), description, data.get('category', 'other'),
+         amount, expense_date,
          data.get('payment_method', 'cash'), data.get('vendor'), data.get('receipt_ref'),
          user['id'], utcnow())
     )
