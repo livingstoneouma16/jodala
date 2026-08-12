@@ -1480,6 +1480,23 @@ def _migration_0033_expenses_vendor_receipt_approver(conn):
     conn.execute("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS approved_by INTEGER REFERENCES users(id)")
 
 
+def _migration_0034_remove_cloudpay(conn):
+    """CloudPay has been removed as a payment gateway option -- M-Pesa
+    Daraja is now the only STK Push gateway, so the gateway-selector and
+    cloudpay_* company_settings rows are no longer used; delete them
+    outright rather than leave them around unused. mpesa_transactions rows
+    already tagged gateway='cloudpay' are left as historical record --
+    they're still valid past payments, just from a gateway that's no
+    longer selectable for new ones."""
+    conn.execute("""
+        DELETE FROM company_settings WHERE key IN (
+            'payment_gateway', 'cloudpay_environment', 'cloudpay_api_key',
+            'cloudpay_api_secret', 'cloudpay_till_number', 'cloudpay_enabled',
+            'cloudpay_callback_url'
+        )
+    """)
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1518,6 +1535,7 @@ MIGRATIONS = [
     (32, 'add individual staff permission grants', _migration_0032_user_permissions),
     (33, 'backfill vendor/receipt_ref/approved_by on expenses for installs predating those columns',
      _migration_0033_expenses_vendor_receipt_approver),
+    (34, 'remove CloudPay payment gateway support', _migration_0034_remove_cloudpay),
 ]
 
 

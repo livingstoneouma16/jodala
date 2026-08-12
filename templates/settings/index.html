@@ -173,42 +173,6 @@
 
 <!-- Payment Gateway Settings -->
 <div id="mpesaSet" class="d-none">
-  <div class="jd-card"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-toggles" style="color:var(--brand-light)"></i>Active STK Push Gateway</div>
-    <div class="text-muted" style="font-size:12px;margin-top:2px">Choose which gateway new payment prompts (loan repayments and savings deposits) go through. Only one is active at a time — switch back and forth freely; past transactions and their history are unaffected.</div></div>
-  <div class="jd-card-body">
-    <div class="row g-4" id="gatewaySelectForm">
-      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
-    </div>
-    <div class="d-flex justify-content-end mt-3">
-      <button class="btn btn-brand" id="saveGatewayBtn" onclick="saveMpesaSettings()"><i class="bi bi-save me-1"></i>Save Gateway Choice</button>
-    </div>
-  </div></div>
-
-  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-cloud" style="color:var(--brand-light)"></i>CloudPay STK Push</div>
-    <div class="text-muted" style="font-size:12px;margin-top:2px">Alternative mobile-money gateway to M-Pesa Daraja. Unlike Daraja, CloudPay has no shared sandbox default — enter your own API key/secret from CloudPay's developer portal before pushes will work, even for testing.</div></div>
-  <div class="jd-card-body">
-    <div class="row g-4" id="cloudpayForm">
-      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
-    </div>
-    <div class="alert alert-warning mt-3" style="font-size:12.5px">
-      <i class="bi bi-exclamation-triangle me-1"></i>
-      CloudPay must be able to reach your <strong>Callback URL</strong> over the public internet with a valid HTTPS
-      certificate. If this app is only running locally, use a tunnel (e.g. ngrok) and paste its HTTPS URL +
-      <code>/mpesa/cloudpay/callback</code> below — otherwise payments will show "pending" forever since the
-      confirmation can never arrive.
-    </div>
-    <hr class="my-4" />
-    <div class="d-flex justify-content-between align-items-center">
-      <div class="d-flex gap-2 align-items-center">
-        <input type="text" class="form-control form-control-sm" id="testCloudpayPhone" placeholder="Test phone e.g. 0712345678" style="width:220px" />
-        <button class="btn btn-outline-secondary btn-sm" onclick="sendTestCloudpayPush()" id="testCloudpayBtn">
-          <i class="bi bi-send me-1"></i>Send KSh 1 Test Push
-        </button>
-      </div>
-      <button class="btn btn-brand" id="saveCloudpayBtn" onclick="saveMpesaSettings()"><i class="bi bi-save me-1"></i>Save Settings</button>
-    </div>
-  </div></div>
-
   <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-phone" style="color:var(--brand-light)"></i>M-Pesa STK Push (Lipa Na M-Pesa Online)</div>
     <div class="text-muted" style="font-size:12px;margin-top:2px">Lets staff trigger a payment prompt on a member's phone for loan repayments and savings deposits</div></div>
   <div class="jd-card-body">
@@ -901,45 +865,6 @@ async function loadMpesaSettings() {
   try {
     const data = await API.get('/settings/api/mpesa');
 
-    document.getElementById('gatewaySelectForm').innerHTML = `
-      <div class="col-md-8">
-        <select class="form-select" id="activeGateway">
-          <option value="mpesa" ${data.payment_gateway!=='cloudpay'?'selected':''}>M-Pesa Daraja (Safaricom)</option>
-          <option value="cloudpay" ${data.payment_gateway==='cloudpay'?'selected':''}>CloudPay</option>
-        </select>
-      </div>
-      <div class="col-md-4 d-flex align-items-center">
-        <span class="badge ${data.payment_gateway==='cloudpay' ? (data.cloudpay_configured ? 'bg-success' : 'bg-warning text-dark') : (data.mpesa_shortcode ? 'bg-success' : 'bg-warning text-dark')}" style="font-size:11px">
-          ${data.payment_gateway==='cloudpay'
-            ? (data.cloudpay_configured ? 'CloudPay configured' : 'CloudPay not fully configured yet')
-            : 'Using M-Pesa Daraja'}
-        </span>
-      </div>`;
-
-    document.getElementById('cloudpayForm').innerHTML = `
-      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Environment</label>
-        <select class="form-select" id="cpEnv">
-          <option value="sandbox" ${data.cloudpay_environment!=='production'?'selected':''}>Sandbox (testing)</option>
-          <option value="production" ${data.cloudpay_environment==='production'?'selected':''}>Production (live)</option>
-        </select></div>
-      <div class="col-md-4 d-flex align-items-end">
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="cpEnabled" ${data.cloudpay_enabled ? 'checked' : ''} />
-          <label class="form-check-label" for="cpEnabled" style="font-size:12.5px">CloudPay payments enabled</label>
-        </div>
-      </div>
-      <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Till Number</label>
-        <input type="text" class="form-control" id="cpTillNumber" placeholder="Your CloudPay till number" value="${escapeHtml(data.cloudpay_till_number||'')}" /></div>
-
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">API Key</label>
-        <input type="text" class="form-control" id="cpApiKey" value="${escapeHtml(data.cloudpay_api_key||'')}" /></div>
-      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">API Secret</label>
-        <input type="password" class="form-control" id="cpApiSecret" placeholder="${data.cloudpay_api_secret_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'From CloudPay developer portal'}" />
-        <div class="text-muted mt-1" style="font-size:11.5px">${data.cloudpay_api_secret_set ? 'A secret is already saved. Leave blank to keep it.' : 'Not yet configured.'}</div></div>
-
-      <div class="col-md-12"><label class="form-label" style="font-size:12.5px">Callback URL</label>
-        <input type="text" class="form-control" id="cpCallbackUrl" placeholder="https://your-public-domain.example.com/mpesa/cloudpay/callback" value="${escapeHtml(data.cloudpay_callback_url||'')}" /></div>`;
-
     document.getElementById('mpesaSandboxNotice').classList.toggle('d-none', !data.using_sandbox_defaults);
     document.getElementById('mpesaForm').innerHTML = `
       <div class="col-md-4"><label class="form-label" style="font-size:12.5px">Environment</label>
@@ -1005,7 +930,6 @@ async function saveMpesaSettings() {
   setLoading(btn, true);
   try {
     const body = {
-      payment_gateway: document.getElementById('activeGateway').value,
       mpesa_environment: document.getElementById('mConsumerEnv').value,
       mpesa_enabled: document.getElementById('mEnabled').checked,
       mpesa_shortcode: document.getElementById('mShortcode').value,
@@ -1016,11 +940,6 @@ async function saveMpesaSettings() {
       mpesa_b2c_command_id: document.getElementById('mB2cCommandId').value,
       mpesa_b2c_result_url: document.getElementById('mB2cResultUrl').value,
       mpesa_b2c_timeout_url: document.getElementById('mB2cTimeoutUrl').value,
-      cloudpay_environment: document.getElementById('cpEnv').value,
-      cloudpay_enabled: document.getElementById('cpEnabled').checked,
-      cloudpay_till_number: document.getElementById('cpTillNumber').value,
-      cloudpay_api_key: document.getElementById('cpApiKey').value,
-      cloudpay_callback_url: document.getElementById('cpCallbackUrl').value,
     };
     const secret = document.getElementById('mConsumerSecret').value;
     if (secret) body.mpesa_consumer_secret = secret;
@@ -1030,8 +949,6 @@ async function saveMpesaSettings() {
     if (initiatorPassword) body.mpesa_initiator_password = initiatorPassword;
     const cert = document.getElementById('mB2cCertificate').value.trim();
     if (cert) body.mpesa_b2c_certificate = cert;
-    const cpSecret = document.getElementById('cpApiSecret').value;
-    if (cpSecret) body.cloudpay_api_secret = cpSecret;
     await API.put('/settings/api/mpesa', body);
     Toast.success('Payment gateway settings saved');
     loadMpesaSettings();
@@ -1058,18 +975,6 @@ async function sendTestMpesaPush() {
   setLoading(btn, true);
   try {
     const data = await API.post('/settings/api/mpesa/test', { phone });
-    Toast.success(data.message || 'Test push sent');
-  } catch(e) { Toast.error(e.message); }
-  finally { setLoading(btn, false); loadMpesaLog(); }
-}
-
-async function sendTestCloudpayPush() {
-  const btn = document.getElementById('testCloudpayBtn');
-  const phone = document.getElementById('testCloudpayPhone').value.trim();
-  if (!phone) { Toast.warning('Enter a phone number first'); return; }
-  setLoading(btn, true);
-  try {
-    const data = await API.post('/settings/api/cloudpay/test', { phone });
     Toast.success(data.message || 'Test push sent');
   } catch(e) { Toast.error(e.message); }
   finally { setLoading(btn, false); loadMpesaLog(); }
