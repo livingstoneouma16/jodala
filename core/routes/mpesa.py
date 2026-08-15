@@ -27,6 +27,7 @@ from core.auth import login_required, get_current_user
 from core.serializers import mpesa_transaction_public
 from core.utils import log_audit
 from core.mpesa import initiate_stk_push, initiate_b2c_payment, MpesaError, normalize_phone
+from core.paywave import initiate_stk_push as paywave_initiate_stk_push, PaywaveError
 from core import limiter
 
 mpesa_bp = Blueprint('mpesa', __name__)
@@ -129,38 +130,58 @@ def stk_push():
         account_reference = target['account_number']
         transaction_desc = 'Savings Dep'
 
+    from core.mpesa import _setting
+    gateway = (_setting('payment_gateway') or 'mpesa').strip().lower()
+    if gateway not in ('mpesa', 'paywave'):
+        gateway = 'mpesa'
+
     try:
         phone_normalized = normalize_phone(phone)
-        result = initiate_stk_push(
-            phone=phone_normalized,
-            amount=amount,
-            account_reference=account_reference,
-            transaction_desc=transaction_desc,
-            callback_url=_callback_url(),
-        )
-        checkout_request_id = result.get('CheckoutRequestID')
-        merchant_request_id = result.get('MerchantRequestID')
-    except MpesaError as e:
+        if gateway == 'paywave':
+            result = paywave_initiate_stk_push(
+                phone=phone_normalized,
+                amount=amount,
+                reference=account_reference,
+                account_number=account_reference,
+            )
+            # Paywave's own transaction_request_id is what we poll/webhook
+            # on -- CheckoutRequestID/MerchantRequestID are the underlying
+            # Daraja IDs Paywave forwards along for reference, and may be
+            # absent depending on how far the request got before failing.
+            checkout_request_id = result.get('transaction_request_id') or result.get('CheckoutRequestID')
+            merchant_request_id = result.get('MerchantRequestID')
+        else:
+            result = initiate_stk_push(
+                phone=phone_normalized,
+                amount=amount,
+                account_reference=account_reference,
+                transaction_desc=transaction_desc,
+                callback_url=_callback_url(),
+            )
+            checkout_request_id = result.get('CheckoutRequestID')
+            merchant_request_id = result.get('MerchantRequestID')
+    except (MpesaError, PaywaveError) as e:
         return jsonify({'error': str(e)}), 502
 
     if not checkout_request_id:
-        current_app.logger.error('M-Pesa STK gateway returned no checkout request ID: %r', result)
+        current_app.logger.error('%s STK gateway returned no checkout/transaction request ID: %r', gateway, result)
         return jsonify({'error': 'Payment gateway did not return a checkout request ID'}), 502
 
     now = utcnow()
     execute(
         """INSERT INTO mpesa_transactions (checkout_request_id, merchant_request_id, purpose, target_id,
                phone, amount, status, initiated_by, gateway, created_at, updated_at)
-           VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s, 'mpesa', %s, %s)""",
+           VALUES (%s, %s, %s, %s, %s, %s, 'pending', %s, %s, %s, %s)""",
         (checkout_request_id, merchant_request_id, purpose, int(target_id), phone_normalized,
-         amount, user['id'], now, now)
+         amount, user['id'], gateway, now, now)
     )
     log_audit('MPESA_STK_PUSH_INITIATED', purpose, int(target_id))
 
+    gateway_label = 'Paywave Express' if gateway == 'paywave' else 'M-Pesa'
     return jsonify({
-        'message': 'STK push sent -- ask the customer to check their phone and enter their M-Pesa PIN',
+        'message': f'STK push sent via {gateway_label} -- ask the customer to check their phone and enter their M-Pesa PIN',
         'checkout_request_id': checkout_request_id,
-        'gateway': 'mpesa',
+        'gateway': gateway,
     }), 201
 
 
@@ -291,6 +312,66 @@ def callback():
 
     _apply_successful_stk_payment(txn, mpesa_receipt, confirmed_amount, result_code, result_desc, 'M-Pesa')
     return jsonify({'ResultCode': 0, 'ResultDesc': 'Accepted'}), 200
+
+
+@mpesa_bp.route('/paywave-webhook', methods=['POST'])
+def paywave_webhook():
+    """Paywave Express posts here once a customer responds to the STK
+    prompt (or it's cancelled/times out). Configure this URL --
+    <this app's public URL>/mpesa/paywave-webhook -- under the linked
+    account's settings on the Paywave Express dashboard. No @login_required,
+    same reasoning as /mpesa/callback: this is Paywave's server, not a
+    browser. We only trust a webhook that references a TransactionID we
+    ourselves generated (as transaction_request_id) and are still waiting
+    on; anything else is ignored. Always acknowledge with HTTP 200 so
+    Paywave doesn't retry forever, even if something below fails -- we log
+    failures instead."""
+    body = request.get_json(silent=True) or {}
+    transaction_id = body.get('TransactionID')
+    if not transaction_id:
+        current_app.logger.warning('Paywave webhook: malformed payload (no TransactionID): %r', body)
+        return jsonify({'status': 'received'}), 200
+
+    txn = get_db().execute(
+        "SELECT * FROM mpesa_transactions WHERE checkout_request_id = %s AND gateway = 'paywave'",
+        (transaction_id,)
+    ).fetchone()
+    if not txn:
+        current_app.logger.warning('Paywave webhook for unknown TransactionID: %s', transaction_id)
+        return jsonify({'status': 'received'}), 200
+    if txn['status'] != 'pending':
+        # Already processed -- Paywave occasionally retries webhooks.
+        return jsonify({'status': 'received'}), 200
+
+    result_code = body.get('ResponseCode')
+    result_desc = body.get('ResponseDescription', '')
+    now = utcnow()
+
+    if not _is_success_code(result_code):
+        execute(
+            "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
+            "WHERE id = %s",
+            (result_code, result_desc, now, txn['id'])
+        )
+        return jsonify({'status': 'received'}), 200
+
+    receipt = body.get('TransactionReceipt')
+    confirmed_amount = body.get('TransactionAmount', txn['amount'])
+    if not _amount_matches(txn['amount'], confirmed_amount):
+        current_app.logger.error(
+            'Paywave webhook amount mismatch for %s: requested=%s confirmed=%s',
+            transaction_id, txn['amount'], confirmed_amount,
+        )
+        execute(
+            "UPDATE mpesa_transactions SET status = 'failed', result_code = %s, result_desc = %s, updated_at = %s "
+            "WHERE id = %s",
+            (result_code, 'Confirmed amount does not match the requested amount; manual reconciliation required',
+             utcnow(), txn['id'])
+        )
+        return jsonify({'status': 'received'}), 200
+
+    _apply_successful_stk_payment(txn, receipt, confirmed_amount, result_code, result_desc, 'Paywave Express')
+    return jsonify({'status': 'success'}), 200
 
 
 @mpesa_bp.route('/api/b2c', methods=['POST'])

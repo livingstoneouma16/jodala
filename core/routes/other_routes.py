@@ -337,6 +337,12 @@ def get_mpesa_settings():
         'mpesa_b2c_configured': is_b2c_configured(),
         'mpesa_b2c_result_url': _setting('mpesa_b2c_result_url', ''),
         'mpesa_b2c_timeout_url': _setting('mpesa_b2c_timeout_url', ''),
+        # Which gateway new STK Push requests (loan repayments, savings
+        # deposits) actually use -- 'mpesa' talks to Daraja directly,
+        # 'paywave' goes through Paywave Express. Lives here rather than a
+        # third settings tab since it's the one shared "which of these two
+        # collection gateways is live" toggle.
+        'payment_gateway': _setting('payment_gateway', 'mpesa'),
     })
 
 
@@ -354,6 +360,8 @@ def update_mpesa_settings():
         else:
             execute("INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)", (key, str(value), now))
 
+    if 'payment_gateway' in data:
+        _set('payment_gateway', 'paywave' if data.get('payment_gateway') == 'paywave' else 'mpesa')
     if 'mpesa_environment' in data:
         _set('mpesa_environment', 'production' if data.get('mpesa_environment') == 'production' else 'sandbox')
     if 'mpesa_consumer_key' in data:
@@ -451,6 +459,74 @@ def send_test_mpesa_b2c():
     return jsonify({
         'message': f'Test B2C payout (KSh 1) sent to {phone_normalized}.',
         'originator_conversation_id': result.get('OriginatorConversationID'),
+    })
+
+
+@settings_bp.route('/api/paywave', methods=['GET'])
+@login_required
+@role_required('admin')
+def get_paywave_settings():
+    from core.paywave import get_paywave_config, is_configured
+    from core.mpesa import _setting
+    cfg = get_paywave_config()
+    return jsonify({
+        'paywave_email': cfg['email'],
+        # Never echo the real api_key back to the browser -- just tell the
+        # UI whether one is already set, so the field can show a
+        # placeholder instead of leaking it.
+        'paywave_api_key_set': bool(cfg['api_key']),
+        'paywave_enabled': cfg['enabled'],
+        'paywave_configured': is_configured(),
+        'payment_gateway': _setting('payment_gateway', 'mpesa'),
+    })
+
+
+@settings_bp.route('/api/paywave', methods=['PUT'])
+@login_required
+@role_required('admin')
+def update_paywave_settings():
+    data = request.get_json() or {}
+    now = utcnow()
+
+    def _set(key, value):
+        existing = get_db().execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
+        if existing:
+            execute("UPDATE company_settings SET value = %s, updated_at = %s WHERE key = %s", (str(value), now, key))
+        else:
+            execute("INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)", (key, str(value), now))
+
+    if 'payment_gateway' in data:
+        _set('payment_gateway', 'paywave' if data.get('payment_gateway') == 'paywave' else 'mpesa')
+    if 'paywave_email' in data:
+        _set('paywave_email', (data.get('paywave_email') or '').strip())
+    if 'paywave_enabled' in data:
+        _set('paywave_enabled', '1' if data.get('paywave_enabled') else '0')
+    # Only overwrite the stored api_key if a new value was actually typed
+    # in -- an empty string means "leave it unchanged", not "clear it".
+    if data.get('paywave_api_key'):
+        _set('paywave_api_key', data['paywave_api_key'].strip())
+
+    log_audit('UPDATE_PAYWAVE_SETTINGS', 'company_settings', None)
+    return jsonify({'message': 'Payment gateway settings updated'})
+
+
+@settings_bp.route('/api/paywave/test', methods=['POST'])
+@login_required
+@role_required('admin')
+def send_test_paywave_push():
+    from core.paywave import initiate_stk_push, PaywaveError, normalize_phone
+    data = request.get_json() or {}
+    phone = data.get('phone')
+    if not phone:
+        return jsonify({'error': 'Phone number is required'}), 400
+    try:
+        phone_normalized = normalize_phone(phone)
+        result = initiate_stk_push(phone=phone_normalized, amount=1, reference='TEST')
+    except PaywaveError as e:
+        return jsonify({'error': str(e)}), 502
+    return jsonify({
+        'message': f'Test STK push (KSh 1) sent to {phone_normalized} via Paywave Express -- check the phone for the M-Pesa prompt.',
+        'transaction_request_id': result.get('transaction_request_id'),
     })
 
 

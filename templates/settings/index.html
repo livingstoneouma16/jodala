@@ -173,6 +173,48 @@
 
 <!-- Payment Gateway Settings -->
 <div id="mpesaSet" class="d-none">
+  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-toggles" style="color:var(--brand-light)"></i>Active Collection Gateway</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">Which gateway new STK Push requests (loan repayments, savings deposits) actually use. Configure whichever one(s) you use below.</div></div>
+  <div class="jd-card-body">
+    <div class="row g-4">
+      <div class="col-md-6">
+        <label class="form-label small">STK Push Gateway</label>
+        <select class="form-select" id="activeGateway">
+          <option value="mpesa">M-Pesa Daraja (direct)</option>
+          <option value="paywave">Paywave Express (aggregator)</option>
+        </select>
+      </div>
+    </div>
+    <hr class="my-4" />
+    <div class="d-flex justify-content-end">
+      <button class="btn btn-brand" id="saveGatewayBtn" onclick="saveActiveGateway()"><i class="bi bi-save me-1"></i>Save</button>
+    </div>
+  </div></div>
+
+  <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-lightning-charge" style="color:var(--brand-light)"></i>Paywave Express</div>
+    <div class="text-muted" style="font-size:12px;margin-top:2px">M-Pesa STK Push via <a href="https://paywavexpress.co.ke" target="_blank" rel="noopener">Paywave Express</a> — an aggregator in front of Daraja, so no certificate/initiator setup is needed, just an API key</div></div>
+  <div class="jd-card-body">
+    <div class="alert alert-info" style="font-size:12.5px">
+      <i class="bi bi-info-circle me-1"></i>
+      Get your API key and register your webhook URL — <code id="paywaveWebhookUrlHint"></code> — from your
+      <a href="https://paywavexpress.co.ke/user/" target="_blank" rel="noopener">Paywave Express dashboard</a> after linking a
+      Till, Paybill, or Bank Account and activating your subscription.
+    </div>
+    <div class="row g-4" id="paywaveForm">
+      <div class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></div>
+    </div>
+    <hr class="my-4" />
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex gap-2 align-items-center">
+        <input type="text" class="form-control form-control-sm" id="testPaywavePhone" placeholder="Test phone e.g. 0712345678" style="width:220px" />
+        <button class="btn btn-outline-secondary btn-sm" onclick="sendTestPaywavePush()" id="testPaywaveBtn">
+          <i class="bi bi-send me-1"></i>Send KSh 1 Test Push
+        </button>
+      </div>
+      <button class="btn btn-brand" id="savePaywaveBtn" onclick="savePaywaveSettings()"><i class="bi bi-save me-1"></i>Save Settings</button>
+    </div>
+  </div></div>
+
   <div class="jd-card mt-3"><div class="jd-card-header"><div class="jd-card-title"><i class="bi bi-phone" style="color:var(--brand-light)"></i>M-Pesa STK Push (Lipa Na M-Pesa Online)</div>
     <div class="text-muted" style="font-size:12px;margin-top:2px">Lets staff trigger a payment prompt on a member's phone for loan repayments and savings deposits</div></div>
   <div class="jd-card-body">
@@ -348,7 +390,7 @@ function showSet(tab, el) {
   else if (tab==='savingsProducts') loadSavingsProducts();
   else if (tab==='regions') loadRegions();
   else if (tab==='notifications') { loadNotificationSettings(); loadEmailLog(); loadSmsNotificationSettings(); loadSmsLog(); }
-  else if (tab==='mpesa') { loadMpesaSettings(); loadMpesaLog(); }
+  else if (tab==='mpesa') { loadMpesaSettings(); loadPaywaveSettings(); loadMpesaLog(); }
   else if (tab==='backups') loadBackups();
 }
 
@@ -980,6 +1022,68 @@ async function sendTestMpesaPush() {
   finally { setLoading(btn, false); loadMpesaLog(); }
 }
 
+async function saveActiveGateway() {
+  const btn = document.getElementById('saveGatewayBtn');
+  setLoading(btn, true);
+  try {
+    await API.put('/settings/api/mpesa', { payment_gateway: document.getElementById('activeGateway').value });
+    Toast.success('Active collection gateway saved');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function loadPaywaveSettings() {
+  try {
+    const data = await API.get('/settings/api/paywave');
+    document.getElementById('activeGateway').value = data.payment_gateway || 'mpesa';
+    document.getElementById('paywaveWebhookUrlHint').textContent = window.location.origin + '/mpesa/paywave-webhook';
+    document.getElementById('paywaveForm').innerHTML = `
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">Account Email</label>
+        <input type="email" class="form-control" id="pwEmail" placeholder="your@email.com" value="${escapeHtml(data.paywave_email||'')}" /></div>
+      <div class="col-md-6"><label class="form-label" style="font-size:12.5px">API Key</label>
+        <input type="password" class="form-control" id="pwApiKey" placeholder="${data.paywave_api_key_set ? '•••••••••••••••• (saved — leave blank to keep)' : 'From your Paywave Express dashboard'}" />
+        <div class="text-muted mt-1" style="font-size:11.5px">${data.paywave_api_key_set ? 'A key is already saved. Leave blank to keep it.' : 'Not yet configured.'}</div></div>
+      <div class="col-md-6 d-flex align-items-center">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="pwEnabled" ${data.paywave_enabled ? 'checked' : ''} />
+          <label class="form-check-label" style="font-size:12.5px">Enabled</label>
+        </div></div>
+      <div class="col-md-6 d-flex align-items-center">
+        <span class="badge ${data.paywave_configured ? 'bg-success' : 'bg-secondary'}" style="font-size:11px">
+          ${data.paywave_configured ? 'Configured' : 'Not fully configured yet'}
+        </span></div>`;
+  } catch(e) { Toast.error(e.message); }
+}
+
+async function savePaywaveSettings() {
+  const btn = event?.target?.closest('button') || document.getElementById('savePaywaveBtn');
+  setLoading(btn, true);
+  try {
+    const body = {
+      paywave_email: document.getElementById('pwEmail').value,
+      paywave_enabled: document.getElementById('pwEnabled').checked,
+    };
+    const apiKey = document.getElementById('pwApiKey').value;
+    if (apiKey) body.paywave_api_key = apiKey;
+    await API.put('/settings/api/paywave', body);
+    Toast.success('Paywave Express settings saved');
+    loadPaywaveSettings();
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); }
+}
+
+async function sendTestPaywavePush() {
+  const btn = document.getElementById('testPaywaveBtn');
+  const phone = document.getElementById('testPaywavePhone').value.trim();
+  if (!phone) { Toast.warning('Enter a phone number first'); return; }
+  setLoading(btn, true);
+  try {
+    const data = await API.post('/settings/api/paywave/test', { phone });
+    Toast.success(data.message || 'Test push sent');
+  } catch(e) { Toast.error(e.message); }
+  finally { setLoading(btn, false); loadMpesaLog(); }
+}
+
 async function loadMpesaLog() {
   try {
     const rows = await API.get('/settings/api/mpesa/log');
@@ -991,7 +1095,7 @@ async function loadMpesaLog() {
     const badge = s => s==='success' ? '<span class="badge bg-success">success</span>'
       : s==='failed' ? '<span class="badge bg-danger">failed</span>'
       : '<span class="badge bg-secondary">pending</span>';
-    const gwBadge = g => g==='cloudpay' ? '<span class="badge bg-info text-dark">CloudPay</span>' : '<span class="badge bg-secondary">M-Pesa</span>';
+    const gwBadge = g => g==='paywave' ? '<span class="badge bg-warning text-dark">Paywave Express</span>' : g==='cloudpay' ? '<span class="badge bg-info text-dark">CloudPay</span>' : '<span class="badge bg-secondary">M-Pesa</span>';
     body.innerHTML = rows.map(r => `
       <tr>
         <td style="padding-left:16px;white-space:nowrap">${r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>

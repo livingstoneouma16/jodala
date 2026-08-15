@@ -1497,6 +1497,35 @@ def _migration_0034_remove_cloudpay(conn):
     """)
 
 
+def _migration_0035_paywave_gateway(conn):
+    """Adds Paywave Express (https://paywavexpress.co.ke) as a switchable
+    alternative to M-Pesa Daraja for STK Push -- an aggregator that fronts
+    Daraja itself, so integrating it needs no certificates/initiator setup,
+    just an api_key + account email. Like the (now-removed) CloudPay
+    gateway, this reuses mpesa_transactions (tagged via the existing
+    `gateway` column) rather than a parallel table, so the Settings
+    activity log, status-polling endpoint, and repayment/deposit
+    application logic all work identically no matter which gateway sent
+    the push. Also (re)introduces the `payment_gateway` selector
+    ('mpesa' or 'paywave') that determines which gateway new pushes use --
+    it was deleted by migration 34 when CloudPay was removed, so this
+    re-adds it rather than assuming it still exists."""
+    now = utcnow()
+    paywave_defaults = {
+        'payment_gateway': 'mpesa',
+        'paywave_api_key': '',
+        'paywave_email': '',
+        'paywave_enabled': '1',
+    }
+    for key, value in paywave_defaults.items():
+        row = conn.execute("SELECT id FROM company_settings WHERE key = %s", (key,)).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO company_settings (key, value, updated_at) VALUES (%s, %s, %s)",
+                (key, value, now)
+            )
+
+
 MIGRATIONS = [
     (1, 'initial schema', _migration_0001_initial_schema),
 
@@ -1536,6 +1565,8 @@ MIGRATIONS = [
     (33, 'backfill vendor/receipt_ref/approved_by on expenses for installs predating those columns',
      _migration_0033_expenses_vendor_receipt_approver),
     (34, 'remove CloudPay payment gateway support', _migration_0034_remove_cloudpay),
+    (35, 'add Paywave Express as a switchable STK Push gateway alongside M-Pesa Daraja',
+     _migration_0035_paywave_gateway),
 ]
 
 
