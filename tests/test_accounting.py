@@ -45,17 +45,19 @@ class TestIncomeExpensePostToLedger:
 
         assert {'vendor', 'receipt_ref', 'approved_by'} <= columns
 
-    def test_income_increases_cash_and_income_account(self, client, admin_token):
+    def test_manual_income_recording_is_removed(self, client, admin_token):
+        """Income now flows in only automatically (loan interest/penalties
+        via repayments); the old manual-entry endpoint stays mounted so
+        stale clients get a clear error rather than a bare 404, but no
+        longer records anything."""
         before_cash = _trial_balance_row(client, admin_token, '1000')['debit']
-        before_fee = _trial_balance_row(client, admin_token, '4100')['credit']
 
         resp = client.post('/accounting/api/income', json={
             'description': 'Membership fee', 'category': 'fees', 'amount': 500,
         }, headers=auth_header(admin_token))
-        assert resp.status_code == 201, resp.get_data(as_text=True)
 
-        assert _trial_balance_row(client, admin_token, '1000')['debit'] == round(before_cash + 500, 2)
-        assert _trial_balance_row(client, admin_token, '4100')['credit'] == round(before_fee + 500, 2)
+        assert resp.status_code == 410
+        assert _trial_balance_row(client, admin_token, '1000')['debit'] == before_cash
 
     def test_expense_decreases_cash_increases_expense_account(self, client, admin_token):
         before_cash = _trial_balance_row(client, admin_token, '1000')['debit']

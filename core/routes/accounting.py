@@ -4,10 +4,9 @@ from datetime import date
 from core.database import get_db, execute, utcnow
 from core.auth import login_required, get_current_user
 from core.serializers import income_public, expense_public, journal_entry_public, account_public, member_full_name
-from core.utils import (generate_journal_number, generate_income_reference,
-                        generate_expense_reference, log_audit, paginate,
-                        adjust_main_account_balance, adjust_account_balance,
-                        post_journal_line)
+from core.utils import (generate_journal_number, generate_expense_reference,
+                        log_audit, paginate, adjust_main_account_balance,
+                        adjust_account_balance, post_journal_line)
 
 accounting_bp = Blueprint('accounting', __name__)
 
@@ -64,24 +63,12 @@ def list_income():
 @accounting_bp.route('/api/income', methods=['POST'])
 @login_required
 def record_income():
-    data = request.get_json()
-    user = get_current_user()
-    cur = execute(
-        """INSERT INTO income (reference, description, category, amount, income_date, payment_method,
-               recorded_by, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-        (generate_income_reference(), data.get('description', '').strip(), data.get('category', 'other'),
-         float(data.get('amount', 0)), data.get('income_date', date.today().isoformat()),
-         data.get('payment_method', 'cash'), user['id'], utcnow())
-    )
-    income = get_db().execute("SELECT * FROM income WHERE id = %s", (cur.lastrowid,)).fetchone()
-    log_audit('RECORD_INCOME', 'income', income['id'])
-    adjust_main_account_balance(income['amount'])
-    # Post to the matching ledger income account (falls back to Fee Income
-    # for anything not specifically interest) so the Chart of Accounts /
-    # Trial Balance reflect this the moment it's recorded.
-    income_code = '4000' if income['category'] == 'interest' else '4100'
-    adjust_account_balance(income_code, income['amount'])
-    return jsonify({'message': 'Income recorded', 'income': income_public(income)}), 201
+    # Manual income entry was removed -- all income now flows in only from
+    # loan interest/penalties (via repayments) and other automated sources.
+    # The route is kept (rather than deleted outright) so any old client-
+    # side caches or bookmarked API calls get a clear, actionable error
+    # instead of a raw 404.
+    return jsonify({'error': 'Manual income recording has been removed. Income is now recorded automatically from repayments.'}), 410
 
 
 @accounting_bp.route('/api/expenses', methods=['GET'])

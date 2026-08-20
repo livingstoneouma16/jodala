@@ -6,7 +6,6 @@
   <div><h4 style="font-family:'Source Serif 4',serif;font-weight:700;margin:0">Accounting</h4>
   <p class="text-muted mb-0" style="font-size:13px">Income, expenses, and financial statements</p></div>
   <div class="d-flex gap-2">
-    <button class="btn btn-brand" data-bs-toggle="modal" data-bs-target="#incomeModal"><i class="bi bi-plus me-1"></i>Record Income</button>
     <button class="btn btn-brand-outline" data-bs-toggle="modal" data-bs-target="#expenseModal"><i class="bi bi-dash me-1"></i>Record Expense</button>
   </div>
 </div>
@@ -97,28 +96,6 @@
       <tbody id="trialTable"><tr><td colspan="5" class="text-center p-4"><span class="spinner-border spinner-border-sm spinner-brand"></span></td></tr></tbody>
       <tfoot id="trialFoot"></tfoot>
     </table></div>
-  </div>
-</div>
-
-<!-- Income Modal -->
-<div class="modal fade" id="incomeModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header"><h6 class="modal-title">Record Income</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <div class="row g-3">
-          <div class="col-12"><label class="form-label">Description <span class="text-danger">*</span></label><input type="text" class="form-control" id="incDesc" placeholder="Income description" /></div>
-          <div class="col-md-6"><label class="form-label">Category</label>
-            <select class="form-select" id="incCat"><option value="interest">Interest Income</option><option value="fees">Fees</option><option value="penalties">Penalties</option><option value="other">Other</option></select></div>
-          <div class="col-md-6"><label class="form-label">Amount (Ksh) <span class="text-danger">*</span></label><input type="number" class="form-control" id="incAmt" step="0.01" placeholder="0.00" /></div>
-          <div class="col-md-6"><label class="form-label">Date</label><input type="date" class="form-control" id="incDate" /></div>
-          <div class="col-md-6"><label class="form-label">Payment Method</label>
-            <select class="form-select" id="incMethod"><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile Money</option></select></div>
-        </div>
-      </div>
-      <div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-sm btn-brand" id="incBtn" onclick="saveIncome()">Save Income</button></div>
-    </div>
   </div>
 </div>
 
@@ -399,24 +376,6 @@ async function loadTrialBalance() {
       <td style="color:var(--danger-ink)">${fmtCurrency(data.total_credit)}</td>
     </tr>`;
   } catch(e) {}
-}
-
-async function saveIncome() {
-  const btn = document.getElementById('incBtn');
-  setLoading(btn, true);
-  try {
-    await API.post('/accounting/api/income', {
-      description: document.getElementById('incDesc').value,
-      category: document.getElementById('incCat').value,
-      amount: document.getElementById('incAmt').value,
-      income_date: document.getElementById('incDate').value,
-      payment_method: document.getElementById('incMethod').value
-    });
-    Toast.success('Income recorded!');
-    bootstrap.Modal.getInstance(document.getElementById('incomeModal')).hide();
-    loadPL();
-  } catch(e) { Toast.error(e.message); }
-  finally { setLoading(btn, false); }
 }
 
 async function saveExpense() {

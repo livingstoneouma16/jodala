@@ -51,14 +51,17 @@ class TestTrendEndpointsAggregateCorrectly:
         this_month = resp.get_json()[-1]
         assert this_month['members'] >= 1
 
-    def test_income_expense_trend_reflects_manual_income_and_expense(self, client, admin_token):
-        client.post('/accounting/api/income', json={'description': 'x', 'amount': 500},
-                    headers=auth_header(admin_token))
+    def test_income_expense_trend_reflects_repayment_income_and_manual_expense(self, client, admin_token, approved_loan):
+        # Income is no longer manually recordable -- it flows in via loan
+        # interest/penalties on repayment instead.
+        client.post('/repayments/api', json={
+            'loan_id': approved_loan['id'], 'amount': 1000, 'payment_method': 'cash',
+        }, headers=auth_header(admin_token))
         client.post('/accounting/api/expenses', json={'description': 'y', 'amount': 200},
                     headers=auth_header(admin_token))
         resp = client.get('/dashboard/income-expense-trend', headers=auth_header(admin_token))
         this_month = resp.get_json()[-1]
-        assert this_month['income'] >= 500
+        assert this_month['income'] > 0
         assert this_month['expenses'] >= 200
 
 
